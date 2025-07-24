@@ -1,0 +1,31 @@
+{
+  "global": {
+    "log_path": "/tmp/zig-tooling-ci.log",
+    "output_format": "json",
+    "color_output": false,
+    "verbosity": 0
+  },
+  "memory_checker": {
+    "analyze_tests": true,
+    "max_file_size": 20971520,
+    "severity_levels": {
+      "missing_defer": "error",
+      "missing_errdefer": "error",
+      "allocation_no_free": "error",
+      "ownership_transfer": "error"
+    }
+  },
+  "testing_compliance": {
+    "test_naming_strict": true,
+    "test_file_prefix": "test_",
+    "require_test_category": true
+  },
+  "logger": {
+    "max_log_size_mb": 50,
+    "max_archives": 10,
+    "performance_warn_threshold_ms": 500,
+    "log_level": "warn",
+    "include_timestamps": true,
+    "archive_compression": "gzip"
+  }
+}

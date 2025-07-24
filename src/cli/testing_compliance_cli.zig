@@ -7,6 +7,33 @@ const print = std.debug.print;
 
 var output_json = false;
 
+// JSON output structures
+const JsonOutput = struct {
+    tool: []const u8,
+    version: []const u8,
+    timestamp: []const u8,
+    summary: Summary,
+    issues: []JsonIssue,
+
+    const Summary = struct {
+        files_analyzed: u32,
+        total_issues: u32,
+        errors: u32,
+        warnings: u32,
+        info: u32,
+    };
+
+    const JsonIssue = struct {
+        file_path: []const u8,
+        line: u32,
+        column: u32,
+        issue_type: []const u8,
+        description: []const u8,
+        suggestion: []const u8,
+        severity: []const u8,
+    };
+};
+
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer _ = gpa.deinit();
@@ -20,11 +47,15 @@ pub fn main() !void {
         return;
     }
 
-    // Check for --json flag before logger init
+    // Check for --json flag before logger init and filter args
+    var filtered_args = std.ArrayList([:0]u8).init(allocator);
+    defer filtered_args.deinit();
+    
     for (args) |arg| {
         if (std.mem.eql(u8, arg, "--json")) {
             output_json = true;
-            break;
+        } else {
+            try filtered_args.append(arg);
         }
     }
 
@@ -39,7 +70,14 @@ pub fn main() !void {
     // Initialize modern logger
     var app_logger = AppLogger.init(allocator, log_path);
 
-    const command = args[1];
+    // Use filtered args for command parsing
+    const filtered_items = filtered_args.items;
+    if (filtered_items.len < 2) {
+        try printHelp();
+        return;
+    }
+    
+    const command = filtered_items[1];
     
     // Log tool start with proper category
     if (!output_json) {
@@ -48,16 +86,16 @@ pub fn main() !void {
     }
     
     if (std.mem.eql(u8, command, "check")) {
-        try runTestingCheck(allocator, args[2..], &app_logger);
+        try runTestingCheck(allocator, filtered_items[2..], &app_logger);
     } else if (std.mem.eql(u8, command, "scan")) {
-        try runProjectScan(allocator, args[2..], &app_logger);
+        try runProjectScan(allocator, filtered_items[2..], &app_logger);
     } else if (std.mem.eql(u8, command, "file")) {
-        if (args.len < 3) {
+        if (filtered_items.len < 3) {
             print("Error: file path required\n", .{});
             try printHelp();
             return;
         }
-        try runSingleFileCheck(allocator, args[2], &app_logger);
+        try runSingleFileCheck(allocator, filtered_items[2], &app_logger);
     } else if (std.mem.eql(u8, command, "help") or std.mem.eql(u8, command, "--help") or std.mem.eql(u8, command, "-h")) {
         try printHelp();
     } else {
@@ -117,12 +155,13 @@ fn runTestingCheck(allocator: std.mem.Allocator, paths: [][:0]u8, logger: *AppLo
         print("=================\n", .{});
         print("Files analyzed: {d}\n", .{total_files});
         print("Issues found: {d}\n", .{total_issues});
-    } else {
-        // JSON output for CI/CD
-        print("{{\"files_analyzed\": {d}, \"issues_found\": {d}, \"has_errors\": {}}}", .{total_files, total_issues, analyzer.hasErrors()});
     }
     
     const duration_ms = @as(u64, @intCast(std.time.milliTimestamp() - start_time));
+    
+    if (output_json) {
+        try outputJsonReport(allocator, &analyzer, total_files, duration_ms);
+    }
     
     if (analyzer.hasErrors()) {
         if (!output_json) {
@@ -177,16 +216,22 @@ fn runProjectScan(allocator: std.mem.Allocator, args: [][:0]u8, logger: *AppLogg
     
     const files_processed = try scanDirectory(allocator, &analyzer, scan_path, logger);
     
-    print("\n", .{});
-    analyzer.printReport();
-    
-    print("\n📊 Project Scan Summary\n", .{});
-    print("======================\n", .{});
-    print("Files analyzed: {d}\n", .{files_processed});
-    print("Issues found: {d}\n", .{analyzer.getIssues().len});
+    if (!output_json) {
+        print("\n", .{});
+        analyzer.printReport();
+        
+        print("\n📊 Project Scan Summary\n", .{});
+        print("======================\n", .{});
+        print("Files analyzed: {d}\n", .{files_processed});
+        print("Issues found: {d}\n", .{analyzer.getIssues().len});
+    }
     
     const duration_ms = @as(u64, @intCast(std.time.milliTimestamp() - start_time));
     const issues = analyzer.getIssues();
+    
+    if (output_json) {
+        try outputJsonReport(allocator, &analyzer, files_processed, duration_ms);
+    }
     
     if (analyzer.hasErrors()) {
         if (!output_json) {
@@ -264,7 +309,23 @@ fn runSingleFileCheck(allocator: std.mem.Allocator, file_path: []const u8, logge
             defer allocator.free(msg);
             try logger.logError(.validation, msg, err_context, null);
         } else {
-            print("{{\"error\": \"Failed to analyze file: {}\", \"file\": \"{s}\"}}", .{err, file_path});
+            // Output error in JSON format
+            const error_output = struct {
+                tool: []const u8,
+                version: []const u8,
+                error_message: []const u8,
+                file: []const u8,
+                details: []const u8,
+            }{
+                .tool = "testing_compliance",
+                .version = "0.1.0",
+                .error_message = "Failed to analyze file",
+                .file = file_path,
+                .details = @errorName(err),
+            };
+            const stdout = std.io.getStdOut().writer();
+            try std.json.stringify(error_output, .{}, stdout);
+            try stdout.writeAll("\n");
         }
         std.process.exit(1);
     };
@@ -275,6 +336,10 @@ fn runSingleFileCheck(allocator: std.mem.Allocator, file_path: []const u8, logge
     
     const duration_ms = @as(u64, @intCast(std.time.milliTimestamp() - start_time));
     const issues = analyzer.getIssues();
+    
+    if (output_json) {
+        try outputJsonReport(allocator, &analyzer, 1, duration_ms);
+    }
     
     if (analyzer.hasErrors()) {
         if (!output_json) {
@@ -288,8 +353,6 @@ fn runSingleFileCheck(allocator: std.mem.Allocator, file_path: []const u8, logge
             const msg = try std.fmt.allocPrint(allocator, "File testing check failed with {d} issues", .{issues.len});
             defer allocator.free(msg);
             try logger.logError(.validation, msg, fail_context, @intCast(issues.len));
-        } else {
-            print("{{\"file\": \"{s}\", \"issues_found\": {d}, \"has_errors\": true}}", .{file_path, issues.len});
         }
         std.process.exit(1);
     } else {
@@ -312,8 +375,6 @@ fn runSingleFileCheck(allocator: std.mem.Allocator, file_path: []const u8, logge
             } else {
                 try logger.logInfo(.validation, msg, pass_context);
             }
-        } else {
-            print("{{\"file\": \"{s}\", \"issues_found\": {d}, \"has_errors\": false}}", .{file_path, issues.len});
         }
     }
 }
@@ -393,6 +454,64 @@ fn shouldSkipFile(file_path: []const u8) bool {
     return false;
 }
 
+fn outputJsonReport(allocator: std.mem.Allocator, analyzer: *TestingAnalyzer, files_analyzed: u32, _: u64) !void {
+    const issues = analyzer.getIssues();
+    
+    // Count issues by severity
+    var errors: u32 = 0;
+    var warnings: u32 = 0;
+    var info: u32 = 0;
+    
+    for (issues) |issue| {
+        switch (issue.severity) {
+            .err => errors += 1,
+            .warning => warnings += 1,
+            .info => info += 1,
+        }
+    }
+    
+    // Create JSON issues array
+    var json_issues = try allocator.alloc(JsonOutput.JsonIssue, issues.len);
+    defer allocator.free(json_issues);
+    
+    for (issues, 0..) |issue, i| {
+        json_issues[i] = .{
+            .file_path = issue.file_path,
+            .line = issue.line,
+            .column = issue.column,
+            .issue_type = @tagName(issue.issue_type),
+            .description = issue.description,
+            .suggestion = issue.suggestion,
+            .severity = @tagName(issue.severity),
+        };
+    }
+    
+    // Create timestamp
+    const timestamp = std.time.timestamp();
+    var buf: [64]u8 = undefined;
+    const timestamp_str = try std.fmt.bufPrint(&buf, "{d}", .{timestamp});
+    
+    // Create JSON output
+    const json_output = JsonOutput{
+        .tool = "testing_compliance",
+        .version = "0.1.0",
+        .timestamp = timestamp_str,
+        .summary = .{
+            .files_analyzed = files_analyzed,
+            .total_issues = @intCast(issues.len),
+            .errors = errors,
+            .warnings = warnings,
+            .info = info,
+        },
+        .issues = json_issues,
+    };
+    
+    // Write JSON to stdout
+    const stdout = std.io.getStdOut().writer();
+    try std.json.stringify(json_output, .{}, stdout);
+    try stdout.writeAll("\n");
+}
+
 fn printHelp() !void {
     print(
         \\Testing Compliance Checker - NFL Simulation Project
@@ -407,6 +526,9 @@ fn printHelp() !void {
         \\  file <path>          Check a single specific file
         \\  help, --help, -h     Show this help message
         \\
+        \\Options:
+        \\  --json               Output results in JSON format (for CI/CD integration)
+        \\
         \\Examples:
         \\  testing_compliance_cli check                     # Check current directory
         \\  testing_compliance_cli check src/               # Check src directory
@@ -414,6 +536,8 @@ fn printHelp() !void {
         \\  testing_compliance_cli file src/main.zig        # Check single file
         \\  testing_compliance_cli scan                      # Scan entire project
         \\  testing_compliance_cli scan /path/to/project     # Scan specific project
+        \\  testing_compliance_cli check --json              # Output JSON to stdout
+        \\  testing_compliance_cli scan src/ --json          # Scan with JSON output
         \\
         \\Testing Compliance Checks:
         \\  ✓ Test naming conventions follow strategy patterns

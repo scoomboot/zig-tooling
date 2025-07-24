@@ -3,9 +3,39 @@ const zig_tooling = @import("zig_tooling");
 const MemoryAnalyzer = zig_tooling.memory_analyzer.MemoryAnalyzer;
 const AppLogger = zig_tooling.app_logger.AppLogger;
 const LogContext = zig_tooling.app_logger.LogContext;
+const config = zig_tooling.config;
+const config_loader = zig_tooling.config_loader;
 const print = std.debug.print;
 
 var output_json = false;
+var tool_config: ?config.ToolConfig = null;
+
+// JSON output structures
+const JsonOutput = struct {
+    tool: []const u8,
+    version: []const u8,
+    timestamp: []const u8,
+    summary: Summary,
+    issues: []JsonIssue,
+
+    const Summary = struct {
+        files_analyzed: u32,
+        total_issues: u32,
+        errors: u32,
+        warnings: u32,
+        info: u32,
+    };
+
+    const JsonIssue = struct {
+        file_path: []const u8,
+        line: u32,
+        column: u32,
+        issue_type: []const u8,
+        description: []const u8,
+        suggestion: []const u8,
+        severity: []const u8,
+    };
+};
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -20,17 +50,47 @@ pub fn main() !void {
         return;
     }
 
-    // Check for --json flag before logger init
-    for (args) |arg| {
-        if (std.mem.eql(u8, arg, "--json")) {
+    // Load configuration
+    var cfg_loader = config_loader.ConfigLoader.init(allocator);
+    tool_config = try cfg_loader.loadConfig();
+    defer if (tool_config) |*tc| tc.deinit();
+    
+    // Check for --json and --config flags before logger init and filter args
+    var filtered_args = std.ArrayList([:0]u8).init(allocator);
+    defer filtered_args.deinit();
+    var custom_config_path: ?[]const u8 = null;
+    
+    var i: usize = 0;
+    while (i < args.len) : (i += 1) {
+        if (std.mem.eql(u8, args[i], "--json")) {
             output_json = true;
-            break;
+        } else if (std.mem.eql(u8, args[i], "--config") and i + 1 < args.len) {
+            custom_config_path = args[i + 1];
+            i += 1; // Skip the config path
+        } else {
+            try filtered_args.append(args[i]);
         }
     }
+    
+    // Load custom config if specified
+    if (custom_config_path) |path| {
+        cfg_loader.loadFromFile(&tool_config.?, path) catch |err| {
+            print("Error loading config from {s}: {}\n", .{path, err});
+            return err;
+        };
+    }
+    
+    // Override output format from config if not set by flag
+    if (!output_json and tool_config != null) {
+        output_json = tool_config.?.isJsonOutput();
+    }
 
-    // Get log path from environment or use default
-    const log_path = std.process.getEnvVarOwned(allocator, "ZIG_TOOLING_LOG_PATH") catch try allocator.dupe(u8, "logs/app.log");
-    defer allocator.free(log_path);
+    // Get log path from config or environment
+    const log_path = if (tool_config) |tc| 
+        tc.getLogPath() orelse try allocator.dupe(u8, "logs/app.log")
+    else 
+        std.process.getEnvVarOwned(allocator, "ZIG_TOOLING_LOG_PATH") catch try allocator.dupe(u8, "logs/app.log");
+    defer if (tool_config == null or tool_config.?.global.log_path == null) allocator.free(log_path);
     
     // Ensure logs directory exists
     const log_dir = std.fs.path.dirname(log_path) orelse "logs";
@@ -39,7 +99,14 @@ pub fn main() !void {
     // Initialize modern logger
     var app_logger = AppLogger.init(allocator, log_path);
 
-    const command = args[1];
+    // Use filtered args for command parsing
+    const filtered_items = filtered_args.items;
+    if (filtered_items.len < 2) {
+        try printHelp();
+        return;
+    }
+    
+    const command = filtered_items[1];
     
     // Log tool start with proper category
     if (!output_json) {
@@ -48,16 +115,18 @@ pub fn main() !void {
     }
     
     if (std.mem.eql(u8, command, "check")) {
-        try runMemoryCheck(allocator, args[2..], &app_logger);
+        try runMemoryCheck(allocator, filtered_items[2..], &app_logger);
     } else if (std.mem.eql(u8, command, "scan")) {
-        try runProjectScan(allocator, args[2..], &app_logger);
+        try runProjectScan(allocator, filtered_items[2..], &app_logger);
     } else if (std.mem.eql(u8, command, "file")) {
-        if (args.len < 3) {
+        if (filtered_items.len < 3) {
             print("Error: file path required\n", .{});
             try printHelp();
             return;
         }
-        try runSingleFileCheck(allocator, args[2], &app_logger);
+        try runSingleFileCheck(allocator, filtered_items[2], &app_logger);
+    } else if (std.mem.eql(u8, command, "config")) {
+        try runConfigCommand(allocator, filtered_items[2..], &cfg_loader);
     } else if (std.mem.eql(u8, command, "help") or std.mem.eql(u8, command, "--help") or std.mem.eql(u8, command, "-h")) {
         try printHelp();
     } else {
@@ -121,6 +190,10 @@ fn runMemoryCheck(allocator: std.mem.Allocator, paths: [][:0]u8, logger: *AppLog
     
     const duration_ms = @as(u64, @intCast(std.time.milliTimestamp() - start_time));
     
+    if (output_json) {
+        try outputJsonReport(allocator, &analyzer, total_files, duration_ms);
+    }
+    
     if (analyzer.hasErrors()) {
         if (!output_json) {
             print("\n❌ MEMORY CHECK FAILED\n", .{});
@@ -174,16 +247,22 @@ fn runProjectScan(allocator: std.mem.Allocator, args: [][:0]u8, logger: *AppLogg
     
     const files_processed = try scanDirectory(allocator, &analyzer, scan_path, logger);
     
-    print("\n", .{});
-    analyzer.printReport();
-    
-    print("\n📊 Project Scan Summary\n", .{});
-    print("======================\n", .{});
-    print("Files analyzed: {d}\n", .{files_processed});
-    print("Issues found: {d}\n", .{analyzer.getIssues().len});
+    if (!output_json) {
+        print("\n", .{});
+        analyzer.printReport();
+        
+        print("\n📊 Project Scan Summary\n", .{});
+        print("======================\n", .{});
+        print("Files analyzed: {d}\n", .{files_processed});
+        print("Issues found: {d}\n", .{analyzer.getIssues().len});
+    }
     
     const duration_ms = @as(u64, @intCast(std.time.milliTimestamp() - start_time));
     const issues = analyzer.getIssues();
+    
+    if (output_json) {
+        try outputJsonReport(allocator, &analyzer, files_processed, duration_ms);
+    }
     
     if (analyzer.hasErrors()) {
         if (!output_json) {
@@ -261,7 +340,23 @@ fn runSingleFileCheck(allocator: std.mem.Allocator, file_path: []const u8, logge
             defer allocator.free(msg);
             try logger.logError(.validation, msg, err_context, null);
         } else {
-            print("{{\"error\": \"Failed to analyze file: {}\", \"file\": \"{s}\"}}", .{err, file_path});
+            // Output error in JSON format
+            const error_output = struct {
+                tool: []const u8,
+                version: []const u8,
+                error_message: []const u8,
+                file: []const u8,
+                details: []const u8,
+            }{
+                .tool = "memory_checker",
+                .version = "0.1.0",
+                .error_message = "Failed to analyze file",
+                .file = file_path,
+                .details = @errorName(err),
+            };
+            const stdout = std.io.getStdOut().writer();
+            try std.json.stringify(error_output, .{}, stdout);
+            try stdout.writeAll("\n");
         }
         std.process.exit(1);
     };
@@ -272,6 +367,10 @@ fn runSingleFileCheck(allocator: std.mem.Allocator, file_path: []const u8, logge
     
     const duration_ms = @as(u64, @intCast(std.time.milliTimestamp() - start_time));
     const issues = analyzer.getIssues();
+    
+    if (output_json) {
+        try outputJsonReport(allocator, &analyzer, 1, duration_ms);
+    }
     
     if (analyzer.hasErrors()) {
         if (!output_json) {
@@ -285,8 +384,6 @@ fn runSingleFileCheck(allocator: std.mem.Allocator, file_path: []const u8, logge
             const msg = try std.fmt.allocPrint(allocator, "File check failed with {d} issues", .{issues.len});
             defer allocator.free(msg);
             try logger.logError(.validation, msg, fail_context, @intCast(issues.len));
-        } else {
-            print("{{\"file\": \"{s}\", \"issues_found\": {d}, \"has_errors\": true}}", .{file_path, issues.len});
         }
         std.process.exit(1);
     } else {
@@ -309,8 +406,6 @@ fn runSingleFileCheck(allocator: std.mem.Allocator, file_path: []const u8, logge
             } else {
                 try logger.logInfo(.validation, msg, pass_context);
             }
-        } else {
-            print("{{\"file\": \"{s}\", \"issues_found\": {d}, \"has_errors\": false}}", .{file_path, issues.len});
         }
     }
 }
@@ -400,7 +495,12 @@ fn printHelp() !void {
         \\  scan [path]          Scan entire project directory for memory issues
         \\                       (defaults to current directory)
         \\  file <path>          Check a single specific file
+        \\  config <cmd>         Manage configuration (show, init, validate)
         \\  help, --help, -h     Show this help message
+        \\
+        \\Options:
+        \\  --json               Output results in JSON format (for CI/CD integration)
+        \\  --config <path>      Use custom configuration file
         \\
         \\Examples:
         \\  memory_checker_cli check                     # Check current directory
@@ -409,6 +509,8 @@ fn printHelp() !void {
         \\  memory_checker_cli file src/main.zig        # Check single file
         \\  memory_checker_cli scan                      # Scan entire project
         \\  memory_checker_cli scan /path/to/project     # Scan specific project
+        \\  memory_checker_cli check --json              # Output JSON to stdout
+        \\  memory_checker_cli scan src/ --json          # Scan with JSON output
         \\
         \\Memory Management Checks:
         \\  ✓ Allocations have corresponding defer cleanup
@@ -429,6 +531,116 @@ fn printHelp() !void {
         \\  sim-engine/docs/archive/MEMORY-MANAGEMENT-STRATEGY.md
         \\
     , .{});
+}
+
+fn runConfigCommand(allocator: std.mem.Allocator, args: [][:0]u8, loader: *config_loader.ConfigLoader) !void {
+    _ = allocator;
+    if (args.len == 0) {
+        print("Error: config subcommand required (show, init, validate)\n", .{});
+        return;
+    }
+    
+    const subcommand = args[0];
+    
+    if (std.mem.eql(u8, subcommand, "show")) {
+        if (tool_config) |tc| {
+            print("Current Configuration:\n", .{});
+            print("===================\n\n", .{});
+            
+            print("Global:\n", .{});
+            print("  Log Path: {s}\n", .{tc.global.log_path orelse "(default)"});
+            print("  Output Format: {s}\n", .{tc.global.output_format});
+            print("  Color Output: {}\n", .{tc.global.color_output});
+            print("  Verbosity: {}\n\n", .{tc.global.verbosity});
+            
+            print("Memory Checker:\n", .{});
+            print("  Analyze Tests: {}\n", .{tc.memory_checker.analyze_tests});
+            print("  Max File Size: {} bytes\n", .{tc.memory_checker.max_file_size});
+            print("  Severity Levels:\n", .{});
+            print("    Missing Defer: {s}\n", .{tc.memory_checker.severity_levels.missing_defer});
+            print("    Missing Errdefer: {s}\n", .{tc.memory_checker.severity_levels.missing_errdefer});
+            print("    Allocation No Free: {s}\n", .{tc.memory_checker.severity_levels.allocation_no_free});
+            print("    Ownership Transfer: {s}\n", .{tc.memory_checker.severity_levels.ownership_transfer});
+        } else {
+            print("No configuration loaded (using defaults)\n", .{});
+        }
+    } else if (std.mem.eql(u8, subcommand, "init")) {
+        const path = if (args.len > 1) args[1] else ".zigtools.json";
+        try loader.createDefaultConfig(path);
+        print("✅ Created default configuration at: {s}\n", .{path});
+    } else if (std.mem.eql(u8, subcommand, "validate")) {
+        if (args.len < 2) {
+            print("Error: config path required\n", .{});
+            return;
+        }
+        const path = args[1];
+        loader.validateConfig(path) catch |err| {
+            print("❌ Configuration validation failed: {}\n", .{err});
+            return err;
+        };
+        print("✅ Configuration is valid: {s}\n", .{path});
+    } else {
+        print("Unknown config subcommand: {s}\n", .{subcommand});
+        print("Available subcommands: show, init, validate\n", .{});
+    }
+}
+
+fn outputJsonReport(allocator: std.mem.Allocator, analyzer: *MemoryAnalyzer, files_analyzed: u32, _: u64) !void {
+    const issues = analyzer.getIssues();
+    
+    // Count issues by severity
+    var errors: u32 = 0;
+    var warnings: u32 = 0;
+    var info: u32 = 0;
+    
+    for (issues) |issue| {
+        switch (issue.severity) {
+            .err => errors += 1,
+            .warning => warnings += 1,
+            .info => info += 1,
+        }
+    }
+    
+    // Create JSON issues array
+    var json_issues = try allocator.alloc(JsonOutput.JsonIssue, issues.len);
+    defer allocator.free(json_issues);
+    
+    for (issues, 0..) |issue, i| {
+        json_issues[i] = .{
+            .file_path = issue.file_path,
+            .line = issue.line,
+            .column = issue.column,
+            .issue_type = @tagName(issue.issue_type),
+            .description = issue.description,
+            .suggestion = issue.suggestion,
+            .severity = @tagName(issue.severity),
+        };
+    }
+    
+    // Create timestamp
+    const timestamp = std.time.timestamp();
+    var buf: [64]u8 = undefined;
+    const timestamp_str = try std.fmt.bufPrint(&buf, "{d}", .{timestamp});
+    
+    // Create JSON output
+    const json_output = JsonOutput{
+        .tool = "memory_checker",
+        .version = "0.1.0",
+        .timestamp = timestamp_str,
+        .summary = .{
+            .files_analyzed = files_analyzed,
+            .total_issues = @intCast(issues.len),
+            .errors = errors,
+            .warnings = warnings,
+            .info = info,
+        },
+        .issues = json_issues,
+    };
+    
+    // Write JSON to stdout
+    const stdout = std.io.getStdOut().writer();
+    try std.json.stringify(json_output, .{}, stdout);
+    try stdout.writeAll("\n");
 }
 
 // Slash command integration helper

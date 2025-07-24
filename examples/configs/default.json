@@ -1,0 +1,31 @@
+{
+  "global": {
+    "log_path": "logs/app.log",
+    "output_format": "text",
+    "color_output": true,
+    "verbosity": 1
+  },
+  "memory_checker": {
+    "analyze_tests": false,
+    "max_file_size": 10485760,
+    "severity_levels": {
+      "missing_defer": "error",
+      "missing_errdefer": "warning",
+      "allocation_no_free": "error",
+      "ownership_transfer": "info"
+    }
+  },
+  "testing_compliance": {
+    "test_naming_strict": true,
+    "test_file_prefix": "test_",
+    "require_test_category": true
+  },
+  "logger": {
+    "max_log_size_mb": 10,
+    "max_archives": 5,
+    "performance_warn_threshold_ms": 1000,
+    "log_level": "info",
+    "include_timestamps": true,
+    "archive_compression": "none"
+  }
+}
