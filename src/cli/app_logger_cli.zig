@@ -4,7 +4,11 @@ const AppLogger = zig_tooling.app_logger.AppLogger;
 const AppLogLevel = zig_tooling.app_logger.AppLogLevel;
 const AppLogCategory = zig_tooling.app_logger.AppLogCategory;
 const LogContext = zig_tooling.app_logger.LogContext;
+const config = zig_tooling.config;
+const config_loader = zig_tooling.config_loader;
 const print = std.debug.print;
+
+var tool_config: ?config.ToolConfig = null;
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -19,18 +23,55 @@ pub fn main() !void {
         return;
     }
 
-    const command = args[1];
+    // Load configuration
+    var cfg_loader = config_loader.ConfigLoader.init(allocator);
+    tool_config = try cfg_loader.loadConfig();
+    defer if (tool_config) |*tc| tc.deinit();
+    
+    // Check for --config flag and filter args
+    var filtered_args = std.ArrayList([:0]u8).init(allocator);
+    defer filtered_args.deinit();
+    var custom_config_path: ?[]const u8 = null;
+    
+    var i: usize = 0;
+    while (i < args.len) : (i += 1) {
+        if (std.mem.eql(u8, args[i], "--config") and i + 1 < args.len) {
+            custom_config_path = args[i + 1];
+            i += 1; // Skip the config path
+        } else {
+            try filtered_args.append(args[i]);
+        }
+    }
+    
+    // Load custom config if specified
+    if (custom_config_path) |path| {
+        cfg_loader.loadFromFile(&tool_config.?, path) catch |err| {
+            print("Error loading config from {s}: {}\n", .{path, err});
+            return err;
+        };
+    }
+    
+    // Use filtered args for command parsing
+    const filtered_items = filtered_args.items;
+    if (filtered_items.len < 2) {
+        try printHelp();
+        return;
+    }
+    
+    const command = filtered_items[1];
     
     if (std.mem.eql(u8, command, "stats")) {
-        try runLogStats(allocator, args[2..]);
+        try runLogStats(allocator, filtered_items[2..]);
     } else if (std.mem.eql(u8, command, "tail")) {
-        try runLogTail(allocator, args[2..]);
+        try runLogTail(allocator, filtered_items[2..]);
     } else if (std.mem.eql(u8, command, "rotate")) {
-        try runLogRotate(allocator, args[2..]);
+        try runLogRotate(allocator, filtered_items[2..]);
     } else if (std.mem.eql(u8, command, "clear")) {
-        try runLogClear(allocator, args[2..]);
+        try runLogClear(allocator, filtered_items[2..]);
     } else if (std.mem.eql(u8, command, "test")) {
-        try runLogTest(allocator, args[2..]);
+        try runLogTest(allocator, filtered_items[2..]);
+    } else if (std.mem.eql(u8, command, "config")) {
+        try runConfigCommand(allocator, filtered_items[2..], &cfg_loader);
     } else if (std.mem.eql(u8, command, "help") or std.mem.eql(u8, command, "--help") or std.mem.eql(u8, command, "-h")) {
         try printHelp();
     } else {
@@ -40,7 +81,8 @@ pub fn main() !void {
 }
 
 fn runLogStats(allocator: std.mem.Allocator, args: [][:0]u8) !void {
-    const log_path = if (args.len > 0) args[0] else "logs/app.log";
+    const default_path = if (tool_config) |tc| tc.global.log_path orelse "logs/app.log" else "logs/app.log";
+    const log_path = if (args.len > 0) args[0] else default_path;
     
     print("📊 Application Log Statistics\n", .{});
     print("=============================\n\n", .{});
@@ -64,7 +106,8 @@ fn runLogStats(allocator: std.mem.Allocator, args: [][:0]u8) !void {
 }
 
 fn runLogTail(allocator: std.mem.Allocator, args: [][:0]u8) !void {
-    const log_path = if (args.len > 0) args[0] else "logs/app.log";
+    const default_path = if (tool_config) |tc| tc.global.log_path orelse "logs/app.log" else "logs/app.log";
+    const log_path = if (args.len > 0) args[0] else default_path;
     const max_lines: usize = if (args.len > 1) 
         std.fmt.parseInt(usize, args[1], 10) catch 20 
     else 
@@ -112,7 +155,8 @@ fn runLogTail(allocator: std.mem.Allocator, args: [][:0]u8) !void {
 }
 
 fn runLogRotate(allocator: std.mem.Allocator, args: [][:0]u8) !void {
-    const log_path = if (args.len > 0) args[0] else "logs/app.log";
+    const default_path = if (tool_config) |tc| tc.global.log_path orelse "logs/app.log" else "logs/app.log";
+    const log_path = if (args.len > 0) args[0] else default_path;
     
     print("🔄 Rotating Log Files\n", .{});
     print("====================\n\n", .{});
@@ -128,7 +172,8 @@ fn runLogRotate(allocator: std.mem.Allocator, args: [][:0]u8) !void {
 }
 
 fn runLogClear(allocator: std.mem.Allocator, args: [][:0]u8) !void {
-    const log_path = if (args.len > 0) args[0] else "logs/app.log";
+    const default_path = if (tool_config) |tc| tc.global.log_path orelse "logs/app.log" else "logs/app.log";
+    const log_path = if (args.len > 0) args[0] else default_path;
     
     print("🗑️  Clearing Log Files\n", .{});
     print("======================\n\n", .{});
@@ -153,7 +198,8 @@ fn runLogClear(allocator: std.mem.Allocator, args: [][:0]u8) !void {
 }
 
 fn runLogTest(allocator: std.mem.Allocator, args: [][:0]u8) !void {
-    const log_path = if (args.len > 0) args[0] else "logs/app.log";
+    const default_path = if (tool_config) |tc| tc.global.log_path orelse "logs/app.log" else "logs/app.log";
+    const log_path = if (args.len > 0) args[0] else default_path;
     
     print("🧪 Testing Application Logger\n", .{});
     print("=============================\n\n", .{});
@@ -195,6 +241,56 @@ fn runLogTest(allocator: std.mem.Allocator, args: [][:0]u8) !void {
     print("Size: {d} bytes, Lines: {d}\n", .{ stats.size, stats.lines });
 }
 
+fn runConfigCommand(allocator: std.mem.Allocator, args: [][:0]u8, loader: *config_loader.ConfigLoader) !void {
+    _ = allocator;
+    if (args.len == 0) {
+        print("Error: config subcommand required (show, init, validate)\n", .{});
+        return;
+    }
+    
+    const subcommand = args[0];
+    
+    if (std.mem.eql(u8, subcommand, "show")) {
+        if (tool_config) |tc| {
+            print("Current Configuration:\n", .{});
+            print("===================\n\n", .{});
+            
+            print("Global:\n", .{});
+            print("  Log Path: {s}\n", .{tc.global.log_path orelse "(default)"});
+            print("  Output Format: {s}\n", .{tc.global.output_format});
+            print("  Color Output: {}\n", .{tc.global.color_output});
+            print("  Verbosity: {d}\n\n", .{tc.global.verbosity});
+            
+            print("Logger:\n", .{});
+            print("  Max Log Size MB: {d}\n", .{tc.logger.max_log_size_mb});
+            print("  Max Archives: {d}\n", .{tc.logger.max_archives});
+            print("  Performance Warn Threshold MS: {d}\n", .{tc.logger.performance_warn_threshold_ms});
+            print("  Log Level: {s}\n", .{tc.logger.log_level});
+            print("  Include Timestamps: {}\n", .{tc.logger.include_timestamps});
+            print("  Archive Compression: {s}\n", .{tc.logger.archive_compression});
+        } else {
+            print("No configuration loaded\n", .{});
+        }
+    } else if (std.mem.eql(u8, subcommand, "init")) {
+        const config_path = if (args.len > 1) args[1] else ".zigtools.json";
+        loader.createDefaultConfig(config_path) catch |err| {
+            print("Error creating config file: {}\n", .{err});
+            return err;
+        };
+        print("Created default configuration at: {s}\n", .{config_path});
+    } else if (std.mem.eql(u8, subcommand, "validate")) {
+        const config_path = if (args.len > 1) args[1] else ".zigtools.json";
+        loader.validateConfig(config_path) catch |err| {
+            print("Configuration validation failed: {}\n", .{err});
+            return err;
+        };
+        print("Configuration is valid: {s}\n", .{config_path});
+    } else {
+        print("Unknown config subcommand: {s}\n", .{subcommand});
+        print("Valid subcommands: show, init, validate\n", .{});
+    }
+}
+
 fn printHelp() !void {
     print("App Logger CLI Tool\n", .{});
     print("===================\n\n", .{});
@@ -207,10 +303,12 @@ fn printHelp() !void {
     print("    rotate [LOG_PATH]          Force log rotation\n", .{});
     print("    clear [LOG_PATH]           Clear all log files (with confirmation)\n", .{});
     print("    test [LOG_PATH]            Write test entries and validate logging system\n", .{});
+    print("    config <subcmd>            Manage configuration (show, init, validate)\n", .{});
     print("    help                       Show this help message\n\n", .{});
     print("OPTIONS:\n", .{});
     print("    LOG_PATH                   Path to log file (default: logs/app.log)\n", .{});
-    print("    LINES                      Number of lines to show with tail command\n\n", .{});
+    print("    LINES                      Number of lines to show with tail command\n", .{});
+    print("    --config <path>            Use custom configuration file (default: .zigtools.json)\n\n", .{});
     print("EXAMPLES:\n", .{});
     print("    app_logger_cli stats                    # Show default log stats\n", .{});
     print("    app_logger_cli tail logs/app.log 50     # Show last 50 lines\n", .{});

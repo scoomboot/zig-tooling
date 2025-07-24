@@ -3,9 +3,12 @@ const zig_tooling = @import("zig_tooling");
 const TestingAnalyzer = zig_tooling.testing_analyzer.TestingAnalyzer;
 const AppLogger = zig_tooling.app_logger.AppLogger;
 const LogContext = zig_tooling.app_logger.LogContext;
+const config = zig_tooling.config;
+const config_loader = zig_tooling.config_loader;
 const print = std.debug.print;
 
 var output_json = false;
+var tool_config: ?config.ToolConfig = null;
 
 // JSON output structures
 const JsonOutput = struct {
@@ -47,21 +50,47 @@ pub fn main() !void {
         return;
     }
 
-    // Check for --json flag before logger init and filter args
+    // Load configuration
+    var cfg_loader = config_loader.ConfigLoader.init(allocator);
+    tool_config = try cfg_loader.loadConfig();
+    defer if (tool_config) |*tc| tc.deinit();
+    
+    // Check for --json and --config flags before logger init and filter args
     var filtered_args = std.ArrayList([:0]u8).init(allocator);
     defer filtered_args.deinit();
+    var custom_config_path: ?[]const u8 = null;
     
-    for (args) |arg| {
-        if (std.mem.eql(u8, arg, "--json")) {
+    var i: usize = 0;
+    while (i < args.len) : (i += 1) {
+        if (std.mem.eql(u8, args[i], "--json")) {
             output_json = true;
+        } else if (std.mem.eql(u8, args[i], "--config") and i + 1 < args.len) {
+            custom_config_path = args[i + 1];
+            i += 1; // Skip the config path
         } else {
-            try filtered_args.append(arg);
+            try filtered_args.append(args[i]);
         }
     }
+    
+    // Load custom config if specified
+    if (custom_config_path) |path| {
+        cfg_loader.loadFromFile(&tool_config.?, path) catch |err| {
+            print("Error loading config from {s}: {}\n", .{path, err});
+            return err;
+        };
+    }
+    
+    // Override output format from config if not set by flag
+    if (!output_json and tool_config != null) {
+        output_json = tool_config.?.isJsonOutput();
+    }
 
-    // Get log path from environment or use default
-    const log_path = std.process.getEnvVarOwned(allocator, "ZIG_TOOLING_LOG_PATH") catch try allocator.dupe(u8, "logs/app.log");
-    defer allocator.free(log_path);
+    // Get log path from config or environment
+    const log_path = if (tool_config) |tc| 
+        tc.getLogPath() orelse try allocator.dupe(u8, "logs/app.log")
+    else 
+        std.process.getEnvVarOwned(allocator, "ZIG_TOOLING_LOG_PATH") catch try allocator.dupe(u8, "logs/app.log");
+    defer if (tool_config == null or tool_config.?.global.log_path == null) allocator.free(log_path);
     
     // Ensure logs directory exists
     const log_dir = std.fs.path.dirname(log_path) orelse "logs";
@@ -96,6 +125,8 @@ pub fn main() !void {
             return;
         }
         try runSingleFileCheck(allocator, filtered_items[2], &app_logger);
+    } else if (std.mem.eql(u8, command, "config")) {
+        try runConfigCommand(allocator, filtered_items[2..], &cfg_loader);
     } else if (std.mem.eql(u8, command, "help") or std.mem.eql(u8, command, "--help") or std.mem.eql(u8, command, "-h")) {
         try printHelp();
     } else {
@@ -435,15 +466,16 @@ fn scanDirectory(allocator: std.mem.Allocator, analyzer: *TestingAnalyzer, dir_p
 }
 
 fn shouldSkipFile(file_path: []const u8) bool {
-    // Skip common files that don't need testing analysis or are generated
-    const skip_patterns = [_][]const u8{
-        "build_runner.zig",
-        "memory_checker_cli.zig",
-        "testing_compliance_cli.zig",
-        "memory_analyzer.zig", 
-        "testing_analyzer.zig",
-        "generated_",
-    };
+    // Use config skip patterns if available, otherwise use defaults
+    const skip_patterns = if (tool_config) |tc|
+        tc.testing_compliance.skip_patterns
+    else
+        &[_][]const u8{
+            "build_runner.zig",
+            "generated_",
+            "zig-cache/",
+            "zig-out/",
+        };
     
     for (skip_patterns) |pattern| {
         if (std.mem.indexOf(u8, file_path, pattern) != null) {
@@ -512,6 +544,53 @@ fn outputJsonReport(allocator: std.mem.Allocator, analyzer: *TestingAnalyzer, fi
     try stdout.writeAll("\n");
 }
 
+fn runConfigCommand(allocator: std.mem.Allocator, args: [][:0]u8, loader: *config_loader.ConfigLoader) !void {
+    _ = allocator;
+    if (args.len == 0) {
+        print("Error: config subcommand required (show, init, validate)\n", .{});
+        return;
+    }
+    
+    const subcommand = args[0];
+    
+    if (std.mem.eql(u8, subcommand, "show")) {
+        if (tool_config) |tc| {
+            print("Current Configuration:\n", .{});
+            print("===================\n\n", .{});
+            
+            print("Global:\n", .{});
+            print("  Log Path: {s}\n", .{tc.global.log_path orelse "(default)"});
+            print("  Output Format: {s}\n", .{tc.global.output_format});
+            print("  Color Output: {}\n", .{tc.global.color_output});
+            print("  Verbosity: {d}\n\n", .{tc.global.verbosity});
+            
+            print("Testing Compliance:\n", .{});
+            print("  Test Naming Strict: {}\n", .{tc.testing_compliance.test_naming_strict});
+            print("  Test File Prefix: {s}\n", .{tc.testing_compliance.test_file_prefix});
+            print("  Require Test Category: {}\n", .{tc.testing_compliance.require_test_category});
+        } else {
+            print("No configuration loaded\n", .{});
+        }
+    } else if (std.mem.eql(u8, subcommand, "init")) {
+        const config_path = if (args.len > 1) args[1] else ".zigtools.json";
+        loader.createDefaultConfig(config_path) catch |err| {
+            print("Error creating config file: {}\n", .{err});
+            return err;
+        };
+        print("Created default configuration at: {s}\n", .{config_path});
+    } else if (std.mem.eql(u8, subcommand, "validate")) {
+        const config_path = if (args.len > 1) args[1] else ".zigtools.json";
+        loader.validateConfig(config_path) catch |err| {
+            print("Configuration validation failed: {}\n", .{err});
+            return err;
+        };
+        print("Configuration is valid: {s}\n", .{config_path});
+    } else {
+        print("Unknown config subcommand: {s}\n", .{subcommand});
+        print("Valid subcommands: show, init, validate\n", .{});
+    }
+}
+
 fn printHelp() !void {
     print(
         \\Testing Compliance Checker - NFL Simulation Project
@@ -524,10 +603,12 @@ fn printHelp() !void {
         \\  scan [path]          Scan entire project directory for testing issues
         \\                       (defaults to current directory)
         \\  file <path>          Check a single specific file
+        \\  config <subcmd>      Manage configuration (show, init, validate)
         \\  help, --help, -h     Show this help message
         \\
         \\Options:
         \\  --json               Output results in JSON format (for CI/CD integration)
+        \\  --config <path>      Use custom configuration file (default: .zigtools.json)
         \\
         \\Examples:
         \\  testing_compliance_cli check                     # Check current directory

@@ -71,6 +71,11 @@ pub const ConfigLoader = struct {
         ) catch return error.InvalidJson;
         defer parsed.deinit();
         
+        // Check if parsed value is actually an object
+        if (parsed.value != .object) {
+            return error.InvalidJson;
+        }
+        
         const root = parsed.value.object;
         
         // Parse global config
@@ -99,6 +104,10 @@ pub const ConfigLoader = struct {
         
         if (obj.object.get("log_path")) |val| {
             if (val == .string) {
+                // Free old path if it exists
+                if (global.log_path) |old_path| {
+                    self.allocator.free(old_path);
+                }
                 global.log_path = try self.allocator.dupe(u8, val.string);
             }
         }
@@ -106,7 +115,7 @@ pub const ConfigLoader = struct {
         if (obj.object.get("output_format")) |val| {
             if (val == .string) {
                 if (std.mem.eql(u8, val.string, "json") or std.mem.eql(u8, val.string, "text")) {
-                    global.output_format = val.string;
+                    global.output_format = try self.allocator.dupe(u8, val.string);
                 }
             }
         }
@@ -125,7 +134,6 @@ pub const ConfigLoader = struct {
     }
     
     fn parseMemoryCheckerConfig(self: *ConfigLoader, mc: *config.MemoryCheckerConfig, obj: std.json.Value) !void {
-        _ = self;
         if (obj != .object) return;
         
         if (obj.object.get("analyze_tests")) |val| {
@@ -145,22 +153,26 @@ pub const ConfigLoader = struct {
             if (severity_obj == .object) {
                 if (severity_obj.object.get("missing_defer")) |val| {
                     if (val == .string) {
-                        mc.severity_levels.missing_defer = try config.parseSeverityLevel(val.string);
+                        const level = try config.parseSeverityLevel(val.string);
+                        mc.severity_levels.missing_defer = try self.allocator.dupe(u8, level);
                     }
                 }
                 if (severity_obj.object.get("missing_errdefer")) |val| {
                     if (val == .string) {
-                        mc.severity_levels.missing_errdefer = try config.parseSeverityLevel(val.string);
+                        const level = try config.parseSeverityLevel(val.string);
+                        mc.severity_levels.missing_errdefer = try self.allocator.dupe(u8, level);
                     }
                 }
                 if (severity_obj.object.get("allocation_no_free")) |val| {
                     if (val == .string) {
-                        mc.severity_levels.allocation_no_free = try config.parseSeverityLevel(val.string);
+                        const level = try config.parseSeverityLevel(val.string);
+                        mc.severity_levels.allocation_no_free = try self.allocator.dupe(u8, level);
                     }
                 }
                 if (severity_obj.object.get("ownership_transfer")) |val| {
                     if (val == .string) {
-                        mc.severity_levels.ownership_transfer = try config.parseSeverityLevel(val.string);
+                        const level = try config.parseSeverityLevel(val.string);
+                        mc.severity_levels.ownership_transfer = try self.allocator.dupe(u8, level);
                     }
                 }
             }
@@ -171,7 +183,6 @@ pub const ConfigLoader = struct {
     }
     
     fn parseTestingComplianceConfig(self: *ConfigLoader, tc: *config.TestingComplianceConfig, obj: std.json.Value) !void {
-        _ = self;
         if (obj != .object) return;
         
         if (obj.object.get("test_naming_strict")) |val| {
@@ -182,7 +193,7 @@ pub const ConfigLoader = struct {
         
         if (obj.object.get("test_file_prefix")) |val| {
             if (val == .string) {
-                tc.test_file_prefix = val.string;
+                tc.test_file_prefix = try self.allocator.dupe(u8, val.string);
             }
         }
         
@@ -194,7 +205,6 @@ pub const ConfigLoader = struct {
     }
     
     fn parseLoggerConfig(self: *ConfigLoader, logger: *config.LoggerConfig, obj: std.json.Value) !void {
-        _ = self;
         if (obj != .object) return;
         
         if (obj.object.get("max_log_size_mb")) |val| {
@@ -217,7 +227,8 @@ pub const ConfigLoader = struct {
         
         if (obj.object.get("log_level")) |val| {
             if (val == .string) {
-                logger.log_level = try config.parseLogLevel(val.string);
+                const level = try config.parseLogLevel(val.string);
+                logger.log_level = try self.allocator.dupe(u8, level);
             }
         }
         
@@ -230,7 +241,7 @@ pub const ConfigLoader = struct {
         if (obj.object.get("archive_compression")) |val| {
             if (val == .string) {
                 if (std.mem.eql(u8, val.string, "none") or std.mem.eql(u8, val.string, "gzip")) {
-                    logger.archive_compression = val.string;
+                    logger.archive_compression = try self.allocator.dupe(u8, val.string);
                 }
             }
         }

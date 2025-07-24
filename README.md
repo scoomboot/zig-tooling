@@ -24,6 +24,19 @@ A comprehensive suite of code quality and analysis tools for Zig projects, provi
 - Multiple log levels and categories
 - Log file statistics and monitoring
 
+## Quick Start
+
+1. **Install the tools** (see Installation section below)
+2. **Initialize configuration:**
+   ```bash
+   memory_checker_cli config init
+   ```
+3. **Run checks on your project:**
+   ```bash
+   memory_checker_cli scan
+   testing_compliance_cli scan
+   ```
+
 ## Installation
 
 ### Option 1: Download Pre-built Binaries (Recommended)
@@ -39,7 +52,7 @@ A comprehensive suite of code quality and analysis tools for Zig projects, provi
    ```
 4. Verify installation:
    ```bash
-   memory_checker --version
+   memory_checker_cli --version
    ```
 
 ### Option 2: Build from Source
@@ -113,26 +126,41 @@ app_logger_cli rotate
 
 ## Configuration
 
-### Log Path Configuration
-By default, logs are written to `logs/app.log` in the current directory. You can customize this:
+The tools support flexible configuration through JSON files, environment variables, and command-line arguments. See the [Configuration Guide](docs/configuration.md) for complete details.
 
-1. **Environment Variable**:
+### Quick Configuration
+
+1. **Create default configuration:**
    ```bash
-   export ZIG_TOOLING_LOG_PATH=/path/to/your/logfile.log
+   memory_checker_cli config init
+   ```
+   This creates `.zigtools.json` with sensible defaults.
+
+2. **View current configuration:**
+   ```bash
+   memory_checker_cli config show
    ```
 
-2. **Command Line** (for app_logger_cli):
+3. **Use custom configuration:**
    ```bash
-   app_logger_cli stats /custom/path/to/log.log
+   memory_checker_cli --config custom-config.json scan
    ```
+
+### Configuration Options
+
+Key settings you can configure:
+- **Output format**: JSON or text output
+- **Log paths**: Custom log file locations
+- **Severity levels**: Error, warning, or info for different issue types
+- **Skip patterns**: Files to exclude from analysis
+- **Performance settings**: File size limits, log rotation
 
 ### Output Formats
-All tools support JSON output for integration with other tools:
+All tools support JSON output for integration with CI/CD:
 ```bash
 memory_checker_cli scan --json
 testing_compliance_cli scan --json
 ```
-**Note:** JSON output is currently not working (see ISSUE-081 in issue tracker)
 
 ## Integration
 
@@ -186,9 +214,11 @@ With ReleaseFast builds:
 
 ## Documentation
 
-- [User Guide](docs/user-guide.md) - Comprehensive usage guide
+- [Configuration Guide](docs/configuration.md) - Complete configuration reference
+- [User Guide](docs/user-guide/user-guide.md) - Comprehensive usage guide
 - [Scope Tracking Guide](docs/scope-tracking-guide.md) - Implementation details
-- [Current State](docs/tooling-current-state.md) - Honest assessment of tool capabilities
+- [Current State](docs/analysis/tooling-current-state.md) - Honest assessment of tool capabilities
+- [Issue Tracker](docs/issue-tracker/README.md) - Report and track issues
 
 ## Contributing
 

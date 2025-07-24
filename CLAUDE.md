@@ -29,6 +29,23 @@ zig build run-logger -- [args]
 ./zig-out/bin/app_logger_cli [args]
 ```
 
+### Configuration Commands
+```bash
+# Initialize configuration
+memory_checker_cli config init
+
+# Show current configuration
+memory_checker_cli config show
+
+# Validate configuration file
+memory_checker_cli config validate .zigtools.json
+
+# Use custom configuration
+memory_checker_cli --config custom-config.json scan
+testing_compliance_cli --config custom-config.json check
+app_logger_cli --config custom-config.json stats
+```
+
 ### Test Commands
 ```bash
 # Run all tests
@@ -78,3 +95,9 @@ This is a Zig tooling suite providing three main CLI tools for code quality anal
 - Test naming convention: `test "unit: component: description"`
 - All tests use test allocator for memory safety validation
 - Helper functions in tests for file creation/deletion operations
+
+## See Also
+
+- [Configuration Guide](docs/configuration.md) - Complete configuration reference
+- [User Guide](docs/user-guide/user-guide.md) - Comprehensive usage guide
+- [README](README.md) - Quick start and overview
