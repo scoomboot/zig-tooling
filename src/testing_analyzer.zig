@@ -2,9 +2,9 @@ const std = @import("std");
 const print = std.debug.print;
 const ArrayList = std.ArrayList;
 const HashMap = std.HashMap;
-const ScopeTracker = @import("../core/scope_tracker.zig").ScopeTracker;
-const ScopeInfo = @import("../core/scope_tracker.zig").ScopeInfo;
-const EnhancedSourceContext = @import("../core/source_context.zig").SourceContext;
+const ScopeTracker = @import("scope_tracker.zig").ScopeTracker;
+const ScopeInfo = @import("scope_tracker.zig").ScopeInfo;
+const EnhancedSourceContext = @import("source_context.zig").SourceContext;
 
 pub const TestingIssue = struct {
     file_path: []const u8,

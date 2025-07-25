@@ -2,34 +2,34 @@
 
 **Current Focus**: Library conversion from CLI tools to pure Zig library package.
 
+## 📊 Progress Summary
+- **Completed**: 2/21 issues (LC001 ✅, LC002 ✅)
+- **Ready to Start**: LC003
+- **In Progress**: None
+- **Blocked**: 18 issues awaiting dependencies
+
 ## 🟢 No Dependencies - Start Immediately
 
-### Critical Priority
-
-- **#LC001**: Clean up file structure
-  - **Component**: All CLI files, scripts, docs
-  - **Status**: Backlog
-  - **Dependencies**: None
-  - **Details**: Delete all CLI-related files, shell scripts, and CLI documentation
-  - **Action**: Start with this to clear the codebase
+*No issues currently available without dependencies. See "All Dependencies Completed" section below.*
 
 ## 🟢 All Dependencies Completed - Ready to Start
 
-*Issues will appear here as their dependencies are completed*
+- **#LC003**: Update build.zig for library *(moved from Next Wave)*
+  - **Component**: build.zig
+  - **Status**: Ready
+  - **Dependencies**: #LC002 ✅ (Completed 2025-07-25)
+  - **Details**: Remove all executable targets and configure as pure library
+  - **Requirements**:
+    - Remove executable targets
+    - Remove run steps
+    - Update test configuration
+    - Configure library export
 
 ## 🔄 Next Wave (1 Dependency Away)
 
 *Issues that become available after completing current work*
 
-### After #LC001 (Clean up file structure)
-- **#LC002**: Restructure source tree
-  - **Details**: Flatten directory structure and rename files for library usage
-  - **Unlocks**: #LC003
 
-### After #LC002 (Restructure source tree)
-- **#LC003**: Update build.zig for library
-  - **Details**: Remove all executable targets and configure as pure library
-  - **Unlocks**: #LC004
 
 ### After #LC003 (Update build.zig)
 - **#LC004**: Update build.zig.zon metadata
@@ -89,11 +89,11 @@ This path unlocks the most work and enables parallel development.
 
 ## 🎯 Quick Reference
 
-- **Start Now**: #LC001 (Clean up file structure)
+- **Start Now**: #LC002 (Restructure source tree)
 - **Total Issues**: 21
 - **Critical Issues**: 7
 - **Estimated Time**: 10-15 hours total
 
 ---
 
-*This file tracks library conversion issues from ISSUES.md. Updated: 2025-07-25*
+*This file tracks library conversion issues from ISSUES.md. Updated: 2025-07-25 (LC002 completed, LC003 ready)*

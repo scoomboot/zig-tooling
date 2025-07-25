@@ -14,31 +14,6 @@
 
 ### Phase 1: Project Restructuring
 
-- [ ] #LC001: Clean up file structure
-  - **Component**: All CLI files, scripts, docs
-  - **Priority**: Critical
-  - **Created**: 2025-07-25
-  - **Dependencies**: None
-  - **Details**: Delete all CLI-related files, shell scripts, and CLI documentation
-  - **Files to delete**:
-    - src/cli/memory_checker_cli.zig
-    - src/cli/testing_compliance_cli.zig
-    - src/cli/app_logger_cli.zig
-    - src/config/config_loader.zig
-    - scripts/*.sh
-    - docs/user-guide/user-guide.md
-    - examples/configs/
-
-- [ ] #LC002: Restructure source tree
-  - **Component**: src/
-  - **Priority**: Critical
-  - **Created**: 2025-07-25
-  - **Dependencies**: #LC001
-  - **Details**: Flatten directory structure and rename files for library usage
-  - **Requirements**:
-    - Rename root.zig to zig_tooling.zig
-    - Move analyzers to root src/
-    - Create types.zig and utils.zig
 
 - [ ] #LC003: Update build.zig for library
   - **Component**: build.zig
@@ -283,7 +258,38 @@
 
 *Finished issues for reference*
 
-<!-- Move completed issues here with resolution details -->
+- [x] #LC001: Clean up file structure
+  - **Component**: All CLI files, scripts, docs
+  - **Priority**: Critical
+  - **Created**: 2025-07-25
+  - **Completed**: 2025-07-25
+  - **Dependencies**: None
+  - **Details**: Delete all CLI-related files, shell scripts, and CLI documentation
+  - **Resolution**:
+    - Deleted 18 files: 3 CLI executables, config loader, 3 shell scripts, user guide, 5 config examples, 3 CLI tests
+    - Removed 4 directories: src/cli/, scripts/, docs/user-guide/, examples/configs/
+    - Updated build.zig to remove CLI targets and run steps
+    - Updated README.md to reflect library conversion status
+    - Fixed src/root.zig to remove config_loader import
+    - All tests pass, build succeeds
+
+- [x] #LC002: Restructure source tree
+  - **Component**: src/
+  - **Priority**: Critical
+  - **Created**: 2025-07-25
+  - **Completed**: 2025-07-25
+  - **Dependencies**: #LC001
+  - **Details**: Flatten directory structure and rename files for library usage
+  - **Resolution**:
+    - Renamed root.zig to zig_tooling.zig
+    - Moved all analyzers from src/analyzers/ to root src/
+    - Moved all core modules from src/core/ to root src/
+    - Moved logging and config modules to root src/
+    - Created types.zig and utils.zig placeholder files
+    - Updated all import paths in affected files
+    - Updated build.zig to reference new zig_tooling.zig
+    - Removed empty directories (analyzers/, core/, logging/, config/, tools/)
+    - All tests pass, build succeeds
 
 ## Issue Guidelines
 
@@ -296,5 +302,5 @@
 
 ---
 
-*Last Updated: 2025-07-25*
+*Last Updated: 2025-07-25 (LC002 completed)*
 *Focus: Library Conversion Project*

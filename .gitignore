@@ -22,4 +22,4 @@ Thumbs.db
 test-*.zig.tmp
 
 # Documentation (temporary)
-docs/
+docs/archive
