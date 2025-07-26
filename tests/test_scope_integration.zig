@@ -5,8 +5,8 @@
 
 const std = @import("std");
 const zig_tooling = @import("zig_tooling");
-const MemoryAnalyzer = zig_tooling.memory_analyzer.MemoryAnalyzer;
-const ScopeTracker = zig_tooling.scope_tracker.ScopeTracker;
+const MemoryAnalyzer = zig_tooling.MemoryAnalyzer;
+const ScopeTracker = zig_tooling.ScopeTracker;
 const SourceContext = zig_tooling.source_context.SourceContext;
 
 // Test case that demonstrates the critical bug - defer detection in test bodies

@@ -3,10 +3,10 @@
 **Current Focus**: Library conversion from CLI tools to pure Zig library package.
 
 ## 📊 Progress Summary
-- **Completed**: 4/21 issues (LC001 ✅, LC002 ✅, LC003 ✅, LC004 ✅)
-- **Ready to Start**: LC005
+- **Completed**: 5/21 issues (LC001 ✅, LC002 ✅, LC003 ✅, LC004 ✅, LC005 ✅)
+- **Ready to Start**: LC006, LC007
 - **In Progress**: None
-- **Blocked**: 16 issues awaiting dependencies
+- **Blocked**: 14 issues awaiting dependencies
 
 ## 🟢 No Dependencies - Start Immediately
 
@@ -14,16 +14,27 @@
 
 ## 🟢 All Dependencies Completed - Ready to Start
 
-- **#LC005**: Design public API surface
-  - **Component**: src/zig_tooling.zig (new)
+- **#LC006**: Simplify configuration system
+  - **Component**: src/config/config.zig, src/types.zig
   - **Status**: Ready
-  - **Dependencies**: #LC004 ✅ (Completed 2025-07-25)
-  - **Details**: Create main library interface with clean public API
+  - **Dependencies**: #LC005 ✅ (Completed 2025-07-26)
+  - **Details**: Remove file-based config, convert to programmatic only
   - **Requirements**:
-    - Export analyzer types
-    - Add convenience functions
-    - Define public types
-    - Document API surface
+    - Remove config file I/O
+    - Simplify config structures
+    - Provide defaults
+    - Support inline config
+
+- **#LC007**: Remove CLI dependencies
+  - **Component**: All analyzers and core modules
+  - **Status**: Ready
+  - **Dependencies**: #LC005 ✅ (Completed 2025-07-26)
+  - **Details**: Remove all print statements and CLI-specific code
+  - **Requirements**:
+    - Remove print statements
+    - Return structured data
+    - Remove progress indicators
+    - Convert errors to types
 
 ## 🔄 Next Wave (1 Dependency Away)
 
@@ -31,10 +42,6 @@
 
 
 
-### After #LC005 (Design API)
-- **#LC006**: Simplify configuration system
-- **#LC007**: Remove CLI dependencies
-  - **Unlocks**: #LC008
 
 ### After #LC007 (Remove CLI deps)
 - **#LC008**: Improve error handling
@@ -63,8 +70,8 @@
 
 ### Recommended Execution Path:
 
-1. **Phase 1 (Sequential)**: #LC001 → #LC002 → #LC003 → #LC004
-2. **Phase 2 Start**: #LC005 → (#LC006, #LC007 parallel) → #LC008
+1. **Phase 1 (Sequential)**: #LC001 ✅ → #LC002 ✅ → #LC003 ✅ → #LC004 ✅
+2. **Phase 2 Start**: #LC005 ✅ → (#LC006, #LC007 parallel) → #LC008
 3. **Phase 3 (Parallel)**: #LC009, #LC010, #LC011, #LC012
 4. **Phase 4 (After analyzers)**: #LC013, #LC014, #LC015
 5. **Phase 5 (Documentation)**: #LC016 → #LC017, #LC018
@@ -72,18 +79,18 @@
 
 ### Critical Path:
 ```
-#LC001 → #LC002 → #LC003 → #LC004 → #LC005 → #LC007 → #LC008 → #LC009/LC010
+#LC001 ✅ → #LC002 ✅ → #LC003 ✅ → #LC004 ✅ → #LC005 ✅ → #LC007 → #LC008 → #LC009/LC010
 ```
 
 This path unlocks the most work and enables parallel development.
 
 ## 🎯 Quick Reference
 
-- **Start Now**: #LC005 (Design public API surface)
+- **Start Now**: #LC006 (Simplify configuration system) or #LC007 (Remove CLI dependencies)
 - **Total Issues**: 21
 - **Critical Issues**: 7
 - **Estimated Time**: 10-15 hours total
 
 ---
 
-*This file tracks library conversion issues from ISSUES.md. Updated: 2025-07-25 (LC004 completed, LC005 ready)*
+*This file tracks library conversion issues from ISSUES.md. Updated: 2025-07-26 (LC005 completed, LC006 and LC007 ready)*
