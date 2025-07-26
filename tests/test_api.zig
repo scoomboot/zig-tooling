@@ -176,30 +176,48 @@ test "unit: API: custom configuration" {
         \\const std = @import("std");
         \\
         \\pub fn main() !void {
-        \\    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
-        \\    defer arena.deinit();
+        \\    const data = try allocator.alloc(u8, 100);
+        \\    // Missing defer allocator.free(data);
         \\}
     ;
     
-    // Configure to allow arena usage
-    const config = zig_tooling.Config{
+    // Test with defer checking disabled
+    const config_no_defer = zig_tooling.Config{
         .memory = .{
-            .check_arena_usage = false,
+            .check_defer = false,
         },
     };
     
-    const result = try zig_tooling.analyzeMemory(allocator, source, "arena.zig", config);
-    defer allocator.free(result.issues);
-    defer for (result.issues) |issue| {
+    const result1 = try zig_tooling.analyzeMemory(allocator, source, "test.zig", config_no_defer);
+    defer allocator.free(result1.issues);
+    defer for (result1.issues) |issue| {
         allocator.free(issue.file_path);
         allocator.free(issue.message);
         if (issue.suggestion) |s| allocator.free(s);
     };
     
-    // Should not report arena usage issues when disabled
-    for (result.issues) |issue| {
-        try testing.expect(issue.issue_type != .arena_in_library);
+    // Should not report missing defer issues when disabled
+    for (result1.issues) |issue| {
+        try testing.expect(issue.issue_type != .missing_defer);
     }
+    
+    // Test with default config (defer checking enabled)
+    const result2 = try zig_tooling.analyzeMemory(allocator, source, "test.zig", null);
+    defer allocator.free(result2.issues);
+    defer for (result2.issues) |issue| {
+        allocator.free(issue.file_path);
+        allocator.free(issue.message);
+        if (issue.suggestion) |s| allocator.free(s);
+    };
+    
+    // Should report missing defer with default config
+    var found_missing_defer = false;
+    for (result2.issues) |issue| {
+        if (issue.issue_type == .missing_defer) {
+            found_missing_defer = true;
+        }
+    }
+    try testing.expect(found_missing_defer);
 }
 
 test "unit: API: issue severity levels" {
@@ -248,4 +266,52 @@ test "unit: API: types exports" {
     _ = zig_tooling.MemoryAnalyzer;
     _ = zig_tooling.TestingAnalyzer;
     _ = zig_tooling.ScopeTracker;
+}
+
+test "unit: API: testing configuration" {
+    const allocator = testing.allocator;
+    
+    const source =
+        \\test "this test has no category" {
+        \\    try std.testing.expect(true);
+        \\}
+    ;
+    
+    // Test with category enforcement disabled
+    const config_no_categories = zig_tooling.Config{
+        .testing = .{
+            .enforce_categories = false,
+        },
+    };
+    
+    const result1 = try zig_tooling.analyzeTests(allocator, source, "test.zig", config_no_categories);
+    defer allocator.free(result1.issues);
+    defer for (result1.issues) |issue| {
+        allocator.free(issue.file_path);
+        allocator.free(issue.message);
+        if (issue.suggestion) |s| allocator.free(s);
+    };
+    
+    // Should not report uncategorized test issues when disabled
+    for (result1.issues) |issue| {
+        try testing.expect(issue.issue_type != .missing_test_category);
+    }
+    
+    // Test with default config (category enforcement enabled)
+    const result2 = try zig_tooling.analyzeTests(allocator, source, "test.zig", null);
+    defer allocator.free(result2.issues);
+    defer for (result2.issues) |issue| {
+        allocator.free(issue.file_path);
+        allocator.free(issue.message);
+        if (issue.suggestion) |s| allocator.free(s);
+    };
+    
+    // Should report uncategorized test with default config
+    var found_uncategorized = false;
+    for (result2.issues) |issue| {
+        if (issue.issue_type == .missing_test_category) {
+            found_uncategorized = true;
+        }
+    }
+    try testing.expect(found_uncategorized);
 }

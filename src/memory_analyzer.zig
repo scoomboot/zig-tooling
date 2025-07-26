@@ -18,7 +18,6 @@
 //!   analyzer.printReport();
 
 const std = @import("std");
-const print = std.debug.print;
 const ArrayList = std.ArrayList;
 const HashMap = std.HashMap;
 const ScopeTracker = @import("scope_tracker.zig").ScopeTracker;
@@ -127,6 +126,7 @@ pub const MemoryAnalyzer = struct {
     arenas: ArrayList(ArenaPattern),
     scope_tracker: ScopeTracker,
     source_context: SourceContext,
+    config: @import("types.zig").MemoryConfig,
     
     pub fn init(allocator: std.mem.Allocator) MemoryAnalyzer {
         return MemoryAnalyzer{
@@ -136,6 +136,19 @@ pub const MemoryAnalyzer = struct {
             .arenas = ArrayList(ArenaPattern).init(allocator),
             .scope_tracker = ScopeTracker.init(allocator),
             .source_context = SourceContext.init(allocator),
+            .config = .{}, // Use default config
+        };
+    }
+    
+    pub fn initWithConfig(allocator: std.mem.Allocator, config: @import("types.zig").MemoryConfig) MemoryAnalyzer {
+        return MemoryAnalyzer{
+            .allocator = allocator,
+            .issues = ArrayList(MemoryIssue).init(allocator),
+            .allocations = ArrayList(AllocationPattern).init(allocator),
+            .arenas = ArrayList(ArenaPattern).init(allocator),
+            .scope_tracker = ScopeTracker.init(allocator),
+            .source_context = SourceContext.init(allocator),
+            .config = config,
         };
     }
     
@@ -218,7 +231,9 @@ pub const MemoryAnalyzer = struct {
         
         // Validate patterns and generate issues with scope context
         try self.validateMemoryPatterns(file_path, temp_allocator);
-        try self.validateAllocatorChoice(file_path, temp_allocator);
+        if (self.config.check_allocator_usage) {
+            try self.validateAllocatorChoice(file_path, temp_allocator);
+        }
     }
     
     fn identifyAllocations(self: *MemoryAnalyzer, file_path: []const u8, line: []const u8, line_number: u32, temp_allocator: std.mem.Allocator) !void {
@@ -519,7 +534,7 @@ pub const MemoryAnalyzer = struct {
     fn validateMemoryPatterns(self: *MemoryAnalyzer, file_path: []const u8, temp_allocator: std.mem.Allocator) !void {
         // Check allocations for missing cleanup
         for (self.allocations.items) |allocation| {
-            if (!allocation.has_defer) {
+            if (!allocation.has_defer and self.config.check_defer) {
                 // Check if this allocation might be cleaned up in a deinit method
                 const is_struct_field = try self.isAllocationForStructField(file_path, allocation, temp_allocator);
                 
@@ -554,7 +569,7 @@ pub const MemoryAnalyzer = struct {
                 }
             }
             
-            if (!allocation.has_errdefer and std.mem.eql(u8, allocation.allocation_type, "alloc")) {
+            if (!allocation.has_errdefer and std.mem.eql(u8, allocation.allocation_type, "alloc") and self.config.check_defer) {
                 // Check if this is a single-allocation return pattern that doesn't need errdefer
                 const is_single_allocation_return = try self.isSingleAllocationReturn(file_path, allocation, temp_allocator);
                 
@@ -588,7 +603,7 @@ pub const MemoryAnalyzer = struct {
         
         // Check arenas for missing deinit
         for (self.arenas.items) |arena| {
-            if (!arena.has_deinit) {
+            if (!arena.has_deinit and self.config.check_arena_usage) {
                 const issue = MemoryIssue{
                     .file_path = try self.allocator.dupe(u8, file_path),
                     .line = arena.line,
@@ -1210,49 +1225,6 @@ pub const MemoryAnalyzer = struct {
         return false;
     }
     
-    pub fn printReport(self: *MemoryAnalyzer) void {
-        if (self.issues.items.len == 0) {
-            print("✅ No memory management issues found!\n", .{});
-            return;
-        }
-        
-        print("🔍 Memory Management Analysis Report\n", .{});
-        print("=====================================\n", .{});
-        print("Total issues found: {d}\n\n", .{self.issues.items.len});
-        
-        var error_count: u32 = 0;
-        var warning_count: u32 = 0;
-        var info_count: u32 = 0;
-        
-        for (self.issues.items) |issue| {
-            const severity_icon = switch (issue.severity) {
-                .err => "❌",
-                .warning => "⚠️",
-                .info => "ℹ️",
-            };
-            
-            switch (issue.severity) {
-                .err => error_count += 1,
-                .warning => warning_count += 1,
-                .info => info_count += 1,
-            }
-            
-            print("{s} {s}:{d}:{d}\n", .{ severity_icon, issue.file_path, issue.line, issue.column });
-            print("   {s}\n", .{issue.description});
-            print("   💡 {s}\n\n", .{issue.suggestion});
-        }
-        
-        print("Summary: {d} errors, {d} warnings, {d} info\n", .{ error_count, warning_count, info_count });
-        
-        if (error_count > 0) {
-            print("\n❌ Memory management check FAILED - please fix errors before proceeding\n", .{});
-        } else if (warning_count > 0) {
-            print("\n⚠️  Memory management check PASSED with warnings - consider addressing them\n", .{});
-        } else {
-            print("\n✅ Memory management check PASSED\n", .{});
-        }
-    }
-    
     pub fn hasErrors(self: *MemoryAnalyzer) bool {
         for (self.issues.items) |issue| {
             if (issue.severity == .err) return true;
@@ -1288,7 +1260,7 @@ test "memory: memory analyzer basic functionality" {
     for (analyzer.issues.items) |issue| {
         if (issue.severity == .err) {
             error_count += 1;
-            std.debug.print("Error found: {s} at line {d}\n", .{issue.description, issue.line});
+            // Error found: issue already added to list
         }
     }
     try std.testing.expect(error_count == 0);

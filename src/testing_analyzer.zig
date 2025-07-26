@@ -1,5 +1,4 @@
 const std = @import("std");
-const print = std.debug.print;
 const ArrayList = std.ArrayList;
 const HashMap = std.HashMap;
 const ScopeTracker = @import("scope_tracker.zig").ScopeTracker;
@@ -99,6 +98,7 @@ pub const TestingAnalyzer = struct {
     source_files: ArrayList(SourceFilePattern),
     scope_tracker: ScopeTracker,
     enhanced_source_context: EnhancedSourceContext,
+    config: @import("types.zig").TestingConfig,
     
     pub fn init(allocator: std.mem.Allocator) TestingAnalyzer {
         return TestingAnalyzer{
@@ -108,6 +108,19 @@ pub const TestingAnalyzer = struct {
             .source_files = ArrayList(SourceFilePattern).init(allocator),
             .scope_tracker = ScopeTracker.init(allocator),
             .enhanced_source_context = EnhancedSourceContext.init(allocator),
+            .config = .{}, // Use default config
+        };
+    }
+    
+    pub fn initWithConfig(allocator: std.mem.Allocator, config: @import("types.zig").TestingConfig) TestingAnalyzer {
+        return TestingAnalyzer{
+            .allocator = allocator,
+            .issues = ArrayList(TestingIssue).init(allocator),
+            .tests = ArrayList(TestPattern).init(allocator),
+            .source_files = ArrayList(SourceFilePattern).init(allocator),
+            .scope_tracker = ScopeTracker.init(allocator),
+            .enhanced_source_context = EnhancedSourceContext.init(allocator),
+            .config = config,
         };
     }
     
@@ -410,7 +423,7 @@ pub const TestingAnalyzer = struct {
     
     fn generateTestIssues(self: *TestingAnalyzer, test_pattern: TestPattern, file_path: []const u8) !void {
         // Check test naming convention
-        if (!test_pattern.has_proper_naming) {
+        if (!test_pattern.has_proper_naming and self.config.enforce_naming) {
             const issue = TestingIssue{
                 .file_path = try self.allocator.dupe(u8, file_path),
                 .line = test_pattern.line,
@@ -432,7 +445,7 @@ pub const TestingAnalyzer = struct {
         }
         
         // Check for uncategorized tests
-        if (test_pattern.category == .unknown) {
+        if (test_pattern.category == .unknown and self.config.enforce_categories) {
             const issue = TestingIssue{
                 .file_path = try self.allocator.dupe(u8, file_path),
                 .line = test_pattern.line,
@@ -667,49 +680,6 @@ pub const TestingAnalyzer = struct {
         return true;
     }
     
-    pub fn printReport(self: *TestingAnalyzer) void {
-        if (self.issues.items.len == 0) {
-            print("✅ No testing compliance issues found!\n", .{});
-            return;
-        }
-        
-        print("🔍 Testing Compliance Analysis Report\n", .{});
-        print("=====================================\n", .{});
-        print("Total issues found: {d}\n\n", .{self.issues.items.len});
-        
-        var error_count: u32 = 0;
-        var warning_count: u32 = 0;
-        var info_count: u32 = 0;
-        
-        for (self.issues.items) |issue| {
-            const severity_icon = switch (issue.severity) {
-                .err => "❌",
-                .warning => "⚠️",
-                .info => "ℹ️",
-            };
-            
-            switch (issue.severity) {
-                .err => error_count += 1,
-                .warning => warning_count += 1,
-                .info => info_count += 1,
-            }
-            
-            print("{s} {s}:{d}:{d}\n", .{ severity_icon, issue.file_path, issue.line, issue.column });
-            print("   {s}\n", .{issue.description});
-            print("   💡 {s}\n\n", .{issue.suggestion});
-        }
-        
-        print("Summary: {d} errors, {d} warnings, {d} info\n", .{ error_count, warning_count, info_count });
-        
-        if (error_count > 0) {
-            print("\n❌ TESTING COMPLIANCE CHECK FAILED\n", .{});
-        } else if (warning_count > 0) {
-            print("\n⚠️  TESTING COMPLIANCE CHECK PASSED WITH WARNINGS\n", .{});
-        } else {
-            print("\n✅ TESTING COMPLIANCE CHECK PASSED\n", .{});
-        }
-    }
-    
     pub fn hasErrors(self: *TestingAnalyzer) bool {
         for (self.issues.items) |issue| {
             if (issue.severity == .err) return true;
@@ -757,16 +727,6 @@ test "integration: testing analyzer detects improper naming" {
     try analyzer.analyzeSourceCode("test.zig", test_source);
     
     // Should find naming issue
-    if (analyzer.issues.items.len == 0) {
-        std.debug.print("No issues found! Test patterns: {d}\n", .{analyzer.tests.items.len});
-        for (analyzer.tests.items) |test_pattern| {
-            std.debug.print("Test: {s}, has_proper_naming: {}\n", .{test_pattern.test_name, test_pattern.has_proper_naming});
-        }
-    } else {
-        for (analyzer.issues.items) |issue| {
-            std.debug.print("Issue type: {}, description: {s}\n", .{issue.issue_type, issue.description});
-        }
-    }
     try std.testing.expect(analyzer.issues.items.len > 0);
     try std.testing.expect(analyzer.issues.items[0].issue_type == .improper_test_naming);
 }

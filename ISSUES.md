@@ -16,30 +16,6 @@
 
 ### Phase 2: API Design and Refactoring
 
-- [ ] #LC006: Simplify configuration system
-  - **Component**: src/config/config.zig, src/types.zig
-  - **Priority**: High
-  - **Created**: 2025-07-25
-  - **Dependencies**: #LC005
-  - **Details**: Remove file-based config, convert to programmatic only
-  - **Requirements**:
-    - Remove config file I/O
-    - Simplify config structures
-    - Provide defaults
-    - Support inline config
-
-- [ ] #LC007: Remove CLI dependencies
-  - **Component**: All analyzers and core modules
-  - **Priority**: Critical
-  - **Created**: 2025-07-25
-  - **Dependencies**: #LC005
-  - **Details**: Remove all print statements and CLI-specific code
-  - **Requirements**:
-    - Remove print statements
-    - Return structured data
-    - Remove progress indicators
-    - Convert errors to types
-
 - [ ] #LC008: Improve error handling
   - **Component**: src/types.zig, all modules
   - **Priority**: High
@@ -65,6 +41,9 @@
     - Return issue arrays
     - Simplify component detection
     - Flexible allocator handling
+  - **Notes**:
+    - MemoryConfig.allowed_allocators field exists but not checked (src/types.zig:126)
+    - validateAllocatorChoice() at src/memory_analyzer.zig:628 needs update
 
 - [ ] #LC010: Refactor testing analyzer
   - **Component**: src/testing_analyzer.zig
@@ -77,6 +56,10 @@
     - Configurable naming rules
     - Return compliance data
     - Simplify validation logic
+  - **Notes**:
+    - TestCategory enum still hardcoded in src/testing_analyzer.zig:43-63
+    - Config has allowed_categories field but analyzer doesn't use it yet
+    - See determineTestCategory() at src/testing_analyzer.zig:618
 
 - [ ] #LC011: Optimize scope tracker
   - **Component**: src/scope_tracker.zig
@@ -91,7 +74,7 @@
     - API documentation
 
 - [ ] #LC012: Simplify logging system
-  - **Component**: src/logging/app_logger.zig
+  - **Component**: src/app_logger.zig
   - **Priority**: Low
   - **Created**: 2025-07-25
   - **Dependencies**: #LC008
@@ -101,6 +84,10 @@
     - Callback interface
     - Remove file rotation
     - Structured events
+  - **Notes**:
+    - File is now at src/app_logger.zig (not src/logging/)
+    - Exported via zig_tooling.zig but not integrated with Config
+    - Still has file-based logging with rotation
 
 ### Phase 4: Integration Helpers
 
@@ -115,6 +102,9 @@
     - addTestComplianceStep function
     - Pre-commit hook generator
     - Build step examples
+  - **Notes**:
+    - PatternConfig (src/types.zig:140-145) not implemented in analyzers
+    - Need to wire include_patterns/exclude_patterns for file filtering
 
 - [ ] #LC014: Common patterns library
   - **Component**: src/patterns.zig (new)
@@ -139,6 +129,9 @@
     - JSON formatter
     - GitHub Actions formatter
     - Custom formatter support
+  - **Notes**:
+    - AnalysisOptions (src/types.zig:147-154) fields not used yet
+    - max_issues, verbose, parallel, continue_on_error need implementation
 
 ### Phase 5: Documentation and Examples
 
@@ -302,6 +295,39 @@
     - Fixed enum naming conflicts (err vs error) and updated type conversions
     - All tests pass, library builds successfully
 
+- [x] #LC006: Simplify configuration system
+  - **Component**: src/config/config.zig, src/types.zig
+  - **Priority**: High
+  - **Created**: 2025-07-25
+  - **Completed**: 2025-07-26
+  - **Dependencies**: #LC005
+  - **Details**: Remove file-based config, convert to programmatic only
+  - **Resolution**:
+    - Deleted unused src/config/config.zig file (198 lines removed)
+    - Updated MemoryAnalyzer to accept and use MemoryConfig from types.zig
+    - Updated TestingAnalyzer to accept and use TestingConfig from types.zig
+    - Added configuration checks before creating issues (check_defer, check_arena_usage, etc.)
+    - Wired configuration through public API functions analyzeMemory() and analyzeTests()
+    - Added comprehensive tests for configuration usage in test_api.zig
+    - Configuration is now purely programmatic with sensible defaults
+    - All tests pass, configuration system fully functional
+
+- [x] #LC007: Remove CLI dependencies
+  - **Component**: All analyzers and core modules
+  - **Priority**: Critical
+  - **Created**: 2025-07-25
+  - **Completed**: 2025-07-26
+  - **Dependencies**: #LC005
+  - **Details**: Remove all print statements and CLI-specific code
+  - **Resolution**:
+    - Removed printReport() methods from both analyzers (42 lines removed from each)
+    - Removed print imports from memory_analyzer.zig and testing_analyzer.zig
+    - Removed debug print statements from both analyzers
+    - Converted debug.print in app_logger.zig to proper error handling with TODO note
+    - Removed print import from app_logger.zig
+    - All tests pass, library builds successfully
+    - Analyzers now return structured data only, no console output
+
 ## Issue Guidelines
 
 1. **Issue Format**: `#LCXXX: Clear, action-oriented title` (LC = Library Conversion)
@@ -313,5 +339,5 @@
 
 ---
 
-*Last Updated: 2025-07-26 (LC005 completed)*
+*Last Updated: 2025-07-26 (LC007 completed)*
 *Focus: Library Conversion Project*

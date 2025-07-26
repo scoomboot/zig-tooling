@@ -1,7 +1,6 @@
 const std = @import("std");
 const time = std.time;
 const fs = std.fs;
-const print = std.debug.print;
 
 pub const AppLogLevel = enum {
     debug,
@@ -532,7 +531,8 @@ pub const AppLogger = struct {
                 defer self.allocator.free(full_path);
                 fs.cwd().deleteFile(full_path) catch |err| {
                     // Log deletion failure but don't fail the operation
-                    std.debug.print("Failed to delete old archive {s}: {}\n", .{ full_path, err });
+                    // TODO: Consider proper error handling for library usage (LC012)
+                    _ = err;
                 };
             }
         }

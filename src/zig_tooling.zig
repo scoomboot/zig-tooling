@@ -76,9 +76,11 @@ pub fn analyzeMemory(
     config: ?Config,
 ) AnalysisError!AnalysisResult {
     const start_time = std.time.milliTimestamp();
-    _ = config; // TODO: Use config in future issues
     
-    var analyzer = MemoryAnalyzer.init(allocator);
+    var analyzer = if (config) |cfg|
+        MemoryAnalyzer.initWithConfig(allocator, cfg.memory)
+    else
+        MemoryAnalyzer.init(allocator);
     defer analyzer.deinit();
     
     analyzer.analyzeSourceCode(file_path, source) catch |err| switch (err) {
@@ -135,9 +137,11 @@ pub fn analyzeTests(
     config: ?Config,
 ) AnalysisError!AnalysisResult {
     const start_time = std.time.milliTimestamp();
-    _ = config; // TODO: Use config in future issues
     
-    var analyzer = TestingAnalyzer.init(allocator);
+    var analyzer = if (config) |cfg|
+        TestingAnalyzer.initWithConfig(allocator, cfg.testing)
+    else
+        TestingAnalyzer.init(allocator);
     defer analyzer.deinit();
     
     analyzer.analyzeSourceCode(file_path, source) catch {
