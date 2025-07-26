@@ -3,10 +3,10 @@
 **Current Focus**: Library conversion from CLI tools to pure Zig library package.
 
 ## 📊 Progress Summary
-- **Completed**: 3/21 issues (LC001 ✅, LC002 ✅, LC003 ✅)
-- **Ready to Start**: LC004
+- **Completed**: 4/21 issues (LC001 ✅, LC002 ✅, LC003 ✅, LC004 ✅)
+- **Ready to Start**: LC005
 - **In Progress**: None
-- **Blocked**: 17 issues awaiting dependencies
+- **Blocked**: 16 issues awaiting dependencies
 
 ## 🟢 No Dependencies - Start Immediately
 
@@ -14,27 +14,22 @@
 
 ## 🟢 All Dependencies Completed - Ready to Start
 
-- **#LC004**: Update build.zig.zon metadata
-  - **Component**: build.zig.zon
+- **#LC005**: Design public API surface
+  - **Component**: src/zig_tooling.zig (new)
   - **Status**: Ready
-  - **Dependencies**: #LC003 ✅ (Completed 2025-07-25)
-  - **Details**: Update package metadata for library distribution
+  - **Dependencies**: #LC004 ✅ (Completed 2025-07-25)
+  - **Details**: Create main library interface with clean public API
   - **Requirements**:
-    - Change package type
-    - Update semantic version
-    - Update paths list
-    - Add library metadata
+    - Export analyzer types
+    - Add convenience functions
+    - Define public types
+    - Document API surface
 
 ## 🔄 Next Wave (1 Dependency Away)
 
 *Issues that become available after completing current work*
 
 
-
-### After #LC004 (Update metadata)
-- **#LC005**: Design public API surface
-  - **Details**: Create main library interface with clean public API
-  - **Unlocks**: #LC006, #LC007
 
 ### After #LC005 (Design API)
 - **#LC006**: Simplify configuration system
@@ -84,11 +79,11 @@ This path unlocks the most work and enables parallel development.
 
 ## 🎯 Quick Reference
 
-- **Start Now**: #LC004 (Update build.zig.zon metadata)
+- **Start Now**: #LC005 (Design public API surface)
 - **Total Issues**: 21
 - **Critical Issues**: 7
 - **Estimated Time**: 10-15 hours total
 
 ---
 
-*This file tracks library conversion issues from ISSUES.md. Updated: 2025-07-25 (LC003 completed, LC004 ready)*
+*This file tracks library conversion issues from ISSUES.md. Updated: 2025-07-25 (LC004 completed, LC005 ready)*
