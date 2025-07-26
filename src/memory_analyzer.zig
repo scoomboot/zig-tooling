@@ -23,62 +23,15 @@ const HashMap = std.HashMap;
 const ScopeTracker = @import("scope_tracker.zig").ScopeTracker;
 const ScopeInfo = @import("scope_tracker.zig").ScopeInfo;
 const SourceContext = @import("source_context.zig").SourceContext;
+const types = @import("types.zig");
 
-pub const MemoryIssue = struct {
-    file_path: []const u8,
-    line: u32,
-    column: u32,
-    issue_type: IssueType,
-    description: []const u8,
-    suggestion: []const u8,
-    severity: Severity,
-};
+// Using unified types from types.zig
+const Issue = types.Issue;
+const AnalysisError = types.AnalysisError;
 
-pub const IssueType = enum {
-    missing_defer,
-    missing_errdefer,
-    arena_not_deinitialized,
-    wrong_allocator_choice,
-    potential_leak_in_loop,
-    allocation_without_cleanup,
-    gpa_misuse,
-    arena_misuse,
-};
-
-pub const Severity = enum {
-    err,
-    warning,
-    info,
-};
-
-pub const AnalyzerError = error{
-    FileNotFound,
-    AccessDenied,
-};
-
-pub const ComponentType = enum {
-    main_application,
-    database_operations,
-    data_import_processing,
-    simulation_engine,
-    player_team_data,
-    realtime_components,
-    api_handler,
-    unknown,
-    
-    pub fn expectedAllocator(self: ComponentType) []const u8 {
-        return switch (self) {
-            .main_application => "GeneralPurposeAllocator (GPA)",
-            .database_operations => "GeneralPurposeAllocator (inherited from main)",
-            .data_import_processing => "Arena Allocator (primary), GPA (for persistent data)",
-            .simulation_engine => "Arena Allocator per simulation run, Fixed Buffer for real-time",
-            .player_team_data => "GeneralPurposeAllocator (GPA)",
-            .realtime_components => "Fixed Buffer Allocator or C Allocator",
-            .api_handler => "GeneralPurposeAllocator (GPA)",
-            .unknown => "Depends on component type - analyze usage",
-        };
-    }
-};
+// Note: Component type detection has been simplified for library usage.
+// Users should configure allowed_allocators based on their project's needs
+// rather than relying on hardcoded component patterns.
 
 pub const AllocationPattern = struct {
     line: u32,
@@ -121,7 +74,7 @@ pub const ArenaPattern = struct {
 
 pub const MemoryAnalyzer = struct {
     allocator: std.mem.Allocator,
-    issues: ArrayList(MemoryIssue),
+    issues: ArrayList(Issue),
     allocations: ArrayList(AllocationPattern),
     arenas: ArrayList(ArenaPattern),
     scope_tracker: ScopeTracker,
@@ -131,7 +84,7 @@ pub const MemoryAnalyzer = struct {
     pub fn init(allocator: std.mem.Allocator) MemoryAnalyzer {
         return MemoryAnalyzer{
             .allocator = allocator,
-            .issues = ArrayList(MemoryIssue).init(allocator),
+            .issues = ArrayList(Issue).init(allocator),
             .allocations = ArrayList(AllocationPattern).init(allocator),
             .arenas = ArrayList(ArenaPattern).init(allocator),
             .scope_tracker = ScopeTracker.init(allocator),
@@ -143,7 +96,7 @@ pub const MemoryAnalyzer = struct {
     pub fn initWithConfig(allocator: std.mem.Allocator, config: @import("types.zig").MemoryConfig) MemoryAnalyzer {
         return MemoryAnalyzer{
             .allocator = allocator,
-            .issues = ArrayList(MemoryIssue).init(allocator),
+            .issues = ArrayList(Issue).init(allocator),
             .allocations = ArrayList(AllocationPattern).init(allocator),
             .arenas = ArrayList(ArenaPattern).init(allocator),
             .scope_tracker = ScopeTracker.init(allocator),
@@ -156,8 +109,8 @@ pub const MemoryAnalyzer = struct {
         // Free all issue descriptions, suggestions, and file paths
         for (self.issues.items) |issue| {
             if (issue.file_path.len > 0) self.allocator.free(issue.file_path);
-            if (issue.description.len > 0) self.allocator.free(issue.description);
-            if (issue.suggestion.len > 0) self.allocator.free(issue.suggestion);
+            if (issue.message.len > 0) self.allocator.free(issue.message);
+            if (issue.suggestion) |suggestion| if (suggestion.len > 0) self.allocator.free(suggestion);
         }
         
         // Clean up arena patterns
@@ -183,8 +136,8 @@ pub const MemoryAnalyzer = struct {
     
     pub fn analyzeFile(self: *MemoryAnalyzer, file_path: []const u8) !void {
         const file = std.fs.cwd().openFile(file_path, .{}) catch |err| switch (err) {
-            error.FileNotFound => return AnalyzerError.FileNotFound,
-            error.AccessDenied => return AnalyzerError.AccessDenied,
+            error.FileNotFound => return AnalysisError.FileNotFound,
+            error.AccessDenied => return AnalysisError.AccessDenied,
             else => return err,
         };
         defer file.close();
@@ -548,12 +501,13 @@ pub const MemoryAnalyzer = struct {
                 const is_test_allocation = self.isTestAllocation(allocation);
                 
                 if (!is_struct_field and !is_ownership_transfer and !is_arena_allocation and !is_test_allocation) {
-                    const issue = MemoryIssue{
+                    const issue = Issue{
                         .file_path = try self.allocator.dupe(u8, file_path),
                         .line = allocation.line,
                         .column = allocation.column,
                         .issue_type = .missing_defer,
-                        .description = try std.fmt.allocPrint(
+                        .severity = types.Severity.err,
+                        .message = try std.fmt.allocPrint(
                             self.allocator,
                             "Allocation on line {d} is missing corresponding 'defer' cleanup",
                             .{allocation.line}
@@ -563,7 +517,7 @@ pub const MemoryAnalyzer = struct {
                             "Add 'defer {s}.free(variable_name);' after allocation",
                             .{allocation.allocator_var}
                         ),
-                        .severity = .err,
+                        .code_snippet = null,
                     };
                     try self.issues.append(issue);
                 }
@@ -579,12 +533,13 @@ pub const MemoryAnalyzer = struct {
                 const is_test_allocation = self.isTestAllocation(allocation);
                 
                 if (!is_single_allocation_return and !is_ownership_transfer and !is_arena_allocation and !is_test_allocation) {
-                    const issue = MemoryIssue{
+                    const issue = Issue{
                         .file_path = try self.allocator.dupe(u8, file_path),
                         .line = allocation.line,
                         .column = allocation.column,
                         .issue_type = .missing_errdefer,
-                        .description = try std.fmt.allocPrint(
+                        .severity = types.Severity.warning,
+                        .message = try std.fmt.allocPrint(
                             self.allocator,
                             "Allocation on line {d} should have 'errdefer' for error path cleanup",
                             .{allocation.line}
@@ -594,7 +549,7 @@ pub const MemoryAnalyzer = struct {
                             "Add 'errdefer allocator.free(variable_name);' for error handling",
                             .{}
                         ),
-                        .severity = .warning,
+                        .code_snippet = null,
                     };
                     try self.issues.append(issue);
                 }
@@ -604,12 +559,13 @@ pub const MemoryAnalyzer = struct {
         // Check arenas for missing deinit
         for (self.arenas.items) |arena| {
             if (!arena.has_deinit and self.config.check_arena_usage) {
-                const issue = MemoryIssue{
+                const issue = Issue{
                     .file_path = try self.allocator.dupe(u8, file_path),
                     .line = arena.line,
                     .column = arena.column,
-                    .issue_type = .arena_not_deinitialized,
-                    .description = try std.fmt.allocPrint(
+                    .issue_type = .memory_leak,  // Arena not deinitialized leads to memory leak
+                    .severity = types.Severity.err,
+                    .message = try std.fmt.allocPrint(
                         self.allocator,
                         "Arena allocator '{s}' on line {d} is not deinitialized",
                         .{arena.arena_var, arena.line}
@@ -619,7 +575,7 @@ pub const MemoryAnalyzer = struct {
                         "Add 'defer {s}.deinit();' after arena creation",
                         .{arena.arena_var}
                     ),
-                    .severity = .err,
+                    .code_snippet = null,
                 };
                 try self.issues.append(issue);
             }
@@ -627,100 +583,113 @@ pub const MemoryAnalyzer = struct {
     }
     
     fn validateAllocatorChoice(self: *MemoryAnalyzer, file_path: []const u8, _: std.mem.Allocator) !void {
-        const component_type = self.determineComponentType(file_path);
-        const expected = component_type.expectedAllocator();
+        // Skip validation if no allowed allocators are configured
+        if (self.config.allowed_allocators.len == 0) {
+            return;
+        }
         
-        // This is a simplified check - in a real implementation, you'd analyze
-        // the actual allocator types being used
-        if (component_type == .unknown) {
-            const issue = MemoryIssue{
-                .file_path = try self.allocator.dupe(u8, file_path),
-                .line = 1,
-                .column = 1,
-                .issue_type = .wrong_allocator_choice,
-                .description = try std.fmt.allocPrint(
-                    self.allocator,
-                    "Unable to determine component type for allocator validation",
-                    .{}
-                ),
-                .suggestion = try std.fmt.allocPrint(
-                    self.allocator,
-                    "Verify allocator choice matches strategy: {s}",
-                    .{expected}
-                ),
-                .severity = .info,
-            };
-            try self.issues.append(issue);
+        // Track unique allocator types found in this file
+        var found_allocators = std.StringHashMap(struct { line: u32, column: u32 }).init(self.allocator);
+        defer found_allocators.deinit();
+        
+        // Analyze allocator usage from tracked allocations
+        for (self.allocations.items) |allocation| {
+            // Extract the allocator type from patterns like:
+            // - std.heap.page_allocator
+            // - std.testing.allocator
+            // - arena.allocator()
+            // - gpa.allocator()
+            const allocator_type = try self.extractAllocatorType(allocation.allocator_var);
+            defer self.allocator.free(allocator_type);
+            
+            // Track this allocator type if not already seen
+            if (!found_allocators.contains(allocator_type)) {
+                try found_allocators.put(allocator_type, .{
+                    .line = allocation.line,
+                    .column = allocation.column,
+                });
+            }
+        }
+        
+        // Check each found allocator against the allowed list
+        var iter = found_allocators.iterator();
+        while (iter.next()) |entry| {
+            const allocator_type = entry.key_ptr.*;
+            const location = entry.value_ptr.*;
+            
+            var is_allowed = false;
+            for (self.config.allowed_allocators) |allowed| {
+                if (std.mem.eql(u8, allocator_type, allowed)) {
+                    is_allowed = true;
+                    break;
+                }
+            }
+            
+            if (!is_allowed) {
+                const issue = Issue{
+                    .file_path = try self.allocator.dupe(u8, file_path),
+                    .line = location.line,
+                    .column = location.column,
+                    .issue_type = .incorrect_allocator,
+                    .severity = types.Severity.warning,
+                    .message = try std.fmt.allocPrint(
+                        self.allocator,
+                        "Allocator type '{s}' is not in the allowed list",
+                        .{allocator_type}
+                    ),
+                    .suggestion = try std.fmt.allocPrint(
+                        self.allocator,
+                        "Use one of the allowed allocators: {s}",
+                        .{try self.formatAllowedAllocators()}
+                    ),
+                    .code_snippet = null,
+                };
+                try self.issues.append(issue);
+            }
         }
     }
     
-    fn determineComponentType(self: *MemoryAnalyzer, file_path: []const u8) ComponentType {
-        _ = self;
-        
-        // Main application
-        if (std.mem.indexOf(u8, file_path, "main.zig")) |_| return .main_application;
-        
-        // Database operations
-        if (std.mem.indexOf(u8, file_path, "database.zig") != null or
-            std.mem.indexOf(u8, file_path, "database_") != null or
-            std.mem.indexOf(u8, file_path, "query_") != null or
-            std.mem.indexOf(u8, file_path, "sync_engine.zig") != null) return .database_operations;
-        
-        // Data import and processing
-        if (std.mem.indexOf(u8, file_path, "data_import.zig") != null or 
-            std.mem.indexOf(u8, file_path, "data_adapter.zig") != null or
-            std.mem.indexOf(u8, file_path, "data_connector.zig") != null or
-            std.mem.indexOf(u8, file_path, "data_lineage.zig") != null or
-            std.mem.indexOf(u8, file_path, "conflict_resolution.zig") != null or
-            std.mem.indexOf(u8, file_path, "change_detection.zig") != null) return .data_import_processing;
-        
-        // Simulation engine
-        if (std.mem.indexOf(u8, file_path, "simulation.zig") != null or 
-            std.mem.indexOf(u8, file_path, "play_engine.zig") != null or
-            std.mem.indexOf(u8, file_path, "game_state.zig") != null or
-            std.mem.indexOf(u8, file_path, "game_flow.zig") != null or
-            std.mem.indexOf(u8, file_path, "down_system.zig") != null or
-            std.mem.indexOf(u8, file_path, "rules.zig") != null) return .simulation_engine;
-        
-        // Real-time components
-        if (std.mem.indexOf(u8, file_path, "game_clock.zig") != null or
-            std.mem.indexOf(u8, file_path, "rate_limiter.zig") != null) return .realtime_components;
-        
-        // Player and team data
-        if (std.mem.indexOf(u8, file_path, "player") != null or 
-            std.mem.indexOf(u8, file_path, "team.zig") != null or
-            std.mem.indexOf(u8, file_path, "position.zig") != null or
-            std.mem.indexOf(u8, file_path, "roster.zig") != null or
-            std.mem.indexOf(u8, file_path, "enhanced_player.zig") != null or
-            std.mem.indexOf(u8, file_path, "fantasy.zig") != null) return .player_team_data;
-        
-        // API handlers and HTTP components
-        if (std.mem.indexOf(u8, file_path, "api/") != null or
-            std.mem.indexOf(u8, file_path, "handlers/") != null or
-            std.mem.indexOf(u8, file_path, "router.zig") != null or
-            std.mem.indexOf(u8, file_path, "server.zig") != null or
-            std.mem.indexOf(u8, file_path, "middleware.zig") != null or
-            std.mem.indexOf(u8, file_path, "http_") != null or
-            std.mem.indexOf(u8, file_path, "models/") != null) return .api_handler;
-        
-        // Additional patterns for common files
-        if (std.mem.indexOf(u8, file_path, "cache") != null or
-            std.mem.indexOf(u8, file_path, "caching") != null or
-            std.mem.indexOf(u8, file_path, "materialized_views.zig") != null) return .database_operations;
-        
-        if (std.mem.indexOf(u8, file_path, "logging/") != null or
-            std.mem.indexOf(u8, file_path, "security.zig") != null or
-            std.mem.indexOf(u8, file_path, "error_recovery.zig") != null) return .api_handler;
-        
-        if (std.mem.indexOf(u8, file_path, "statistics.zig") != null or
-            std.mem.indexOf(u8, file_path, "export_engine.zig") != null) return .data_import_processing;
-        
-        if (std.mem.indexOf(u8, file_path, "field.zig") != null or
-            std.mem.indexOf(u8, file_path, "score.zig") != null or
-            std.mem.indexOf(u8, file_path, "play_types.zig") != null) return .simulation_engine;
-        
-        return .unknown;
+    fn extractAllocatorType(self: *MemoryAnalyzer, allocator_var: []const u8) ![]const u8 {
+        // Handle common allocator patterns
+        if (std.mem.eql(u8, allocator_var, "allocator")) {
+            // Generic allocator parameter - type is unknown
+            return try self.allocator.dupe(u8, "parameter_allocator");
+        } else if (std.mem.indexOf(u8, allocator_var, "std.heap.page_allocator")) |_| {
+            return try self.allocator.dupe(u8, "std.heap.page_allocator");
+        } else if (std.mem.indexOf(u8, allocator_var, "std.testing.allocator")) |_| {
+            return try self.allocator.dupe(u8, "std.testing.allocator");
+        } else if (std.mem.indexOf(u8, allocator_var, "testing.allocator")) |_| {
+            return try self.allocator.dupe(u8, "std.testing.allocator");
+        } else if (std.mem.indexOf(u8, allocator_var, "gpa")) |_| {
+            return try self.allocator.dupe(u8, "GeneralPurposeAllocator");
+        } else if (std.mem.indexOf(u8, allocator_var, "arena")) |_| {
+            return try self.allocator.dupe(u8, "ArenaAllocator");
+        } else if (std.mem.indexOf(u8, allocator_var, "fixed_buffer")) |_| {
+            return try self.allocator.dupe(u8, "FixedBufferAllocator");
+        } else if (std.mem.indexOf(u8, allocator_var, "c_allocator")) |_| {
+            return try self.allocator.dupe(u8, "std.heap.c_allocator");
+        } else {
+            // For other cases, try to extract a meaningful type name
+            return try self.allocator.dupe(u8, allocator_var);
+        }
     }
+    
+    fn formatAllowedAllocators(self: *MemoryAnalyzer) ![]const u8 {
+        if (self.config.allowed_allocators.len == 0) {
+            return try self.allocator.dupe(u8, "(none configured)");
+        }
+        
+        var list = std.ArrayList(u8).init(self.allocator);
+        defer list.deinit();
+        
+        for (self.config.allowed_allocators, 0..) |allowed, i| {
+            if (i > 0) try list.appendSlice(", ");
+            try list.appendSlice(allowed);
+        }
+        
+        return try list.toOwnedSlice();
+    }
+    
     
     fn isAllocationForStructField(self: *MemoryAnalyzer, file_path: []const u8, allocation: AllocationPattern, temp_allocator: std.mem.Allocator) !bool {
         
@@ -1227,12 +1196,12 @@ pub const MemoryAnalyzer = struct {
     
     pub fn hasErrors(self: *MemoryAnalyzer) bool {
         for (self.issues.items) |issue| {
-            if (issue.severity == .err) return true;
+            if (issue.severity == types.Severity.err) return true;
         }
         return false;
     }
     
-    pub fn getIssues(self: *MemoryAnalyzer) []const MemoryIssue {
+    pub fn getIssues(self: *MemoryAnalyzer) []const Issue {
         return self.issues.items;
     }
 };

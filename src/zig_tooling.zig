@@ -96,11 +96,11 @@ pub fn analyzeMemory(
             .file_path = try allocator.dupe(u8, ai.file_path),
             .line = ai.line,
             .column = ai.column,
-            .issue_type = convertMemoryIssueType(ai.issue_type),
-            .severity = convertSeverity(ai.severity),
-            .message = try allocator.dupe(u8, ai.description),
-            .suggestion = if (ai.suggestion.len > 0) try allocator.dupe(u8, ai.suggestion) else null,
-            .code_snippet = null,
+            .issue_type = ai.issue_type,
+            .severity = ai.severity,
+            .message = try allocator.dupe(u8, ai.message),
+            .suggestion = if (ai.suggestion) |s| try allocator.dupe(u8, s) else null,
+            .code_snippet = ai.code_snippet,
         };
     }
     
@@ -156,11 +156,11 @@ pub fn analyzeTests(
             .file_path = try allocator.dupe(u8, ai.file_path),
             .line = ai.line,
             .column = ai.column,
-            .issue_type = convertTestingIssueType(ai.issue_type),
-            .severity = convertSeverity(ai.severity),
-            .message = try allocator.dupe(u8, ai.description),
-            .suggestion = if (ai.suggestion.len > 0) try allocator.dupe(u8, ai.suggestion) else null,
-            .code_snippet = null,
+            .issue_type = ai.issue_type,
+            .severity = ai.severity,
+            .message = try allocator.dupe(u8, ai.message),
+            .suggestion = if (ai.suggestion) |s| try allocator.dupe(u8, s) else null,
+            .code_snippet = ai.code_snippet,
         };
     }
     
@@ -278,50 +278,4 @@ pub fn analyzeSource(
     };
 }
 
-// Helper functions for type conversion
-fn convertMemoryIssueType(issue_type: @import("memory_analyzer.zig").IssueType) IssueType {
-    return switch (issue_type) {
-        .missing_defer => .missing_defer,
-        .missing_errdefer => .missing_errdefer,
-        .arena_not_deinitialized => .memory_leak,
-        .wrong_allocator_choice => .incorrect_allocator,
-        .potential_leak_in_loop => .defer_in_loop,
-        .allocation_without_cleanup => .memory_leak,
-        .gpa_misuse => .incorrect_allocator,
-        .arena_misuse => .arena_in_library,
-    };
-}
-
-fn convertTestingIssueType(issue_type: @import("testing_analyzer.zig").IssueType) IssueType {
-    return switch (issue_type) {
-        .missing_test_file => .missing_test_file,
-        .improper_test_naming => .invalid_test_naming,
-        .missing_memory_safety_patterns => .missing_defer,
-        .uncategorized_test => .missing_test_category,
-        .missing_test_organization => .test_outside_file,
-        .improper_allocator_usage => .incorrect_allocator,
-        .missing_defer_in_test => .missing_defer,
-        .missing_errdefer_in_test => .missing_errdefer,
-        .test_not_colocated => .invalid_test_location,
-        .performance_test_missing => .missing_test_file,
-    };
-}
-
-fn convertSeverity(severity: anytype) Severity {
-    const T = @TypeOf(severity);
-    if (T == @import("memory_analyzer.zig").Severity) {
-        return switch (severity) {
-            .err => .err,
-            .warning => .warning,
-            .info => .info,
-        };
-    } else if (T == @import("testing_analyzer.zig").Severity) {
-        return switch (severity) {
-            .err => .err,
-            .warning => .warning,
-            .info => .info,
-        };
-    } else {
-        @compileError("Unknown severity type");
-    }
-}
+// Conversion functions removed - analyzers now use unified types directly from types.zig

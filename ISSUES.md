@@ -8,6 +8,53 @@
 
 *Currently being worked on*
 
+## 🐛 Newly Discovered Issues
+
+*Issues found during implementation that need to be addressed*
+
+- [ ] #LC022: Fix arena allocator tracking
+  - **Component**: src/memory_analyzer.zig
+  - **Priority**: Medium
+  - **Created**: 2025-07-26
+  - **Dependencies**: None
+  - **Details**: Arena allocator variable tracking is broken
+  - **Requirements**:
+    - Call trackArenaAllocatorVars() in analyzeSourceCode loop
+    - Ensure arena-derived allocators are properly tracked
+    - Add tests for arena allocator detection
+  - **Notes**:
+    - trackArenaAllocatorVars() function exists at line 306 but is never called
+    - This breaks the isArenaAllocation() check for arena.allocator_vars
+    - Discovered during LC009 implementation
+
+- [ ] #LC023: Document memory management for helper functions
+  - **Component**: src/memory_analyzer.zig
+  - **Priority**: Low
+  - **Created**: 2025-07-26
+  - **Dependencies**: None
+  - **Details**: Some helper functions return allocated memory without clear documentation
+  - **Requirements**:
+    - Document that formatAllowedAllocators() returns owned memory
+    - Add doc comments about memory ownership
+    - Consider using a different pattern to avoid allocation
+  - **Notes**:
+    - formatAllowedAllocators() at line 672 returns allocated memory
+    - Callers must free this memory to avoid leaks
+
+- [ ] #LC024: Improve allocator type detection
+  - **Component**: src/memory_analyzer.zig
+  - **Priority**: Low
+  - **Created**: 2025-07-26
+  - **Dependencies**: None
+  - **Details**: Current allocator type detection is limited to known patterns
+  - **Requirements**:
+    - Support custom allocator detection
+    - Allow users to register custom allocator patterns
+    - Better handling of wrapper allocators
+  - **Notes**:
+    - extractAllocatorType() at line 648 uses simple pattern matching
+    - Custom allocators with non-standard names won't be detected
+
 ## 📋 Backlog
 
 *Library conversion work organized by phase*
@@ -16,34 +63,8 @@
 
 ### Phase 2: API Design and Refactoring
 
-- [ ] #LC008: Improve error handling
-  - **Component**: src/types.zig, all modules
-  - **Priority**: High
-  - **Created**: 2025-07-25
-  - **Dependencies**: #LC007
-  - **Details**: Define proper error types and structured issues
-  - **Requirements**:
-    - Define AnalysisError enum
-    - Create Issue struct
-    - Update all error returns
-    - Add error documentation
 
 ### Phase 3: Core Component Updates
-
-- [ ] #LC009: Refactor memory analyzer
-  - **Component**: src/memory_analyzer.zig
-  - **Priority**: High
-  - **Created**: 2025-07-25
-  - **Dependencies**: #LC008
-  - **Details**: Remove CLI formatting, return structured data
-  - **Requirements**:
-    - Remove issue formatting
-    - Return issue arrays
-    - Simplify component detection
-    - Flexible allocator handling
-  - **Notes**:
-    - MemoryConfig.allowed_allocators field exists but not checked (src/types.zig:126)
-    - validateAllocatorChoice() at src/memory_analyzer.zig:628 needs update
 
 - [ ] #LC010: Refactor testing analyzer
   - **Component**: src/testing_analyzer.zig
@@ -57,9 +78,12 @@
     - Return compliance data
     - Simplify validation logic
   - **Notes**:
-    - TestCategory enum still hardcoded in src/testing_analyzer.zig:43-63
+    - TestCategory enum still hardcoded in src/testing_analyzer.zig:43-63  
     - Config has allowed_categories field but analyzer doesn't use it yet
     - See determineTestCategory() at src/testing_analyzer.zig:618
+    - Legacy type alias: `pub const TestingIssue = Issue;` (line 14) - remove after migration
+    - Duplicate imports can be cleaned up: `const IssueType = types.IssueType;` (line 9)
+    - Field renamed from description to message in all issue creation (LC008)
 
 - [ ] #LC011: Optimize scope tracker
   - **Component**: src/scope_tracker.zig
@@ -328,6 +352,45 @@
     - All tests pass, library builds successfully
     - Analyzers now return structured data only, no console output
 
+- [x] #LC008: Improve error handling
+  - **Component**: src/types.zig, all modules
+  - **Priority**: High
+  - **Created**: 2025-07-25
+  - **Completed**: 2025-07-26
+  - **Dependencies**: #LC007
+  - **Details**: Define proper error types and structured issues
+  - **Resolution**:
+    - AnalysisError enum already existed in types.zig with proper error types
+    - Issue struct already existed in types.zig
+    - Removed duplicate AnalyzerError enums from both memory_analyzer.zig and testing_analyzer.zig
+    - Updated all error returns to use unified AnalysisError from types.zig
+    - Fixed field name mismatches (description → message) in issue creation
+    - Added comprehensive error documentation with examples
+    - Removed unnecessary type conversion functions from zig_tooling.zig
+    - Both analyzers now use unified Issue type directly
+    - All tests pass, library builds successfully
+  - **Cleanup needed in LC009/LC010**:
+    - Remove legacy type aliases (MemoryIssue, TestingIssue) added for backward compatibility
+    - Clean up duplicate type imports (IssueType, Severity) to use types.* directly
+    - Watch for similar field name patterns in other modules
+
+- [x] #LC009: Refactor memory analyzer
+  - **Component**: src/memory_analyzer.zig
+  - **Priority**: High
+  - **Created**: 2025-07-25
+  - **Completed**: 2025-07-26
+  - **Dependencies**: #LC008
+  - **Details**: Remove CLI formatting, return structured data
+  - **Resolution**:
+    - Removed legacy type alias `pub const MemoryIssue = Issue;` and duplicate imports
+    - Implemented allowed_allocators configuration check in validateAllocatorChoice()
+    - Enhanced allocator tracking with extractAllocatorType() to identify allocator types
+    - Removed NFL-specific ComponentType enum and determineComponentType() function
+    - Added formatAllowedAllocators() helper for better error messages
+    - Added comprehensive tests for allowed_allocators configuration
+    - All allocator usage is now validated against the configured allowed list
+    - Library is now fully generic and suitable for any Zig project
+
 ## Issue Guidelines
 
 1. **Issue Format**: `#LCXXX: Clear, action-oriented title` (LC = Library Conversion)
@@ -339,5 +402,5 @@
 
 ---
 
-*Last Updated: 2025-07-26 (LC007 completed)*
+*Last Updated: 2025-07-26 (LC009 completed, LC022-LC024 added)*
 *Focus: Library Conversion Project*

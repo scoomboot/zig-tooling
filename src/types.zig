@@ -152,14 +152,56 @@ pub const AnalysisOptions = struct {
     continue_on_error: bool = true,
 };
 
-/// Analysis errors that can occur
+/// Analysis errors that can occur during code analysis operations
+/// 
+/// These errors represent various failure conditions that may occur when
+/// analyzing Zig source code files. Proper error handling ensures graceful
+/// degradation and meaningful error messages to users.
+/// 
+/// Example usage:
+/// ```zig
+/// const result = zig_tooling.analyzeFile(allocator, "src/main.zig", null) catch |err| switch (err) {
+///     AnalysisError.FileNotFound => {
+///         std.debug.print("File not found: src/main.zig\n", .{});
+///         return;
+///     },
+///     AnalysisError.AccessDenied => {
+///         std.debug.print("Permission denied accessing file\n", .{});
+///         return;
+///     },
+///     else => return err,
+/// };
+/// ```
 pub const AnalysisError = error{
+    /// Failed to read file contents due to I/O error
+    /// Occurs when file exists but cannot be read (disk error, etc.)
     FileReadError,
+    
+    /// Failed to parse source code
+    /// Indicates malformed or invalid Zig syntax that prevents analysis
     ParseError,
+    
+    /// Configuration validation failed
+    /// The provided Config struct contains invalid or conflicting settings
     InvalidConfiguration,
+    
+    /// Memory allocation failed
+    /// System is out of memory or allocation limit reached
     OutOfMemory,
+    
+    /// File or directory access denied
+    /// Insufficient permissions to read the requested file
     AccessDenied,
+    
+    /// Requested file does not exist
+    /// The specified file path could not be found in the filesystem
     FileNotFound,
+    
+    /// Invalid file path provided
+    /// Path contains invalid characters or format
     InvalidPath,
+    
+    /// Analysis stopped due to too many issues
+    /// Exceeded the configured maximum issue limit (AnalysisOptions.max_issues)
     TooManyIssues,
 };

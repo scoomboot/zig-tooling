@@ -84,6 +84,93 @@ test "unit: API: analyzeTests with valid test file" {
     try testing.expect(!result.hasErrors());
 }
 
+test "unit: API: analyzeMemory with allowed_allocators configuration" {
+    const allocator = testing.allocator;
+    
+    const source =
+        \\pub fn main() !void {
+        \\    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+        \\    const allocator = gpa.allocator();
+        \\    const data = try allocator.alloc(u8, 100);
+        \\    defer allocator.free(data);
+        \\    
+        \\    // This should trigger a warning since page_allocator is not allowed
+        \\    const temp = try std.heap.page_allocator.alloc(u8, 50);
+        \\    defer std.heap.page_allocator.free(temp);
+        \\}
+    ;
+    
+    const config = zig_tooling.Config{
+        .memory = .{
+            .allowed_allocators = &.{ "GeneralPurposeAllocator", "std.testing.allocator" },
+        },
+    };
+    
+    const result = try zig_tooling.analyzeMemory(allocator, source, "test.zig", config);
+    defer allocator.free(result.issues);
+    defer for (result.issues) |issue| {
+        allocator.free(issue.file_path);
+        allocator.free(issue.message);
+        if (issue.suggestion) |s| allocator.free(s);
+    };
+    
+    // Should find one issue about page_allocator not being allowed
+    try testing.expect(result.issues_found > 0);
+    
+    var found_incorrect_allocator = false;
+    for (result.issues) |issue| {
+        if (issue.issue_type == .incorrect_allocator) {
+            found_incorrect_allocator = true;
+            break;
+        }
+    }
+    try testing.expect(found_incorrect_allocator);
+}
+
+test "unit: API: analyzeMemory allowed_allocators empty list allows all" {
+    const allocator = testing.allocator;
+    
+    const source =
+        \\pub fn main() !void {
+        \\    // When allowed_allocators is empty, all allocators should be allowed
+        \\    const data1 = try std.heap.page_allocator.alloc(u8, 100);
+        \\    defer std.heap.page_allocator.free(data1);
+        \\    
+        \\    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+        \\    defer arena.deinit();
+        \\    const arena_allocator = arena.allocator();
+        \\    const data2 = try arena_allocator.alloc(u8, 50);
+        \\    
+        \\    const data3 = try std.heap.c_allocator.alloc(u8, 25);
+        \\    defer std.heap.c_allocator.free(data3);
+        \\}
+    ;
+    
+    const config = zig_tooling.Config{
+        .memory = .{
+            .allowed_allocators = &.{}, // Empty list means all allocators are allowed
+        },
+    };
+    
+    const result = try zig_tooling.analyzeMemory(allocator, source, "test.zig", config);
+    defer allocator.free(result.issues);
+    defer for (result.issues) |issue| {
+        allocator.free(issue.file_path);
+        allocator.free(issue.message);
+        if (issue.suggestion) |s| allocator.free(s);
+    };
+    
+    // Should not find any incorrect_allocator issues
+    var found_incorrect_allocator = false;
+    for (result.issues) |issue| {
+        if (issue.issue_type == .incorrect_allocator) {
+            found_incorrect_allocator = true;
+            break;
+        }
+    }
+    try testing.expect(!found_incorrect_allocator);
+}
+
 test "unit: API: analyzeTests detects missing category" {
     const allocator = testing.allocator;
     

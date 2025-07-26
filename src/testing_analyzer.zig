@@ -4,40 +4,16 @@ const HashMap = std.HashMap;
 const ScopeTracker = @import("scope_tracker.zig").ScopeTracker;
 const ScopeInfo = @import("scope_tracker.zig").ScopeInfo;
 const EnhancedSourceContext = @import("source_context.zig").SourceContext;
+const types = @import("types.zig");
 
-pub const TestingIssue = struct {
-    file_path: []const u8,
-    line: u32,
-    column: u32,
-    issue_type: IssueType,
-    description: []const u8,
-    suggestion: []const u8,
-    severity: Severity,
-};
+// Using unified types from types.zig
+const Issue = types.Issue;
+pub const IssueType = types.IssueType;
+pub const Severity = types.Severity;
+const AnalysisError = types.AnalysisError;
 
-pub const IssueType = enum {
-    missing_test_file,
-    improper_test_naming,
-    missing_memory_safety_patterns,
-    uncategorized_test,
-    missing_test_organization,
-    improper_allocator_usage,
-    missing_defer_in_test,
-    missing_errdefer_in_test,
-    test_not_colocated,
-    performance_test_missing,
-};
-
-pub const Severity = enum {
-    err,
-    warning,
-    info,
-};
-
-pub const AnalyzerError = error{
-    FileNotFound,
-    AccessDenied,
-};
+// Legacy alias for backward compatibility during migration
+pub const TestingIssue = Issue;
 
 pub const TestCategory = enum {
     unit,
@@ -93,7 +69,7 @@ pub const SourceContext = struct {
 
 pub const TestingAnalyzer = struct {
     allocator: std.mem.Allocator,
-    issues: ArrayList(TestingIssue),
+    issues: ArrayList(Issue),
     tests: ArrayList(TestPattern),
     source_files: ArrayList(SourceFilePattern),
     scope_tracker: ScopeTracker,
@@ -103,7 +79,7 @@ pub const TestingAnalyzer = struct {
     pub fn init(allocator: std.mem.Allocator) TestingAnalyzer {
         return TestingAnalyzer{
             .allocator = allocator,
-            .issues = ArrayList(TestingIssue).init(allocator),
+            .issues = ArrayList(Issue).init(allocator),
             .tests = ArrayList(TestPattern).init(allocator),
             .source_files = ArrayList(SourceFilePattern).init(allocator),
             .scope_tracker = ScopeTracker.init(allocator),
@@ -115,7 +91,7 @@ pub const TestingAnalyzer = struct {
     pub fn initWithConfig(allocator: std.mem.Allocator, config: @import("types.zig").TestingConfig) TestingAnalyzer {
         return TestingAnalyzer{
             .allocator = allocator,
-            .issues = ArrayList(TestingIssue).init(allocator),
+            .issues = ArrayList(Issue).init(allocator),
             .tests = ArrayList(TestPattern).init(allocator),
             .source_files = ArrayList(SourceFilePattern).init(allocator),
             .scope_tracker = ScopeTracker.init(allocator),
@@ -128,8 +104,8 @@ pub const TestingAnalyzer = struct {
         // Free all issue descriptions, suggestions, and file paths
         for (self.issues.items) |issue| {
             if (issue.file_path.len > 0) self.allocator.free(issue.file_path);
-            if (issue.description.len > 0) self.allocator.free(issue.description);
-            if (issue.suggestion.len > 0) self.allocator.free(issue.suggestion);
+            if (issue.message.len > 0) self.allocator.free(issue.message);
+            if (issue.suggestion) |suggestion| if (suggestion.len > 0) self.allocator.free(suggestion);
         }
         
         // Free all test names (allocated with self.allocator in identifyTests)
@@ -154,8 +130,8 @@ pub const TestingAnalyzer = struct {
     
     pub fn analyzeFile(self: *TestingAnalyzer, file_path: []const u8) !void {
         const file = std.fs.cwd().openFile(file_path, .{}) catch |err| switch (err) {
-            error.FileNotFound => return AnalyzerError.FileNotFound,
-            error.AccessDenied => return AnalyzerError.AccessDenied,
+            error.FileNotFound => return AnalysisError.FileNotFound,
+            error.AccessDenied => return AnalysisError.AccessDenied,
             else => return err,
         };
         defer file.close();
@@ -424,12 +400,13 @@ pub const TestingAnalyzer = struct {
     fn generateTestIssues(self: *TestingAnalyzer, test_pattern: TestPattern, file_path: []const u8) !void {
         // Check test naming convention
         if (!test_pattern.has_proper_naming and self.config.enforce_naming) {
-            const issue = TestingIssue{
+            const issue = Issue{
                 .file_path = try self.allocator.dupe(u8, file_path),
                 .line = test_pattern.line,
                 .column = test_pattern.column,
-                .issue_type = .improper_test_naming,
-                .description = try std.fmt.allocPrint(
+                .issue_type = .invalid_test_naming,
+                .severity = .warning,
+                .message = try std.fmt.allocPrint(
                     self.allocator,
                     "Test '{s}' on line {d} does not follow naming convention",
                     .{test_pattern.test_name, test_pattern.line}
@@ -439,19 +416,20 @@ pub const TestingAnalyzer = struct {
                     "Use pattern: {s}",
                     .{test_pattern.category.expectedNamingPattern()}
                 ),
-                .severity = .warning,
+                .code_snippet = null,
             };
             try self.issues.append(issue);
         }
         
         // Check for uncategorized tests
         if (test_pattern.category == .unknown and self.config.enforce_categories) {
-            const issue = TestingIssue{
+            const issue = Issue{
                 .file_path = try self.allocator.dupe(u8, file_path),
                 .line = test_pattern.line,
                 .column = test_pattern.column,
-                .issue_type = .uncategorized_test,
-                .description = try std.fmt.allocPrint(
+                .issue_type = .missing_test_category,
+                .severity = .info,
+                .message = try std.fmt.allocPrint(
                     self.allocator,
                     "Test '{s}' on line {d} cannot be categorized",
                     .{test_pattern.test_name, test_pattern.line}
@@ -461,19 +439,20 @@ pub const TestingAnalyzer = struct {
                     "Add category prefix: unit, integration, simulation, data validation, performance, or memory",
                     .{}
                 ),
-                .severity = .info,
+                .code_snippet = null,
             };
             try self.issues.append(issue);
         }
         
         // Check for memory safety in tests that should have it
         if (self.shouldHaveMemorySafety(test_pattern) and !test_pattern.has_memory_safety) {
-            const issue = TestingIssue{
+            const issue = Issue{
                 .file_path = try self.allocator.dupe(u8, file_path),
                 .line = test_pattern.line,
                 .column = test_pattern.column,
-                .issue_type = .missing_memory_safety_patterns,
-                .description = try std.fmt.allocPrint(
+                .issue_type = .missing_defer,  // Memory safety patterns include defer usage
+                .severity = .warning,
+                .message = try std.fmt.allocPrint(
                     self.allocator,
                     "Test '{s}' should use memory safety patterns",
                     .{test_pattern.test_name}
@@ -483,7 +462,7 @@ pub const TestingAnalyzer = struct {
                     "Use std.testing.allocator, defer cleanup, and errdefer for error paths",
                     .{}
                 ),
-                .severity = .warning,
+                .code_snippet = null,
             };
             try self.issues.append(issue);
         }
@@ -502,12 +481,13 @@ pub const TestingAnalyzer = struct {
             const test_file_exists = self.fileExists(expected_test_file);
             
             if (!test_file_exists) {
-                const issue = TestingIssue{
+                const issue = Issue{
                     .file_path = try self.allocator.dupe(u8, file_path),
                     .line = 1,
                     .column = 1,
                     .issue_type = .missing_test_file,
-                    .description = try std.fmt.allocPrint(
+                    .severity = .err,
+                    .message = try std.fmt.allocPrint(
                         self.allocator,
                         "No test file found for source file: {s}",
                         .{file_path}
@@ -517,19 +497,20 @@ pub const TestingAnalyzer = struct {
                         "Create test file: {s}",
                         .{expected_test_file}
                     ),
-                    .severity = .err,
+                    .code_snippet = null,
                 };
                 try self.issues.append(issue);
             }
         } else {
             // For unit test modules, inline tests are preferred
             if (!has_inline_tests) {
-                const issue = TestingIssue{
+                const issue = Issue{
                     .file_path = try self.allocator.dupe(u8, file_path),
                     .line = 1,
                     .column = 1,
                     .issue_type = .missing_test_file,
-                    .description = try std.fmt.allocPrint(
+                    .severity = .warning,  // Less severe for unit modules
+                    .message = try std.fmt.allocPrint(
                         self.allocator,
                         "No tests found for source file: {s} (inline tests preferred for this module type)",
                         .{file_path}
@@ -539,7 +520,7 @@ pub const TestingAnalyzer = struct {
                         "Add inline test blocks: test \"module_name: specific behavior\" {{ ... }}",
                         .{}
                     ),
-                    .severity = .warning,  // Less severe for unit modules
+                    .code_snippet = null,
                 };
                 try self.issues.append(issue);
             }
@@ -687,7 +668,7 @@ pub const TestingAnalyzer = struct {
         return false;
     }
     
-    pub fn getIssues(self: *TestingAnalyzer) []const TestingIssue {
+    pub fn getIssues(self: *TestingAnalyzer) []const Issue {
         return self.issues.items;
     }
 };
