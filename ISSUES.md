@@ -8,15 +8,28 @@
 
 *Currently being worked on*
 
-## 🟢 Ready to Start
+## 🎯 TIER 1: Library Completion (Must Have for v1.0)
 
-*Issues with no dependencies or all dependencies completed*
+*Minimum viable complete library - focus on these first*
+
+- [ ] #LC019: Update test suite
+  - **Component**: tests/
+  - **Priority**: Critical
+  - **Created**: 2025-07-25
+  - **Dependencies**: #LC005 ✅-#LC012 ✅ (All completed 2025-07-27)
+  - **Details**: Remove CLI tests, add API usage tests
+  - **Requirements**:
+    - Remove CLI-specific tests
+    - Add API tests
+    - Error condition tests
+    - Performance benchmarks
+  - **Why Tier 1**: Blocks all further testing work and quality validation
 
 - [ ] #LC015: Result formatting utilities
   - **Component**: src/formatters.zig (new)
   - **Priority**: Medium
   - **Created**: 2025-07-25
-  - **Dependencies**: #LC008 ✅
+  - **Dependencies**: #LC008 ✅ (Completed 2025-07-26)
   - **Details**: Format analysis results for different outputs
   - **Requirements**:
     - Text formatter
@@ -26,18 +39,112 @@
   - **Notes**:
     - AnalysisOptions (src/types.zig:147-154) fields not used yet
     - max_issues, verbose, parallel, continue_on_error need implementation
+  - **Why Tier 1**: Blocks all documentation and user-facing output work
 
-- [ ] #LC019: Update test suite
-  - **Component**: tests/
-  - **Priority**: Critical
+- [ ] #LC016: API documentation
+  - **Component**: All public modules
+  - **Priority**: High
   - **Created**: 2025-07-25
-  - **Dependencies**: #LC005 ✅-#LC012 ✅
-  - **Details**: Remove CLI tests, add API usage tests
+  - **Dependencies**: #LC005-#LC015 (LC015 pending)
+  - **Details**: Add comprehensive documentation to all public APIs
   - **Requirements**:
-    - Remove CLI-specific tests
-    - Add API tests
-    - Error condition tests
-    - Performance benchmarks
+    - Doc comments on all public items
+    - API reference guide
+    - Generated documentation
+    - Usage examples in docs
+  - **Why Tier 1**: Essential for library adoption and usability
+
+- [ ] #LC017: Integration examples
+  - **Component**: examples/
+  - **Priority**: High
+  - **Created**: 2025-07-25
+  - **Dependencies**: #LC013-#LC015 (LC015 pending)
+  - **Details**: Create example code for common integration scenarios
+  - **Example files**:
+    - basic_usage.zig
+    - build_integration.zig
+    - custom_analyzer.zig
+    - ide_integration.zig
+    - ci_integration.zig
+  - **Why Tier 1**: Critical for user onboarding and demonstrating library value
+
+## 🏆 TIER 2: Professional Polish (Should Have for v1.0)
+
+*Professional quality and user experience - work on after Tier 1*
+
+- [ ] #LC018: Migration guide
+  - **Component**: docs/migration-guide.md (new)
+  - **Priority**: Medium
+  - **Created**: 2025-07-25
+  - **Dependencies**: #LC016
+  - **Details**: Guide for migrating from CLI to library
+  - **Requirements**:
+    - CLI to API mappings
+    - Before/after examples
+    - Common patterns
+    - Troubleshooting
+
+- [ ] #LC020: Integration testing
+  - **Component**: tests/integration/
+  - **Priority**: High
+  - **Created**: 2025-07-25
+  - **Dependencies**: #LC019
+  - **Details**: Test library with real projects
+  - **Requirements**:
+    - Sample project tests
+    - Build integration tests
+    - Memory usage validation
+    - Thread safety tests
+
+- [ ] #LC021: Documentation testing
+  - **Component**: All documentation
+  - **Priority**: Medium
+  - **Created**: 2025-07-25
+  - **Dependencies**: #LC016-#LC018
+  - **Details**: Ensure all documentation code compiles and works
+  - **Requirements**:
+    - Example compilation
+    - Code snippet validation
+    - API completeness check
+    - Link validation
+
+- [ ] #LC038: Implement proper glob pattern library for build integration
+  - **Component**: src/build_integration.zig
+  - **Priority**: Medium
+  - **Created**: 2025-07-27
+  - **Dependencies**: #LC013 ✅ (Completed 2025-07-27)
+  - **Details**: Current glob pattern matching is basic and limited
+  - **Requirements**:
+    - Replace basic pattern matching with proper glob library
+    - Support complex patterns like "src/**/test_*.zig" 
+    - Add pattern validation and error handling
+    - Add tests for glob pattern edge cases
+  - **Notes**:
+    - Current matchesPattern() at [src/build_integration.zig:634-652](src/build_integration.zig#L634-L652) only handles simple cases
+    - Could use std.glob when available or implement more complete matching
+    - Discovered during LC013 implementation
+
+- [ ] #LC039: Complete output formatter implementations
+  - **Component**: src/build_integration.zig
+  - **Priority**: Medium
+  - **Created**: 2025-07-27
+  - **Dependencies**: #LC013 ✅, #LC015 (when completed)
+  - **Details**: JSON and GitHub Actions formatters are placeholder implementations
+  - **Requirements**:
+    - Implement printJsonResults() function for structured JSON output
+    - Implement printGitHubActionsResults() for GitHub annotations format
+    - Add tests for all output formats
+    - Document format specifications
+  - **Notes**:
+    - Functions at [src/build_integration.zig:694-700](src/build_integration.zig#L694-L700) are placeholders
+    - Should coordinate with LC015 formatter work to avoid duplication
+    - Discovered during LC013 implementation
+
+## ✨ TIER 3: Future Enhancements (Defer to v1.1+)
+
+*Nice-to-have features that don't block library adoption*
+
+### Allocator Pattern Enhancements (5 issues)
 
 - [ ] #LC029: Implement regex support for allocator patterns
   - **Component**: src/memory_analyzer.zig, src/types.zig
@@ -124,6 +231,8 @@
     - extractAllocatorType() logic at src/memory_analyzer.zig:675-697
     - Discovered during LC028 implementation
 
+### Logging Enhancements (4 issues)
+
 - [ ] #LC034: Improve logging callback pattern for stateful collectors
   - **Component**: src/app_logger.zig, src/types.zig
   - **Priority**: Low
@@ -192,41 +301,7 @@
     - Could lead to use-after-free if misused
     - Discovered during LC012 implementation
 
-## 🐛 Newly Discovered Issues
-
-*Issues found during implementation that need to be addressed*
-
-- [ ] #LC038: Implement proper glob pattern library for build integration
-  - **Component**: src/build_integration.zig
-  - **Priority**: Medium
-  - **Created**: 2025-07-27
-  - **Dependencies**: #LC013 ✅
-  - **Details**: Current glob pattern matching is basic and limited
-  - **Requirements**:
-    - Replace basic pattern matching with proper glob library
-    - Support complex patterns like "src/**/test_*.zig" 
-    - Add pattern validation and error handling
-    - Add tests for glob pattern edge cases
-  - **Notes**:
-    - Current matchesPattern() at [src/build_integration.zig:634-652](src/build_integration.zig#L634-L652) only handles simple cases
-    - Could use std.glob when available or implement more complete matching
-    - Discovered during LC013 implementation
-
-- [ ] #LC039: Complete output formatter implementations
-  - **Component**: src/build_integration.zig
-  - **Priority**: Medium
-  - **Created**: 2025-07-27
-  - **Dependencies**: #LC013 ✅, #LC015 (when completed)
-  - **Details**: JSON and GitHub Actions formatters are placeholder implementations
-  - **Requirements**:
-    - Implement printJsonResults() function for structured JSON output
-    - Implement printGitHubActionsResults() for GitHub annotations format
-    - Add tests for all output formats
-    - Document format specifications
-  - **Notes**:
-    - Functions at [src/build_integration.zig:694-700](src/build_integration.zig#L694-L700) are placeholders
-    - Should coordinate with LC015 formatter work to avoid duplication
-    - Discovered during LC013 implementation
+### Build Integration & Performance (3 issues)
 
 - [ ] #LC040: Add build integration test suite
   - **Component**: tests/test_build_integration.zig (new)
@@ -261,22 +336,6 @@
     - Could integrate with Zig's build cache system
     - Discovered during LC013 implementation
 
-- [ ] #LC042: Complete pre-commit hook implementations
-  - **Component**: src/build_integration.zig
-  - **Priority**: Low
-  - **Created**: 2025-07-27
-  - **Dependencies**: #LC013 ✅
-  - **Details**: Only bash pre-commit hooks are fully implemented
-  - **Requirements**:
-    - Implement createFishPreCommitHook() with proper Fish shell syntax
-    - Implement createPowerShellPreCommitHook() for Windows environments
-    - Add tests for all hook types
-    - Document hook installation procedures
-  - **Notes**:
-    - Functions at [src/build_integration.zig:762-769](src/build_integration.zig#L762-L769) are placeholders
-    - Should follow shell-specific best practices
-    - Discovered during LC013 implementation
-
 - [ ] #LC043: Add parallel file analysis support
   - **Component**: src/build_integration.zig, src/types.zig
   - **Priority**: Medium
@@ -292,6 +351,24 @@
     - AnalysisOptions.parallel at [src/types.zig:171](src/types.zig#L171) is defined but unused
     - Would improve analysis performance for large codebases
     - Need to consider memory usage with parallel processing
+    - Discovered during LC013 implementation
+
+### Code Quality & Maintenance (3 issues)
+
+- [ ] #LC042: Complete pre-commit hook implementations
+  - **Component**: src/build_integration.zig
+  - **Priority**: Low
+  - **Created**: 2025-07-27
+  - **Dependencies**: #LC013 ✅
+  - **Details**: Only bash pre-commit hooks are fully implemented
+  - **Requirements**:
+    - Implement createFishPreCommitHook() with proper Fish shell syntax
+    - Implement createPowerShellPreCommitHook() for Windows environments
+    - Add tests for all hook types
+    - Document hook installation procedures
+  - **Notes**:
+    - Functions at [src/build_integration.zig:762-769](src/build_integration.zig#L762-L769) are placeholders
+    - Should follow shell-specific best practices
     - Discovered during LC013 implementation
 
 - [ ] #LC044: Extract shared glob pattern matching utility
@@ -327,89 +404,17 @@
     - Would improve test maintainability and readability
     - Discovered during LC014 implementation
 
-*All newly discovered issues have been triaged and moved to appropriate sections*
+## 📋 Archive: Original Phase Organization
 
-## 📋 Backlog
+*The library conversion was originally organized by phases, but has been replaced by the tier system above for better prioritization and clearer v1.0 focus.*
 
-*Library conversion work organized by phase*
+**Original Phases (All Complete or Moved to Tiers):**
+- ✅ **Phase 1-3**: Project restructuring, API design, and core components (all issues completed)
+- ✅ **Phase 4**: Integration helpers (issues completed or moved to TIER 2-3)
+- 🔄 **Phase 5**: Documentation (issues moved to TIER 1-2 based on v1.0 criticality)
+- 🔄 **Phase 6**: Testing (issues moved to TIER 2 based on quality requirements)
 
-### Phase 1: Project Restructuring
-
-### Phase 2: API Design and Refactoring
-
-
-### Phase 3: Core Component Updates
-
-### Phase 4: Integration Helpers
-
-*All Phase 4 issues have been moved to Ready to Start section*
-
-### Phase 5: Documentation and Examples
-
-- [ ] #LC016: API documentation
-  - **Component**: All public modules
-  - **Priority**: High
-  - **Created**: 2025-07-25
-  - **Dependencies**: #LC005-#LC015
-  - **Details**: Add comprehensive documentation to all public APIs
-  - **Requirements**:
-    - Doc comments on all public items
-    - API reference guide
-    - Generated documentation
-    - Usage examples in docs
-
-- [ ] #LC017: Integration examples
-  - **Component**: examples/
-  - **Priority**: High
-  - **Created**: 2025-07-25
-  - **Dependencies**: #LC013-#LC015
-  - **Details**: Create example code for common integration scenarios
-  - **Example files**:
-    - basic_usage.zig
-    - build_integration.zig
-    - custom_analyzer.zig
-    - ide_integration.zig
-    - ci_integration.zig
-
-- [ ] #LC018: Migration guide
-  - **Component**: docs/migration-guide.md (new)
-  - **Priority**: Medium
-  - **Created**: 2025-07-25
-  - **Dependencies**: #LC016
-  - **Details**: Guide for migrating from CLI to library
-  - **Requirements**:
-    - CLI to API mappings
-    - Before/after examples
-    - Common patterns
-    - Troubleshooting
-
-### Phase 6: Testing and Validation
-
-*LC019 has been moved to Ready to Start section*
-
-- [ ] #LC020: Integration testing
-  - **Component**: tests/integration/
-  - **Priority**: High
-  - **Created**: 2025-07-25
-  - **Dependencies**: #LC019
-  - **Details**: Test library with real projects
-  - **Requirements**:
-    - Sample project tests
-    - Build integration tests
-    - Memory usage validation
-    - Thread safety tests
-
-- [ ] #LC021: Documentation testing
-  - **Component**: All documentation
-  - **Priority**: Medium
-  - **Created**: 2025-07-25
-  - **Dependencies**: #LC016-#LC018
-  - **Details**: Ensure all documentation code compiles and works
-  - **Requirements**:
-    - Example compilation
-    - Code snippet validation
-    - API completeness check
-    - Link validation
+*For current work prioritization, see the TIER sections above.*
 
 ## ✅ Completed
 
