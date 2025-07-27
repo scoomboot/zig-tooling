@@ -5,6 +5,29 @@ All notable changes to the Zig Tooling Suite will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.4] - 2025-07-27
+
+### Added
+- **Enhanced Ownership Detection**: Added "get" function pattern to default ownership transfer patterns
+  - Reduces false positives for getter functions that return owned memory
+  - Improves analysis accuracy for common accessor patterns
+- **Advanced Struct Field Detection**: Enhanced array element struct field assignment detection
+  - Better handling of complex ownership transfer patterns in struct initialization
+  - Improved recognition of indirect ownership transfers through data structures
+
+### Fixed
+- Improved ownership transfer detection for GitHub issue #2 patterns (getMigrationHistory example)
+- Enhanced pattern matching for array-based data structure initialization
+
+### Changed
+- Updated project tracking documentation (ISSUES.md, READY.md)
+- Expanded test coverage with LC072 test case replicating real-world usage patterns
+
+### Tests
+- Added comprehensive LC072 test case demonstrating getMigrationHistory ownership pattern
+- Enhanced validation for struct field assignment scenarios
+- Improved test coverage for edge cases in ownership detection
+
 ## [0.1.3] - 2025-07-27
 
 ### Added

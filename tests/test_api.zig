@@ -2179,3 +2179,173 @@ test "LC068: ownership transfer - struct initialization pattern" {
         try testing.expect(issue.issue_type != .missing_defer);
     }
 }
+
+test "LC072: getMigrationHistory ownership transfer example" {
+    const allocator = testing.allocator;
+    
+    // This test replicates the exact pattern from GitHub issue #2
+    const source =
+        \\pub fn getMigrationHistory(allocator: std.mem.Allocator) ![]Migration {
+        \\    const data = try allocator.alloc(Migration, 10);
+        \\    errdefer allocator.free(data);
+        \\    
+        \\    // Process migrations...
+        \\    return data;
+        \\}
+    ;
+    
+    const result = try zig_tooling.analyzeMemory(allocator, source, "test.zig", null);
+    defer allocator.free(result.issues);
+    defer for (result.issues) |issue| {
+        allocator.free(issue.file_path);
+        allocator.free(issue.message);
+        if (issue.suggestion) |s| allocator.free(s);
+    };
+    
+    // Should not report missing defer for getMigrationHistory function (starts with "get")
+    for (result.issues) |issue| {
+        try testing.expect(issue.issue_type != .missing_defer);
+    }
+}
+
+test "LC072: get function pattern detection" {
+    const allocator = testing.allocator;
+    
+    // Test various "get" function patterns
+    const source =
+        \\pub fn getBuffer(allocator: std.mem.Allocator) ![]u8 {
+        \\    return try allocator.alloc(u8, 100);
+        \\}
+        \\
+        \\pub fn getData(allocator: std.mem.Allocator) ![]const u8 {
+        \\    const buffer = try allocator.alloc(u8, 50);
+        \\    errdefer allocator.free(buffer);
+        \\    // Process buffer...
+        \\    return buffer;
+        \\}
+        \\
+        \\pub fn getConfig(allocator: std.mem.Allocator) !*Config {
+        \\    return try allocator.create(Config);
+        \\}
+    ;
+    
+    const result = try zig_tooling.analyzeMemory(allocator, source, "test.zig", null);
+    defer allocator.free(result.issues);
+    defer for (result.issues) |issue| {
+        allocator.free(issue.file_path);
+        allocator.free(issue.message);
+        if (issue.suggestion) |s| allocator.free(s);
+    };
+    
+    // Should not report missing defer for any of these "get" functions
+    for (result.issues) |issue| {
+        try testing.expect(issue.issue_type != .missing_defer);
+    }
+}
+
+test "LC072: array element struct field assignment - initialization" {
+    const allocator = testing.allocator;
+    
+    // Test pattern: result[i] = Struct{ .field = allocation }
+    const source =
+        \\pub fn buildArray(allocator: std.mem.Allocator) ![]Item {
+        \\    var result = try allocator.alloc(Item, 10);
+        \\    errdefer allocator.free(result);
+        \\    
+        \\    for (result, 0..) |*item, i| {
+        \\        const data = try allocator.alloc(u8, 100);
+        \\        result[i] = Item{ .data = data, .len = 100 };
+        \\    }
+        \\    
+        \\    return result;
+        \\}
+    ;
+    
+    const result = try zig_tooling.analyzeMemory(allocator, source, "test.zig", null);
+    defer allocator.free(result.issues);
+    defer for (result.issues) |issue| {
+        allocator.free(issue.file_path);
+        allocator.free(issue.message);
+        if (issue.suggestion) |s| allocator.free(s);
+    };
+    
+    // Should not report missing defer for allocation assigned to array element struct field
+    var found_missing_defer = false;
+    for (result.issues) |issue| {
+        if (issue.issue_type == .missing_defer and std.mem.indexOf(u8, issue.message, "data") != null) {
+            found_missing_defer = true;
+        }
+    }
+    try testing.expect(!found_missing_defer);
+}
+
+test "LC072: array element struct field assignment - direct assignment" {
+    const allocator = testing.allocator;
+    
+    // Test pattern: result[i].field = allocation
+    const source =
+        \\pub fn initializeArray(allocator: std.mem.Allocator) ![]Item {
+        \\    var result = try allocator.alloc(Item, 10);
+        \\    errdefer allocator.free(result);
+        \\    
+        \\    for (result, 0..) |*item, i| {
+        \\        const data = try allocator.alloc(u8, 100);
+        \\        result[i].data = data;
+        \\        result[i].len = 100;
+        \\    }
+        \\    
+        \\    return result;
+        \\}
+    ;
+    
+    const result = try zig_tooling.analyzeMemory(allocator, source, "test.zig", null);
+    defer allocator.free(result.issues);
+    defer for (result.issues) |issue| {
+        allocator.free(issue.file_path);
+        allocator.free(issue.message);
+        if (issue.suggestion) |s| allocator.free(s);
+    };
+    
+    // Should not report missing defer for allocation assigned directly to array element field
+    var found_missing_defer = false;
+    for (result.issues) |issue| {
+        if (issue.issue_type == .missing_defer and std.mem.indexOf(u8, issue.message, "data") != null) {
+            found_missing_defer = true;
+        }
+    }
+    try testing.expect(!found_missing_defer);
+}
+
+test "LC072: struct field assignment - general case" {
+    const allocator = testing.allocator;
+    
+    // Test general struct field assignment patterns
+    const source =
+        \\pub fn createStruct(allocator: std.mem.Allocator) !MyStruct {
+        \\    var result: MyStruct = undefined;
+        \\    
+        \\    const buffer = try allocator.alloc(u8, 100);
+        \\    result.buffer = buffer;
+        \\    result.len = 100;
+        \\    
+        \\    return result;
+        \\}
+    ;
+    
+    const result = try zig_tooling.analyzeMemory(allocator, source, "test.zig", null);
+    defer allocator.free(result.issues);
+    defer for (result.issues) |issue| {
+        allocator.free(issue.file_path);
+        allocator.free(issue.message);
+        if (issue.suggestion) |s| allocator.free(s);
+    };
+    
+    // Should not report missing defer for allocation assigned to struct field
+    var found_missing_defer = false;
+    for (result.issues) |issue| {
+        if (issue.issue_type == .missing_defer and std.mem.indexOf(u8, issue.message, "buffer") != null) {
+            found_missing_defer = true;
+        }
+    }
+    try testing.expect(!found_missing_defer);
+}

@@ -78,6 +78,7 @@ const default_ownership_patterns = [_]OwnershipPattern{
     .{ .function_pattern = "duplicate", .description = "Duplicate functions return owned copies" },
     .{ .function_pattern = "copy", .description = "Copy functions may return owned copies" },
     .{ .function_pattern = "alloc", .description = "Alloc functions explicitly allocate memory" },
+    .{ .function_pattern = "get", .description = "Getter functions that may return owned memory" },
     
     // String/buffer creation patterns
     .{ .function_pattern = "toString", .description = "String conversion often allocates" },
@@ -1701,6 +1702,31 @@ pub const MemoryAnalyzer = struct {
                             if (std.mem.indexOf(u8, after_return, allocation.variable_name)) |_| {
                                 return true;
                             }
+                        }
+                    }
+                    
+                    // Check for array element struct field assignments (ownership transfer patterns)
+                    if (std.mem.indexOf(u8, line, allocation.variable_name)) |_| {
+                        // Pattern: result[i] = Struct{ .field = allocation }
+                        if (std.mem.indexOf(u8, line, "[") != null and 
+                            std.mem.indexOf(u8, line, "]") != null and
+                            std.mem.indexOf(u8, line, "= ") != null and
+                            std.mem.indexOf(u8, line, "{") != null) {
+                            return true;
+                        }
+                        
+                        // Pattern: result[i].field = allocation
+                        if (std.mem.indexOf(u8, line, "[") != null and 
+                            std.mem.indexOf(u8, line, "]") != null and
+                            std.mem.indexOf(u8, line, ".") != null and
+                            std.mem.indexOf(u8, line, "= ") != null) {
+                            return true;
+                        }
+                        
+                        // Pattern: any assignment to struct fields (general case)
+                        if (std.mem.indexOf(u8, line, ".") != null and
+                            std.mem.indexOf(u8, line, "= ") != null) {
+                            return true;
                         }
                     }
                 }
