@@ -46,10 +46,23 @@ pub const ScopeConfig = types.ScopeConfig;
 pub const PatternConfig = types.PatternConfig;
 pub const AnalysisOptions = types.AnalysisOptions;
 pub const AnalysisError = types.AnalysisError;
+pub const AllocatorPattern = types.AllocatorPattern;
 
 // Re-export other modules for advanced usage
 pub const source_context = @import("source_context.zig");
-pub const app_logger = @import("app_logger.zig");
+
+// Re-export logging components
+const logger_module = @import("app_logger.zig");
+pub const Logger = logger_module.Logger;
+pub const LogLevel = logger_module.LogLevel;
+pub const LogEvent = logger_module.LogEvent;
+pub const LogContext = logger_module.LogContext;
+pub const LogCallback = logger_module.LogCallback;
+pub const LoggingConfig = logger_module.LoggingConfig;
+pub const stderrLogCallback = logger_module.stderrLogCallback;
+
+// Export the entire logger module for advanced usage
+pub const app_logger = logger_module;
 
 /// Analyzes memory safety in the provided source code
 /// 
@@ -86,7 +99,7 @@ pub fn analyzeMemory(
     const start_time = std.time.milliTimestamp();
     
     var analyzer = if (config) |cfg|
-        MemoryAnalyzer.initWithConfig(allocator, cfg.memory)
+        MemoryAnalyzer.initWithFullConfig(allocator, cfg)
     else
         MemoryAnalyzer.init(allocator);
     defer analyzer.deinit();
@@ -147,7 +160,7 @@ pub fn analyzeTests(
     const start_time = std.time.milliTimestamp();
     
     var analyzer = if (config) |cfg|
-        TestingAnalyzer.initWithConfig(allocator, cfg.testing)
+        TestingAnalyzer.initWithFullConfig(allocator, cfg)
     else
         TestingAnalyzer.init(allocator);
     defer analyzer.deinit();

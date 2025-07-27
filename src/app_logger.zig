@@ -1,583 +1,373 @@
-const std = @import("std");
-const time = std.time;
-const fs = std.fs;
+//! Lightweight callback-based logging for library usage
+//!
+//! This module provides a simple, optional logging interface that allows
+//! library users to integrate their own logging implementations.
+//!
+//! ## Example Usage
+//! ```zig
+//! const LogConfig = LoggingConfig{
+//!     .enabled = true,
+//!     .callback = myLogHandler,
+//!     .min_level = .info,
+//! };
+//!
+//! fn myLogHandler(event: LogEvent) void {
+//!     std.debug.print("[{s}] {s}: {s}\n", .{
+//!         @tagName(event.level),
+//!         event.category,
+//!         event.message,
+//!     });
+//! }
+//! ```
 
-pub const AppLogLevel = enum {
+const std = @import("std");
+
+/// Log severity levels
+pub const LogLevel = enum {
     debug,
     info,
     warn,
     err,
-    fatal,
-};
-
-pub const AppLogCategory = enum {
-    simulation,
-    api,
-    database,
-    data_import,
-    performance,
-    security,
-    cache,
-    export_data,
-    validation,
-    general,
     
-    pub fn toString(self: AppLogCategory) []const u8 {
+    pub fn toString(self: LogLevel) []const u8 {
         return switch (self) {
-            .simulation => "SIMULATION",
-            .api => "API",
-            .database => "DATABASE",
-            .data_import => "DATA_IMPORT",
-            .performance => "PERFORMANCE",
-            .security => "SECURITY",
-            .cache => "CACHE",
-            .export_data => "EXPORT",
-            .validation => "VALIDATION",
-            .general => "GENERAL",
-        };
-    }
-};
-
-pub const LogContext = struct {
-    request_id: ?[]const u8 = null,
-    user_id: ?[]const u8 = null,
-    game_id: ?[]const u8 = null,
-    operation_type: ?[]const u8 = null,
-    duration_ms: ?u64 = null,
-    
-    pub fn format(self: LogContext, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
-        _ = fmt;
-        _ = options;
-        
-        var has_context = false;
-        try writer.writeAll("[");
-        
-        if (self.request_id) |req_id| {
-            try writer.print("req:{s}", .{req_id});
-            has_context = true;
-        }
-        
-        if (self.user_id) |user_id| {
-            if (has_context) try writer.writeAll(",");
-            try writer.print("user:{s}", .{user_id});
-            has_context = true;
-        }
-        
-        if (self.game_id) |game_id| {
-            if (has_context) try writer.writeAll(",");
-            try writer.print("game:{s}", .{game_id});
-            has_context = true;
-        }
-        
-        if (self.operation_type) |op_type| {
-            if (has_context) try writer.writeAll(",");
-            try writer.print("op:{s}", .{op_type});
-            has_context = true;
-        }
-        
-        if (self.duration_ms) |duration| {
-            if (has_context) try writer.writeAll(",");
-            try writer.print("dur:{d}ms", .{duration});
-            has_context = true;
-        }
-        
-        if (!has_context) {
-            try writer.writeAll("no-context");
-        }
-        
-        try writer.writeAll("]");
-    }
-};
-
-pub const AppLogEntry = struct {
-    timestamp: i64,
-    level: AppLogLevel,
-    category: AppLogCategory,
-    message: []const u8,
-    context: LogContext,
-    source_location: ?[]const u8 = null,
-    error_code: ?i32 = null,
-    use_color: bool = true,
-    
-    pub fn format(self: AppLogEntry, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
-        _ = fmt;
-        _ = options;
-        
-        // ANSI color codes
-        const RESET = if (self.use_color) "\x1b[0m" else "";
-        const GRAY = if (self.use_color) "\x1b[90m" else "";
-        const CYAN = if (self.use_color) "\x1b[36m" else "";
-        const YELLOW = if (self.use_color) "\x1b[33m" else "";
-        const RED = if (self.use_color) "\x1b[31m" else "";
-        const MAGENTA = if (self.use_color) "\x1b[35m" else "";
-        const GREEN = if (self.use_color) "\x1b[32m" else "";
-        const BRIGHT_RED = if (self.use_color) "\x1b[91m" else "";
-        
-        const level_text = switch (self.level) {
             .debug => "DEBUG",
             .info => "INFO",
             .warn => "WARN",
             .err => "ERROR",
-            .fatal => "FATAL",
         };
-        
-        const level_color = switch (self.level) {
-            .debug => GRAY,
-            .info => CYAN,
-            .warn => YELLOW,
-            .err => RED,
-            .fatal => BRIGHT_RED,
-        };
-        
-        // Format timestamp
-        const dt = std.time.timestamp();
-        const dt_str = try std.fmt.allocPrint(std.heap.page_allocator, "{d}", .{dt});
-        defer std.heap.page_allocator.free(dt_str);
-        
-        const category_str = self.category.toString();
-        
-        // Category colors
-        const category_color = switch (self.category) {
-            .api => GREEN,
-            .database => YELLOW,
-            .simulation => MAGENTA,
-            .performance => CYAN,
-            .security => BRIGHT_RED,
-            else => GRAY,
-        };
-        
-        // Format: [timestamp] LEVEL [CATEGORY] context source: message (error_code)
-        try writer.print("{s}[{s}]{s} {s}{s}{s} {s}[{s}]{s} {}", 
-            .{ GRAY, dt_str, RESET, level_color, level_text, RESET, category_color, category_str, RESET, self.context });
-        
-        if (self.source_location) |source| {
-            try writer.print(" {s}{s}:{s}", .{GRAY, source, RESET});
-        }
-        
-        try writer.print(" {s}", .{self.message});
-        
-        if (self.error_code) |code| {
-            try writer.print(" {s}(code: {d}){s}", .{GRAY, code, RESET});
-        }
-        
-        try writer.print("\n", .{});
     }
 };
 
-pub const LogStats = struct { 
-    size: u64, 
-    lines: usize, 
-    archives: usize 
+/// Optional context information for log events
+pub const LogContext = struct {
+    /// File path being analyzed
+    file_path: ?[]const u8 = null,
+    
+    /// Line number in source file
+    line: ?u32 = null,
+    
+    /// Column number in source file  
+    column: ?u32 = null,
+    
+    /// Analysis phase or operation
+    operation: ?[]const u8 = null,
+    
+    /// Additional key-value pairs
+    extra: ?std.json.Value = null,
 };
 
-pub const AppLogger = struct {
+/// Source location information
+pub const SourceLocation = struct {
+    file: []const u8,
+    function: []const u8,
+    line: u32,
+};
+
+/// Structured log event
+pub const LogEvent = struct {
+    /// Timestamp in milliseconds since epoch
+    timestamp: i64,
+    
+    /// Log severity level
+    level: LogLevel,
+    
+    /// User-defined category string
+    category: []const u8,
+    
+    /// Log message
+    message: []const u8,
+    
+    /// Optional context information
+    context: ?LogContext = null,
+    
+    /// Optional source location
+    source_location: ?SourceLocation = null,
+};
+
+/// Log event callback function type
+pub const LogCallback = *const fn (event: LogEvent) void;
+
+/// Logging configuration
+pub const LoggingConfig = struct {
+    /// Enable or disable logging
+    enabled: bool = false,
+    
+    /// Callback function to handle log events
+    callback: ?LogCallback = null,
+    
+    /// Minimum log level to emit
+    min_level: LogLevel = .info,
+};
+
+/// Simple logger that uses callbacks
+pub const Logger = struct {
+    config: LoggingConfig,
     allocator: std.mem.Allocator,
-    log_file_path: []const u8,
-    max_log_size: usize = 10 * 1024 * 1024, // 10MB default
-    max_archives: u8 = 5, // Keep 5 archived logs
     
-    pub fn init(allocator: std.mem.Allocator, log_file_path: []const u8) AppLogger {
-        return AppLogger{
+    /// Initialize a new logger
+    pub fn init(allocator: std.mem.Allocator, config: LoggingConfig) Logger {
+        return .{
             .allocator = allocator,
-            .log_file_path = log_file_path,
+            .config = config,
         };
     }
     
-    pub fn log(self: *AppLogger, level: AppLogLevel, category: AppLogCategory, message: []const u8, context: LogContext) !void {
-        return self.logWithSource(level, category, message, context, null, null);
+    /// Check if logging is enabled and callback is set
+    pub fn isEnabled(self: *const Logger) bool {
+        return self.config.enabled and self.config.callback != null;
     }
     
-    pub fn logWithSource(self: *AppLogger, level: AppLogLevel, category: AppLogCategory, message: []const u8, context: LogContext, source_location: ?[]const u8, error_code: ?i32) !void {
-        // Check if log rotation is needed before writing
-        try self.rotateIfNeeded();
+    /// Check if a log level meets the minimum threshold
+    pub fn shouldLog(self: *const Logger, level: LogLevel) bool {
+        if (!self.isEnabled()) return false;
+        return @intFromEnum(level) >= @intFromEnum(self.config.min_level);
+    }
+    
+    /// Log an event
+    pub fn log(
+        self: *const Logger,
+        level: LogLevel,
+        category: []const u8,
+        message: []const u8,
+        context: ?LogContext,
+    ) void {
+        if (!self.shouldLog(level)) return;
         
-        // Create entry without color for file
-        var entry = AppLogEntry{
-            .timestamp = time.timestamp(),
+        const event = LogEvent{
+            .timestamp = std.time.milliTimestamp(),
+            .level = level,
+            .category = category,
+            .message = message,
+            .context = context,
+            .source_location = null,
+        };
+        
+        if (self.config.callback) |callback| {
+            callback(event);
+        }
+    }
+    
+    /// Log with source location information
+    pub fn logWithSource(
+        self: *const Logger,
+        level: LogLevel,
+        category: []const u8,
+        message: []const u8,
+        context: ?LogContext,
+        source_location: ?SourceLocation,
+    ) void {
+        if (!self.shouldLog(level)) return;
+        
+        const event = LogEvent{
+            .timestamp = std.time.milliTimestamp(),
             .level = level,
             .category = category,
             .message = message,
             .context = context,
             .source_location = source_location,
-            .error_code = error_code,
-            .use_color = false,
         };
         
-        // Write to file (without color)
-        try self.writeToFile(entry);
-        
-        // Also write to stderr for immediate visibility of errors (with color)
-        if (level == .err or level == .fatal) {
-            entry.use_color = true;
-            const stderr = std.io.getStdErr().writer();
-            try stderr.print("{}", .{entry});
+        if (self.config.callback) |callback| {
+            callback(event);
         }
     }
     
-    fn writeToFile(self: *AppLogger, entry: AppLogEntry) !void {
-        // Format the entire entry first to ensure atomic write
-        var buffer: [4096]u8 = undefined;
-        var fbs = std.io.fixedBufferStream(&buffer);
-        try fbs.writer().print("{}", .{entry});
-        const formatted = fbs.getWritten();
-        
-        // Open file in write mode - we'll use pwriteAll for atomic positioning
-        const file = fs.cwd().openFile(self.log_file_path, .{ 
-            .mode = .write_only,
-        }) catch |err| switch (err) {
-            error.FileNotFound => blk: {
-                // Extract directory path from log file path
-                const dir_end = std.mem.lastIndexOfScalar(u8, self.log_file_path, '/');
-                if (dir_end) |end| {
-                    const dir_path = self.log_file_path[0..end];
-                    // Try to create the directory (will succeed if it already exists)
-                    fs.cwd().makePath(dir_path) catch {};
-                }
-                
-                // Create file if it doesn't exist
-                const new_file = try fs.cwd().createFile(self.log_file_path, .{});
-                new_file.close();
-                // Re-open in write mode
-                break :blk try fs.cwd().openFile(self.log_file_path, .{ 
-                    .mode = .write_only,
-                });
-            },
-            else => return err,
-        };
-        defer file.close();
-        
-        // Write atomically at end of file using pwriteAll
-        const end_pos = try file.getEndPos();
-        try file.pwriteAll(formatted, end_pos);
+    /// Convenience methods for common log levels
+    pub fn debug(self: *const Logger, category: []const u8, message: []const u8, context: ?LogContext) void {
+        self.log(.debug, category, message, context);
     }
     
-    // Convenience methods for common logging patterns
-    pub fn logInfo(self: *AppLogger, category: AppLogCategory, message: []const u8, context: LogContext) !void {
-        try self.log(.info, category, message, context);
+    pub fn info(self: *const Logger, category: []const u8, message: []const u8, context: ?LogContext) void {
+        self.log(.info, category, message, context);
     }
     
-    pub fn logWarn(self: *AppLogger, category: AppLogCategory, message: []const u8, context: LogContext) !void {
-        try self.log(.warn, category, message, context);
+    pub fn warn(self: *const Logger, category: []const u8, message: []const u8, context: ?LogContext) void {
+        self.log(.warn, category, message, context);
     }
     
-    pub fn logError(self: *AppLogger, category: AppLogCategory, message: []const u8, context: LogContext, error_code: ?i32) !void {
-        try self.logWithSource(.err, category, message, context, null, error_code);
+    pub fn err(self: *const Logger, category: []const u8, message: []const u8, context: ?LogContext) void {
+        self.log(.err, category, message, context);
     }
     
-    pub fn logDebug(self: *AppLogger, category: AppLogCategory, message: []const u8, context: LogContext) !void {
-        try self.log(.debug, category, message, context);
-    }
-    
-    pub fn logFatal(self: *AppLogger, category: AppLogCategory, message: []const u8, context: LogContext, error_code: ?i32) !void {
-        try self.logWithSource(.fatal, category, message, context, null, error_code);
-    }
-    
-    // API-specific logging methods
-    pub fn logAPIRequest(self: *AppLogger, method: []const u8, uri: []const u8, request_id: []const u8, user_id: ?[]const u8) !void {
-        const msg = try std.fmt.allocPrint(self.allocator, "API request: {s} {s}", .{ method, uri });
-        defer self.allocator.free(msg);
+    /// Log with formatted message
+    pub fn logFmt(
+        self: *const Logger,
+        level: LogLevel,
+        category: []const u8,
+        comptime fmt: []const u8,
+        args: anytype,
+        context: ?LogContext,
+    ) void {
+        if (!self.shouldLog(level)) return;
         
-        const context = LogContext{
-            .request_id = request_id,
-            .user_id = user_id,
-            .operation_type = "api_request",
-        };
+        const message = std.fmt.allocPrint(self.allocator, fmt, args) catch return;
+        defer self.allocator.free(message);
         
-        try self.log(.info, .api, msg, context);
-    }
-    
-    pub fn logAPIResponse(self: *AppLogger, status_code: u16, request_id: []const u8, duration_ms: u64) !void {
-        const msg = try std.fmt.allocPrint(self.allocator, "API response: {d}", .{status_code});
-        defer self.allocator.free(msg);
-        
-        const context = LogContext{
-            .request_id = request_id,
-            .duration_ms = duration_ms,
-            .operation_type = "api_response",
-        };
-        
-        const level: AppLogLevel = if (status_code >= 500) .err else if (status_code >= 400) .warn else .info;
-        try self.log(level, .api, msg, context);
-    }
-    
-    // Simulation-specific logging methods
-    pub fn logSimulationStart(self: *AppLogger, game_id: []const u8, teams: []const u8) !void {
-        const msg = try std.fmt.allocPrint(self.allocator, "Simulation started: {s}", .{teams});
-        defer self.allocator.free(msg);
-        
-        const context = LogContext{
-            .game_id = game_id,
-            .operation_type = "simulation_start",
-        };
-        
-        try self.log(.info, .simulation, msg, context);
-    }
-    
-    pub fn logSimulationEnd(self: *AppLogger, game_id: []const u8, duration_ms: u64, final_score: []const u8) !void {
-        const msg = try std.fmt.allocPrint(self.allocator, "Simulation completed: {s}", .{final_score});
-        defer self.allocator.free(msg);
-        
-        const context = LogContext{
-            .game_id = game_id,
-            .duration_ms = duration_ms,
-            .operation_type = "simulation_end",
-        };
-        
-        try self.log(.info, .simulation, msg, context);
-    }
-    
-    // Database-specific logging methods
-    pub fn logQueryExecution(self: *AppLogger, query_type: []const u8, duration_ms: u64, rows_affected: ?u64) !void {
-        const msg = if (rows_affected) |rows|
-            try std.fmt.allocPrint(self.allocator, "Query executed: {s} ({d} rows)", .{ query_type, rows })
-        else
-            try std.fmt.allocPrint(self.allocator, "Query executed: {s}", .{query_type});
-        defer self.allocator.free(msg);
-        
-        const context = LogContext{
-            .duration_ms = duration_ms,
-            .operation_type = query_type,
-        };
-        
-        const level: AppLogLevel = if (duration_ms > 1000) .warn else .debug;
-        try self.log(level, .database, msg, context);
-    }
-    
-    // Performance logging methods
-    pub fn logPerformanceMetric(self: *AppLogger, metric_name: []const u8, value: f64, unit: []const u8, context: LogContext) !void {
-        const msg = try std.fmt.allocPrint(self.allocator, "Performance metric: {s} = {d:.2} {s}", .{ metric_name, value, unit });
-        defer self.allocator.free(msg);
-        
-        try self.log(.info, .performance, msg, context);
-    }
-    
-    pub fn logPerformanceRegression(self: *AppLogger, metric_name: []const u8, old_value: f64, new_value: f64, threshold: f64) !void {
-        const regression_pct = ((new_value - old_value) / old_value) * 100.0;
-        const msg = try std.fmt.allocPrint(self.allocator, "Performance regression: {s} {d:.2} -> {d:.2} ({d:.1}% increase, threshold: {d:.1}%)", .{ metric_name, old_value, new_value, regression_pct, threshold });
-        defer self.allocator.free(msg);
-        
-        const context = LogContext{
-            .operation_type = "performance_regression",
-        };
-        
-        try self.log(.warn, .performance, msg, context);
-    }
-    
-    // Log management methods
-    pub fn getLogStats(self: *AppLogger) !LogStats {
-        var stats = LogStats{ .size = 0, .lines = 0, .archives = 0 };
-        
-        // Get current log file stats
-        const file = fs.cwd().openFile(self.log_file_path, .{}) catch |err| switch (err) {
-            error.FileNotFound => return stats,
-            else => return err,
-        };
-        defer file.close();
-        
-        stats.size = try file.getEndPos();
-        
-        // Count lines
-        const contents = try self.allocator.alloc(u8, @intCast(stats.size));
-        defer self.allocator.free(contents);
-        _ = try file.preadAll(contents, 0);
-        
-        var it = std.mem.tokenizeScalar(u8, contents, '\n');
-        while (it.next()) |_| {
-            stats.lines += 1;
-        }
-        
-        // Count archives
-        const dir_path = fs.path.dirname(self.log_file_path) orelse ".";
-        const base_name = fs.path.basename(self.log_file_path);
-        
-        var dir = try fs.cwd().openDir(dir_path, .{ .iterate = true });
-        defer dir.close();
-        
-        var dir_it = dir.iterate();
-        while (try dir_it.next()) |entry| {
-            if (entry.kind == .file and std.mem.startsWith(u8, entry.name, base_name) and std.mem.endsWith(u8, entry.name, ".archive")) {
-                stats.archives += 1;
-            }
-        }
-        
-        return stats;
-    }
-    
-    pub fn forceRotate(self: *AppLogger) !void {
-        const file = fs.cwd().openFile(self.log_file_path, .{}) catch |err| switch (err) {
-            error.FileNotFound => return, // Nothing to rotate
-            else => return err,
-        };
-        file.close();
-        
-        try self.rotateLog();
-    }
-    
-    pub fn readRecentLogs(self: *AppLogger, allocator: std.mem.Allocator, max_lines: usize) ![][]u8 {
-        const file = fs.cwd().openFile(self.log_file_path, .{}) catch |err| switch (err) {
-            error.FileNotFound => return &[_][]u8{},
-            else => return err,
-        };
-        defer file.close();
-        
-        const file_size = try file.getEndPos();
-        if (file_size == 0) return &[_][]u8{};
-        
-        const contents = try allocator.alloc(u8, file_size);
-        defer allocator.free(contents);
-        _ = try file.readAll(contents);
-        
-        var lines = std.ArrayList([]u8).init(allocator);
-        defer lines.deinit();
-        
-        var it = std.mem.splitScalar(u8, contents, '\n');
-        
-        while (it.next()) |line| {
-            if (line.len > 0) {
-                const owned_line = try allocator.dupe(u8, line);
-                errdefer allocator.free(owned_line);
-                try lines.append(owned_line);
-            }
-        }
-        
-        const total_lines = lines.items.len;
-        const start_idx = if (total_lines > max_lines) total_lines - max_lines else 0;
-        
-        const result = try allocator.alloc([]u8, total_lines - start_idx);
-        errdefer allocator.free(result);
-        for (lines.items[start_idx..], 0..) |line, i| {
-            result[i] = line;
-        }
-        
-        // Free the lines that we're not returning
-        for (lines.items[0..start_idx]) |line| {
-            allocator.free(line);
-        }
-        
-        return result;
-    }
-    
-    pub fn clearLogs(self: *AppLogger) !void {
-        const file = fs.cwd().createFile(self.log_file_path, .{}) catch |err| switch (err) {
-            error.FileNotFound => return,
-            else => return err,
-        };
-        file.close();
-    }
-    
-    fn rotateIfNeeded(self: *AppLogger) !void {
-        const file = fs.cwd().openFile(self.log_file_path, .{}) catch |err| switch (err) {
-            error.FileNotFound => return, // No file to rotate
-            else => return err,
-        };
-        defer file.close();
-        
-        const file_size = try file.getEndPos();
-        if (file_size >= self.max_log_size) {
-            try self.rotateLog();
-        }
-    }
-    
-    fn rotateLog(self: *AppLogger) !void {
-        // Generate archive filename with timestamp
-        const timestamp = time.timestamp();
-        const archive_name = try std.fmt.allocPrint(self.allocator, "{s}.{d}.archive", .{ self.log_file_path, timestamp });
-        defer self.allocator.free(archive_name);
-        
-        // Rename current log to archive
-        try fs.cwd().rename(self.log_file_path, archive_name);
-        
-        // Clean up old archives
-        try self.cleanupOldArchives();
-    }
-    
-    fn cleanupOldArchives(self: *AppLogger) !void {
-        const dir_path = fs.path.dirname(self.log_file_path) orelse ".";
-        const base_name = fs.path.basename(self.log_file_path);
-        
-        var archives = std.ArrayList([]const u8).init(self.allocator);
-        defer {
-            for (archives.items) |archive| {
-                self.allocator.free(archive);
-            }
-            archives.deinit();
-        }
-        
-        // Find all archive files
-        var dir = try fs.cwd().openDir(dir_path, .{ .iterate = true });
-        defer dir.close();
-        
-        var it = dir.iterate();
-        while (try it.next()) |entry| {
-            if (entry.kind == .file and std.mem.startsWith(u8, entry.name, base_name) and std.mem.endsWith(u8, entry.name, ".archive")) {
-                const owned_name = try self.allocator.dupe(u8, entry.name);
-                errdefer self.allocator.free(owned_name);
-                try archives.append(owned_name);
-            }
-        }
-        
-        // Sort archives by name (timestamp is in the name)
-        std.mem.sort([]const u8, archives.items, {}, struct {
-            fn lessThan(_: void, a: []const u8, b: []const u8) bool {
-                return std.mem.order(u8, a, b) == .lt;
-            }
-        }.lessThan);
-        
-        // Delete oldest archives if we exceed max_archives
-        if (archives.items.len > self.max_archives) {
-            const to_delete = archives.items.len - self.max_archives;
-            for (archives.items[0..to_delete]) |archive| {
-                const full_path = try fs.path.join(self.allocator, &[_][]const u8{ dir_path, archive });
-                defer self.allocator.free(full_path);
-                fs.cwd().deleteFile(full_path) catch |err| {
-                    // Log deletion failure but don't fail the operation
-                    // TODO: Consider proper error handling for library usage (LC012)
-                    _ = err;
-                };
-            }
-        }
+        self.log(level, category, message, context);
     }
 };
 
-// Utility function to get the default application logger
-pub fn getDefaultAppLogger(allocator: std.mem.Allocator) AppLogger {
-    return AppLogger.init(allocator, "../logs/app.log");
+/// Example log callback that prints to stderr
+pub fn stderrLogCallback(event: LogEvent) void {
+    const stderr = std.io.getStdErr().writer();
+    
+    // Format timestamp
+    const timestamp_sec = @divFloor(event.timestamp, 1000);
+    const timestamp_ms = @mod(event.timestamp, 1000);
+    
+    // Basic format: [TIMESTAMP] LEVEL [CATEGORY] MESSAGE
+    stderr.print("[{d}.{d:0>3}] {s} [{s}] {s}", .{
+        timestamp_sec,
+        timestamp_ms,
+        event.level.toString(),
+        event.category,
+        event.message,
+    }) catch return;
+    
+    // Add context if present
+    if (event.context) |ctx| {
+        if (ctx.file_path) |path| {
+            stderr.print(" (file: {s}", .{path}) catch return;
+            if (ctx.line) |line| {
+                stderr.print(":{d}", .{line}) catch return;
+                if (ctx.column) |col| {
+                    stderr.print(":{d}", .{col}) catch return;
+                }
+            }
+            stderr.print(")", .{}) catch return;
+        }
+        if (ctx.operation) |op| {
+            stderr.print(" [op: {s}]", .{op}) catch return;
+        }
+    }
+    
+    stderr.print("\n", .{}) catch return;
 }
 
-// Test the application logger
-test "unit: app logger basic functionality" {
-    var logger = AppLogger.init(std.testing.allocator, "test_app.log");
+/// Example log callback that collects events in memory
+pub fn createMemoryLogCallback(allocator: std.mem.Allocator) MemoryLogCollector {
+    return MemoryLogCollector.init(allocator);
+}
+
+pub const MemoryLogCollector = struct {
+    allocator: std.mem.Allocator,
+    events: std.ArrayList(LogEvent),
     
-    const context = LogContext{
-        .request_id = "req-123",
-        .operation_type = "test",
+    pub fn init(allocator: std.mem.Allocator) MemoryLogCollector {
+        return .{
+            .allocator = allocator,
+            .events = std.ArrayList(LogEvent).init(allocator),
+        };
+    }
+    
+    pub fn deinit(self: *MemoryLogCollector) void {
+        self.events.deinit();
+    }
+    
+    pub fn callback(self: *MemoryLogCollector) LogCallback {
+        return &self.logEvent;
+    }
+    
+    fn logEvent(ctx: *anyopaque, event: LogEvent) void {
+        const self: *MemoryLogCollector = @ptrCast(@alignCast(ctx));
+        self.events.append(event) catch return;
+    }
+    
+    pub fn getEvents(self: *const MemoryLogCollector) []const LogEvent {
+        return self.events.items;
+    }
+    
+    pub fn clear(self: *MemoryLogCollector) void {
+        self.events.clearRetainingCapacity();
+    }
+};
+
+// Test helpers
+var test_log_called: bool = false;
+var test_last_event: ?LogEvent = null;
+
+fn testLogCallback(event: LogEvent) void {
+    test_log_called = true;
+    test_last_event = event;
+}
+
+test "Logger basic functionality" {
+    const testing = std.testing;
+    
+    // Reset test state
+    test_log_called = false;
+    test_last_event = null;
+    
+    const config = LoggingConfig{
+        .enabled = true,
+        .callback = testLogCallback,
+        .min_level = .info,
     };
     
-    try logger.logInfo(.general, "Application started", context);
-    try logger.logWarn(.performance, "High memory usage detected", context);
-    try logger.logError(.database, "Connection failed", context, 500);
+    const logger = Logger.init(testing.allocator, config);
     
-    // Clean up test file
-    fs.cwd().deleteFile("test_app.log") catch {};
+    // Should log info level
+    logger.info("test", "Info message", null);
+    try testing.expect(test_log_called);
+    try testing.expectEqual(LogLevel.info, test_last_event.?.level);
+    try testing.expectEqualStrings("test", test_last_event.?.category);
+    try testing.expectEqualStrings("Info message", test_last_event.?.message);
+    
+    // Should not log debug level (below min_level)
+    test_log_called = false;
+    logger.debug("test", "Debug message", null);
+    try testing.expect(!test_log_called);
 }
 
-test "integration: app logger api logging" {
-    var logger = AppLogger.init(std.testing.allocator, "test_api.log");
+test "Logger with context" {
+    const testing = std.testing;
     
-    try logger.logAPIRequest("GET", "/api/v1/stats", "req-456", "user-789");
-    try logger.logAPIResponse(200, "req-456", 45);
-    try logger.logAPIResponse(500, "req-457", 120);
+    // Reset test state
+    test_log_called = false;
+    test_last_event = null;
     
-    // Clean up test file
-    fs.cwd().deleteFile("test_api.log") catch {};
+    const config = LoggingConfig{
+        .enabled = true,
+        .callback = testLogCallback,
+        .min_level = .debug,
+    };
+    
+    const logger = Logger.init(testing.allocator, config);
+    
+    const context = LogContext{
+        .file_path = "test.zig",
+        .line = 42,
+        .column = 15,
+        .operation = "memory_check",
+    };
+    
+    logger.warn("analyzer", "Found issue", context);
+    
+    try testing.expect(test_last_event != null);
+    try testing.expect(test_last_event.?.context != null);
+    try testing.expectEqualStrings("test.zig", test_last_event.?.context.?.file_path.?);
+    try testing.expectEqual(@as(u32, 42), test_last_event.?.context.?.line.?);
+    try testing.expectEqual(@as(u32, 15), test_last_event.?.context.?.column.?);
+    try testing.expectEqualStrings("memory_check", test_last_event.?.context.?.operation.?);
 }
 
-test "simulation: app logger simulation logging" {
-    var logger = AppLogger.init(std.testing.allocator, "test_sim.log");
+test "Logger disabled" {
+    const testing = std.testing;
     
-    try logger.logSimulationStart("game-123", "Team A vs Team B");
-    try logger.logSimulationEnd("game-123", 1500, "Team A 21 - Team B 14");
+    // Reset test state
+    test_log_called = false;
+    test_last_event = null;
     
-    // Clean up test file
-    fs.cwd().deleteFile("test_sim.log") catch {};
+    // Logger disabled
+    const config = LoggingConfig{
+        .enabled = false,
+        .callback = testLogCallback,
+        .min_level = .debug,
+    };
+    
+    const logger = Logger.init(testing.allocator, config);
+    
+    logger.err("test", "Error message", null);
+    try testing.expect(!test_log_called);
 }

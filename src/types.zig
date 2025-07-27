@@ -1,6 +1,7 @@
 // Common types and structures for zig-tooling library
 
 const std = @import("std");
+const app_logger = @import("app_logger.zig");
 
 /// Severity levels for all analysis issues
 pub const Severity = enum {
@@ -114,6 +115,9 @@ pub const Config = struct {
     
     /// General analysis options
     options: AnalysisOptions = .{},
+    
+    /// Logging configuration
+    logging: app_logger.LoggingConfig = .{},
 };
 
 /// Pattern definition for custom allocator detection

@@ -5,6 +5,7 @@ const ScopeTracker = @import("scope_tracker.zig").ScopeTracker;
 const ScopeInfo = @import("scope_tracker.zig").ScopeInfo;
 const EnhancedSourceContext = @import("source_context.zig").SourceContext;
 const types = @import("types.zig");
+const app_logger = @import("app_logger.zig");
 
 // Using unified types from types.zig
 const Issue = types.Issue;
@@ -49,7 +50,8 @@ pub const TestingAnalyzer = struct {
     source_files: ArrayList(SourceFilePattern),
     scope_tracker: ScopeTracker,
     enhanced_source_context: EnhancedSourceContext,
-    config: @import("types.zig").TestingConfig,
+    config: types.TestingConfig,
+    logger: ?app_logger.Logger,
     
     pub fn init(allocator: std.mem.Allocator) TestingAnalyzer {
         return TestingAnalyzer{
@@ -60,10 +62,11 @@ pub const TestingAnalyzer = struct {
             .scope_tracker = ScopeTracker.init(allocator),
             .enhanced_source_context = EnhancedSourceContext.init(allocator),
             .config = .{}, // Use default config
+            .logger = null,
         };
     }
     
-    pub fn initWithConfig(allocator: std.mem.Allocator, config: @import("types.zig").TestingConfig) TestingAnalyzer {
+    pub fn initWithConfig(allocator: std.mem.Allocator, config: types.TestingConfig) TestingAnalyzer {
         return TestingAnalyzer{
             .allocator = allocator,
             .issues = ArrayList(Issue).init(allocator),
@@ -72,7 +75,28 @@ pub const TestingAnalyzer = struct {
             .scope_tracker = ScopeTracker.init(allocator),
             .enhanced_source_context = EnhancedSourceContext.init(allocator),
             .config = config,
+            .logger = null,
         };
+    }
+    
+    pub fn initWithFullConfig(allocator: std.mem.Allocator, config: types.Config) TestingAnalyzer {
+        var analyzer = TestingAnalyzer{
+            .allocator = allocator,
+            .issues = ArrayList(Issue).init(allocator),
+            .tests = ArrayList(TestPattern).init(allocator),
+            .source_files = ArrayList(SourceFilePattern).init(allocator),
+            .scope_tracker = ScopeTracker.init(allocator),
+            .enhanced_source_context = EnhancedSourceContext.init(allocator),
+            .config = config.testing,
+            .logger = null,
+        };
+        
+        // Create logger if logging is enabled
+        if (config.logging.enabled) {
+            analyzer.logger = app_logger.Logger.init(allocator, config.logging);
+        }
+        
+        return analyzer;
     }
     
     pub fn deinit(self: *TestingAnalyzer) void {
@@ -122,6 +146,14 @@ pub const TestingAnalyzer = struct {
     }
     
     pub fn analyzeSourceCode(self: *TestingAnalyzer, file_path: []const u8, source: []const u8) !void {
+        // Log analysis start
+        if (self.logger) |logger| {
+            logger.info("testing_analyzer", "Starting test compliance analysis", .{
+                .file_path = file_path,
+                .operation = "analyze_source",
+            });
+        }
+        
         // Create arena for temporary allocations during this analysis
         var temp_arena = std.heap.ArenaAllocator.init(self.allocator);
         defer temp_arena.deinit();
@@ -185,6 +217,20 @@ pub const TestingAnalyzer = struct {
         if (self.source_files.items.len > 0) {
             var last_file = &self.source_files.items[self.source_files.items.len - 1];
             last_file.test_count = @intCast(self.tests.items.len);
+        }
+        
+        // Log analysis completion
+        if (self.logger) |logger| {
+            logger.logFmt(
+                .info,
+                "testing_analyzer",
+                "Completed test compliance analysis: {} issues found, {} tests identified",
+                .{ self.issues.items.len, self.tests.items.len },
+                .{
+                    .file_path = file_path,
+                    .operation = "analyze_complete",
+                },
+            );
         }
     }
     
@@ -402,7 +448,7 @@ pub const TestingAnalyzer = struct {
                     ),
                 .code_snippet = null,
             };
-            try self.issues.append(issue);
+            try self.addIssue(issue);
         }
         
         // Check for uncategorized tests
@@ -434,7 +480,7 @@ pub const TestingAnalyzer = struct {
                 ),
                 .code_snippet = null,
             };
-            try self.issues.append(issue);
+            try self.addIssue(issue);
         }
         
         // Check for memory safety in tests that should have it
@@ -457,7 +503,7 @@ pub const TestingAnalyzer = struct {
                 ),
                 .code_snippet = null,
             };
-            try self.issues.append(issue);
+            try self.addIssue(issue);
         }
     }
     
@@ -492,7 +538,7 @@ pub const TestingAnalyzer = struct {
                     ),
                     .code_snippet = null,
                 };
-                try self.issues.append(issue);
+                try self.addIssue(issue);
             }
         } else {
             // For unit test modules, inline tests are preferred
@@ -515,7 +561,7 @@ pub const TestingAnalyzer = struct {
                     ),
                     .code_snippet = null,
                 };
-                try self.issues.append(issue);
+                try self.addIssue(issue);
             }
         }
     }
@@ -684,6 +730,30 @@ pub const TestingAnalyzer = struct {
     
     pub fn getIssues(self: *TestingAnalyzer) []const Issue {
         return self.issues.items;
+    }
+    
+    fn addIssue(self: *TestingAnalyzer, issue: Issue) !void {
+        // Log the issue if logging is enabled
+        if (self.logger) |logger| {
+            logger.logFmt(
+                switch (issue.severity) {
+                    .err => .err,
+                    .warning => .warn,
+                    .info => .info,
+                },
+                "testing_analyzer",
+                "{s} at {s}:{}:{}",
+                .{ issue.message, issue.file_path, issue.line, issue.column },
+                .{
+                    .file_path = issue.file_path,
+                    .line = issue.line,
+                    .column = issue.column,
+                    .operation = "issue_detected",
+                },
+            );
+        }
+        
+        try self.addIssue(issue);
     }
     
     // Structured compliance data methods

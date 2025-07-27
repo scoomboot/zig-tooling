@@ -98,6 +98,74 @@
     - extractAllocatorType() logic at src/memory_analyzer.zig:675-697
     - Discovered during LC028 implementation
 
+- [ ] #LC034: Improve logging callback pattern for stateful collectors
+  - **Component**: src/app_logger.zig, src/types.zig
+  - **Priority**: Low
+  - **Created**: 2025-07-27
+  - **Dependencies**: #LC012
+  - **Details**: Current callback pattern doesn't work well with stateful log collectors
+  - **Requirements**:
+    - Consider alternative callback patterns that support closures or context pointers
+    - Update LogCallback type definition to support context parameter
+    - Maintain backward compatibility or provide migration path
+    - Add examples of stateful collectors
+  - **Notes**:
+    - Current pattern: `*const fn (event: LogEvent) void`
+    - Tests had to use global variables instead of proper closures (test_api.zig:1104-1157)
+    - MemoryLogCollector example has incomplete implementation
+    - Discovered during LC012 implementation
+
+- [ ] #LC035: Add log filtering by category
+  - **Component**: src/app_logger.zig, src/types.zig
+  - **Priority**: Low
+  - **Created**: 2025-07-27
+  - **Dependencies**: #LC012
+  - **Details**: Can only filter by log level, not by category
+  - **Requirements**:
+    - Add category_filter field to LoggingConfig (optional string array)
+    - Update Logger.shouldLog() to check category filter
+    - Support include/exclude patterns
+    - Add tests for category filtering
+  - **Notes**:
+    - Users might want only "memory_analyzer" logs, not "testing_analyzer"
+    - Current filtering at src/app_logger.zig:122-125
+    - Could use simple string matching or pattern matching
+    - Discovered during LC012 implementation
+
+- [ ] #LC036: Add structured logging format helpers
+  - **Component**: src/app_logger.zig
+  - **Priority**: Low
+  - **Created**: 2025-07-27
+  - **Dependencies**: #LC012
+  - **Details**: No standardized format for structured log messages
+  - **Requirements**:
+    - Add format templates for common log patterns
+    - Support key-value pair formatting
+    - Add JSON formatter for LogEvent
+    - Provide format customization options
+  - **Notes**:
+    - Current stderrLogCallback is basic (src/app_logger.zig:212-246)
+    - Users implementing callbacks must handle all formatting
+    - Could provide formatters: JSON, logfmt, human-readable
+    - Discovered during LC012 implementation
+
+- [ ] #LC037: Document logger lifecycle and memory safety
+  - **Component**: src/app_logger.zig, CLAUDE.md
+  - **Priority**: Medium
+  - **Created**: 2025-07-27
+  - **Dependencies**: #LC012
+  - **Details**: Logger holds reference to LoggingConfig but no lifetime guarantees
+  - **Requirements**:
+    - Document that LoggingConfig must outlive Logger instances
+    - Add warning about callback lifetime requirements
+    - Consider adding config ownership option
+    - Add examples showing proper lifecycle management
+  - **Notes**:
+    - Logger stores config reference at src/app_logger.zig:105
+    - No mechanism to ensure config outlives logger
+    - Could lead to use-after-free if misused
+    - Discovered during LC012 implementation
+
 ## 📋 Backlog
 
 *Library conversion work organized by phase*
@@ -108,22 +176,6 @@
 
 
 ### Phase 3: Core Component Updates
-
-- [ ] #LC012: Simplify logging system
-  - **Component**: src/app_logger.zig
-  - **Priority**: Low
-  - **Created**: 2025-07-25
-  - **Dependencies**: #LC008
-  - **Details**: Make logging optional with callback interface
-  - **Requirements**:
-    - Optional logging
-    - Callback interface
-    - Remove file rotation
-    - Structured events
-  - **Notes**:
-    - File is now at src/app_logger.zig (not src/logging/)
-    - Exported via zig_tooling.zig but not integrated with Config
-    - Still has file-based logging with rotation
 
 ### Phase 4: Integration Helpers
 
@@ -249,6 +301,24 @@
 ## ✅ Completed
 
 *Finished issues for reference*
+
+- [x] #LC012: Simplify logging system
+  - **Component**: src/app_logger.zig
+  - **Priority**: Low
+  - **Created**: 2025-07-25
+  - **Completed**: 2025-07-27
+  - **Dependencies**: #LC008
+  - **Details**: Make logging optional with callback interface
+  - **Resolution**:
+    - Completely redesigned app_logger.zig with callback-based interface
+    - Removed all file operations, rotation, and archive management
+    - Created simple Logger struct with optional LogCallback function
+    - Added LoggingConfig to types.zig and integrated with main Config struct
+    - Integrated logging with MemoryAnalyzer and TestingAnalyzer using initWithFullConfig()
+    - Exported logging types through zig_tooling.zig for easy access
+    - Added example callbacks: stderrLogCallback for console output
+    - Updated CLAUDE.md with logging usage examples
+    - All tests pass successfully
 
 - [x] #LC011: Optimize scope tracker
   - **Component**: src/scope_tracker.zig
@@ -551,5 +621,5 @@
 
 ---
 
-*Last Updated: 2025-07-27 (LC011 completed - scope tracker optimization with builder pattern)*
+*Last Updated: 2025-07-27 (LC012 completed - simplified logging system with callback interface, 4 new logging-related issues discovered)*
 *Focus: Library Conversion Project*

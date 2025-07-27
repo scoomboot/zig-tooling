@@ -83,6 +83,14 @@ if (result.hasErrors()) {
         });
     }
 }
+
+// Logging types
+const Logger = zig_tooling.Logger;
+const LogLevel = zig_tooling.LogLevel;
+const LogEvent = zig_tooling.LogEvent;
+const LogContext = zig_tooling.LogContext;
+const LogCallback = zig_tooling.LogCallback;
+const LoggingConfig = zig_tooling.LoggingConfig;
 ```
 
 ## Common Usage Patterns
@@ -112,6 +120,44 @@ const config = zig_tooling.Config{
 // 
 // var my_arena = CustomArenaAllocator.init();
 // const arena_alloc = my_arena.allocator(); // Detected as "MyArenaAllocator"
+```
+
+### Logging Integration
+```zig
+// Enable logging with a custom callback
+const config = zig_tooling.Config{
+    .memory = .{ .check_defer = true },
+    .testing = .{ .enforce_categories = true },
+    .logging = .{
+        .enabled = true,
+        .callback = myLogHandler,
+        .min_level = .info,
+    },
+};
+
+// Example log handler that writes to stderr
+fn myLogHandler(event: zig_tooling.LogEvent) void {
+    const stderr = std.io.getStdErr().writer();
+    stderr.print("[{s}] {s}: {s}\n", .{
+        @tagName(event.level),
+        event.category,
+        event.message,
+    }) catch return;
+}
+
+// Or use the built-in stderr callback
+const config_with_stderr = zig_tooling.Config{
+    .logging = .{
+        .enabled = true,
+        .callback = zig_tooling.stderrLogCallback,
+        .min_level = .warn, // Only log warnings and errors
+    },
+};
+
+// Logging provides structured information about:
+// - Analysis start/completion
+// - Issues detected with context
+// - Performance metrics (if implemented)
 ```
 
 ### Build System Integration

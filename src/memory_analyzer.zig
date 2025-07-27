@@ -24,6 +24,7 @@ const ScopeTracker = @import("scope_tracker.zig").ScopeTracker;
 const ScopeInfo = @import("scope_tracker.zig").ScopeInfo;
 const SourceContext = @import("source_context.zig").SourceContext;
 const types = @import("types.zig");
+const app_logger = @import("app_logger.zig");
 
 // Using unified types from types.zig
 const Issue = types.Issue;
@@ -92,7 +93,8 @@ pub const MemoryAnalyzer = struct {
     arenas: ArrayList(ArenaPattern),
     scope_tracker: ScopeTracker,
     source_context: SourceContext,
-    config: @import("types.zig").MemoryConfig,
+    config: types.MemoryConfig,
+    logger: ?app_logger.Logger,
     
     pub fn init(allocator: std.mem.Allocator) MemoryAnalyzer {
         return MemoryAnalyzer{
@@ -103,10 +105,11 @@ pub const MemoryAnalyzer = struct {
             .scope_tracker = ScopeTracker.init(allocator),
             .source_context = SourceContext.init(allocator),
             .config = .{}, // Use default config
+            .logger = null,
         };
     }
     
-    pub fn initWithConfig(allocator: std.mem.Allocator, config: @import("types.zig").MemoryConfig) MemoryAnalyzer {
+    pub fn initWithConfig(allocator: std.mem.Allocator, config: types.MemoryConfig) MemoryAnalyzer {
         return MemoryAnalyzer{
             .allocator = allocator,
             .issues = ArrayList(Issue).init(allocator),
@@ -115,7 +118,28 @@ pub const MemoryAnalyzer = struct {
             .scope_tracker = ScopeTracker.init(allocator),
             .source_context = SourceContext.init(allocator),
             .config = config,
+            .logger = null,
         };
+    }
+    
+    pub fn initWithFullConfig(allocator: std.mem.Allocator, config: types.Config) MemoryAnalyzer {
+        var analyzer = MemoryAnalyzer{
+            .allocator = allocator,
+            .issues = ArrayList(Issue).init(allocator),
+            .allocations = ArrayList(AllocationPattern).init(allocator),
+            .arenas = ArrayList(ArenaPattern).init(allocator),
+            .scope_tracker = ScopeTracker.init(allocator),
+            .source_context = SourceContext.init(allocator),
+            .config = config.memory,
+            .logger = null,
+        };
+        
+        // Create logger if logging is enabled
+        if (config.logging.enabled) {
+            analyzer.logger = app_logger.Logger.init(allocator, config.logging);
+        }
+        
+        return analyzer;
     }
     
     pub fn deinit(self: *MemoryAnalyzer) void {
@@ -165,6 +189,14 @@ pub const MemoryAnalyzer = struct {
     }
     
     pub fn analyzeSourceCode(self: *MemoryAnalyzer, file_path: []const u8, source: []const u8) !void {
+        // Log analysis start
+        if (self.logger) |logger| {
+            logger.info("memory_analyzer", "Starting memory analysis", .{
+                .file_path = file_path,
+                .operation = "analyze_source",
+            });
+        }
+        
         // Validate allocator patterns before analysis
         if (try self.validateAllocatorPatterns()) |validation_error| {
             return validation_error;
@@ -205,6 +237,20 @@ pub const MemoryAnalyzer = struct {
         try self.validateMemoryPatterns(file_path, temp_allocator);
         if (self.config.check_allocator_usage) {
             try self.validateAllocatorChoice(file_path, temp_allocator);
+        }
+        
+        // Log analysis completion
+        if (self.logger) |logger| {
+            logger.logFmt(
+                .info,
+                "memory_analyzer",
+                "Completed memory analysis: {} issues found",
+                .{self.issues.items.len},
+                .{
+                    .file_path = file_path,
+                    .operation = "analyze_complete",
+                },
+            );
         }
     }
     
@@ -538,7 +584,7 @@ pub const MemoryAnalyzer = struct {
                         ),
                         .code_snippet = null,
                     };
-                    try self.issues.append(issue);
+                    try self.addIssue(issue);
                 }
             }
             
@@ -570,7 +616,7 @@ pub const MemoryAnalyzer = struct {
                         ),
                         .code_snippet = null,
                     };
-                    try self.issues.append(issue);
+                    try self.addIssue(issue);
                 }
             }
         }
@@ -596,7 +642,7 @@ pub const MemoryAnalyzer = struct {
                     ),
                     .code_snippet = null,
                 };
-                try self.issues.append(issue);
+                try self.addIssue(issue);
             }
         }
     }
@@ -667,7 +713,7 @@ pub const MemoryAnalyzer = struct {
                     ),
                     .code_snippet = null,
                 };
-                try self.issues.append(issue);
+                try self.addIssue(issue);
             }
         }
     }
@@ -755,7 +801,7 @@ pub const MemoryAnalyzer = struct {
                     "Pattern '{s}' uses single character pattern '{s}' which may cause false matches",
                     .{ pattern.name, pattern.pattern }
                 );
-                try self.issues.append(Issue{
+                try self.addIssue(Issue{
                     .file_path = try self.allocator.dupe(u8, "configuration"),
                     .line = 0,
                     .column = 0,
@@ -783,7 +829,7 @@ pub const MemoryAnalyzer = struct {
                     "Custom pattern name '{s}' conflicts with built-in pattern name",
                     .{default_pattern.name}
                 );
-                try self.issues.append(Issue{
+                try self.addIssue(Issue{
                     .file_path = try self.allocator.dupe(u8, "configuration"),
                     .line = 0,
                     .column = 0,
@@ -1311,6 +1357,30 @@ pub const MemoryAnalyzer = struct {
     
     pub fn getIssues(self: *MemoryAnalyzer) []const Issue {
         return self.issues.items;
+    }
+    
+    fn addIssue(self: *MemoryAnalyzer, issue: Issue) !void {
+        // Log the issue if logging is enabled
+        if (self.logger) |logger| {
+            logger.logFmt(
+                switch (issue.severity) {
+                    .err => .err,
+                    .warning => .warn,
+                    .info => .info,
+                },
+                "memory_analyzer",
+                "{s} at {s}:{}:{}",
+                .{ issue.message, issue.file_path, issue.line, issue.column },
+                .{
+                    .file_path = issue.file_path,
+                    .line = issue.line,
+                    .column = issue.column,
+                    .operation = "issue_detected",
+                },
+            );
+        }
+        
+        try self.addIssue(issue);
     }
 };
 

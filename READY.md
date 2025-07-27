@@ -3,8 +3,8 @@
 **Current Focus**: Library conversion from CLI tools to pure Zig library package.
 
 ## 📊 Progress Summary
-- **Completed**: 18/34 issues (LC001 ✅, LC002 ✅, LC003 ✅, LC004 ✅, LC005 ✅, LC006 ✅, LC007 ✅, LC008 ✅, LC009 ✅, LC010 ✅, LC011 ✅, LC022 ✅, LC023 ✅, LC024 ✅, LC025 ✅, LC026 ✅, LC027 ✅, LC028 ✅)
-- **Ready to Start**: LC012, LC013, LC014, LC015, LC029, LC030, LC031, LC032, LC033 (9 issues)
+- **Completed**: 19/38 issues (LC001 ✅, LC002 ✅, LC003 ✅, LC004 ✅, LC005 ✅, LC006 ✅, LC007 ✅, LC008 ✅, LC009 ✅, LC010 ✅, LC011 ✅, LC012 ✅, LC022 ✅, LC023 ✅, LC024 ✅, LC025 ✅, LC026 ✅, LC027 ✅, LC028 ✅)
+- **Ready to Start**: LC013, LC014, LC015, LC029, LC030, LC031, LC032, LC033, LC034, LC035, LC036, LC037 (12 issues)
 - **In Progress**: None
 - **Blocked**: 6 issues awaiting dependencies
 
@@ -13,13 +13,6 @@
 *All no-dependency issues have been completed*
 
 ## 🟢 All Dependencies Completed - Ready to Start
-
-- **#LC012**: Simplify logging system
-  - **Component**: src/app_logger.zig
-  - **Status**: Ready
-  - **Dependencies**: #LC008 ✅ (Completed 2025-07-26)
-  - **Details**: Make logging optional with callback interface
-  - **Notes**: app_logger.zig still has file rotation, not integrated with Config
 
 - **#LC015**: Result formatting utilities
   - **Component**: src/formatters.zig (new)
@@ -63,6 +56,34 @@
   - **Details**: No way to test patterns before using them
   - **Notes**: Would help users debug pattern configuration
 
+- **#LC034**: Improve logging callback pattern for stateful collectors
+  - **Component**: src/app_logger.zig, src/types.zig
+  - **Status**: Ready
+  - **Dependencies**: #LC012 ✅ (Completed 2025-07-27)
+  - **Details**: Current callback pattern doesn't work well with stateful log collectors
+  - **Notes**: Tests had to use global variables instead of proper closures
+
+- **#LC035**: Add log filtering by category
+  - **Component**: src/app_logger.zig, src/types.zig
+  - **Status**: Ready
+  - **Dependencies**: #LC012 ✅ (Completed 2025-07-27)
+  - **Details**: Can only filter by log level, not by category
+  - **Notes**: Users might want only specific analyzer logs
+
+- **#LC036**: Add structured logging format helpers
+  - **Component**: src/app_logger.zig
+  - **Status**: Ready
+  - **Dependencies**: #LC012 ✅ (Completed 2025-07-27)
+  - **Details**: No standardized format for structured log messages
+  - **Notes**: Could provide JSON, logfmt, human-readable formatters
+
+- **#LC037**: Document logger lifecycle and memory safety
+  - **Component**: src/app_logger.zig, CLAUDE.md
+  - **Status**: Ready
+  - **Dependencies**: #LC012 ✅ (Completed 2025-07-27)
+  - **Details**: Logger holds reference to LoggingConfig but no lifetime guarantees
+  - **Notes**: Could lead to use-after-free if misused
+
 ## 🔄 Next Wave (1 Dependency Away)
 
 *Issues that become available after completing current work*
@@ -91,7 +112,7 @@
 
 1. **Phase 1 (Sequential)**: #LC001 ✅ → #LC002 ✅ → #LC003 ✅ → #LC004 ✅
 2. **Phase 2 Start**: #LC005 ✅ → #LC006 ✅ → #LC007 ✅ → #LC008 ✅
-3. **Phase 3 (Parallel)**: #LC009 ✅, #LC010 ✅, #LC011 ✅, #LC012
+3. **Phase 3 (Parallel)**: #LC009 ✅, #LC010 ✅, #LC011 ✅, #LC012 ✅
 4. **Phase 4 (After analyzers)**: #LC013, #LC014, #LC015
 5. **Phase 5 (Documentation)**: #LC016 → #LC017, #LC018
 6. **Phase 6 (Testing)**: #LC019 → #LC020, #LC021
@@ -105,11 +126,11 @@ This path unlocks the most work and enables parallel development.
 
 ## 🎯 Quick Reference
 
-- **Start Now**: #LC012, #LC013, #LC014, #LC015, #LC029, #LC030, #LC031, #LC032, #LC033 (9 issues ready)
-- **Total Issues**: 34
+- **Start Now**: #LC013, #LC014, #LC015, #LC029, #LC030, #LC031, #LC032, #LC033, #LC034, #LC035, #LC036, #LC037 (12 issues ready)
+- **Total Issues**: 38
 - **Critical Issues**: 6
 - **Estimated Time**: 14-20 hours total
 
 ---
 
-*This file tracks library conversion issues from ISSUES.md. Updated: 2025-07-27 (LC011 completed - scope tracker optimization with builder pattern)*
+*This file tracks library conversion issues from ISSUES.md. Updated: 2025-07-27 (LC012 completed, 4 new logging-related issues discovered)*
