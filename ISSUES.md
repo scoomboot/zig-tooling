@@ -36,35 +36,39 @@
 
 *Professional quality and user experience - work on after Tier 1*
 
-- [ ] #LC018: Migration guide
-  - **Component**: docs/migration-guide.md (new)
-  - **Priority**: Medium
-  - **Created**: 2025-07-25
-  - **Dependencies**: #LC016
-  - **Details**: Guide for migrating from CLI to library
-  - **Requirements**:
-    - CLI to API mappings
-    - Before/after examples
-    - Common patterns
-    - Troubleshooting
 
-- [ ] #LC020: Integration testing
+- [x] #LC020: Integration testing
   - **Component**: tests/integration/
   - **Priority**: High
   - **Created**: 2025-07-25
-  - **Dependencies**: #LC019
+  - **Started**: 2025-07-27
+  - **Completed**: 2025-07-27
+  - **Dependencies**: #LC019 ✅ (Completed 2025-07-27)
   - **Details**: Test library with real projects
   - **Requirements**:
     - Sample project tests
     - Build integration tests
     - Memory usage validation
     - Thread safety tests
+  - **Resolution**:
+    - Created comprehensive integration test suite in tests/integration/
+    - Built 4 sample projects with different complexity levels and patterns
+    - Implemented 6 integration test modules covering all requirements:
+      - test_integration_runner.zig - Test infrastructure and utilities
+      - test_real_project_analysis.zig - End-to-end project analysis workflows
+      - test_build_system_integration.zig - Build helpers and output formatters
+      - test_memory_performance.zig - Memory usage validation and performance benchmarks
+      - test_thread_safety.zig - Concurrent analysis and thread safety validation
+      - test_error_boundaries.zig - Error handling and edge case testing
+    - Added build.zig integration with separate test-integration and test-all steps
+    - Sample projects include: simple memory issues, complex multi-file, custom allocators, build integration
+    - All integration tests validate library production readiness and real-world usage scenarios
 
 - [ ] #LC021: Documentation testing
   - **Component**: All documentation
   - **Priority**: Medium
   - **Created**: 2025-07-25
-  - **Dependencies**: #LC016-#LC018
+  - **Dependencies**: #LC016
   - **Details**: Ensure all documentation code compiles and works
   - **Requirements**:
     - Example compilation
@@ -281,24 +285,7 @@
         ```
       - Critical for preventing segfaults in cleanup code
 
-### Build Integration & Performance (3 issues)
-
-- [ ] #LC040: Add build integration test suite
-  - **Component**: tests/test_build_integration.zig (new)
-  - **Priority**: High
-  - **Created**: 2025-07-27
-  - **Dependencies**: #LC013 ✅, #LC019 (when completed)
-  - **Details**: Build integration module has no tests
-  - **Requirements**:
-    - Test file discovery and pattern matching
-    - Test build step creation and execution
-    - Test pre-commit hook generation
-    - Mock file system for consistent testing
-    - Test error conditions and edge cases
-  - **Notes**:
-    - Critical for ensuring build integration reliability
-    - Should test with realistic directory structures
-    - Discovered during LC013 implementation
+### Build Integration & Performance (2 issues)
 
 - [ ] #LC041: Implement incremental analysis for build integration
   - **Component**: src/build_integration.zig
@@ -470,7 +457,63 @@
       - Example regex: `\.(field_name)\s*=\s*"[^"]*"` vs `\.(field_name)\s*=\s*try.*allocPrint`
       - Would have caught the LC056 segfault issue before production
 
-### Library Usability & Examples (5 issues)
+### Library Usability & Examples (8 issues)
+
+- [ ] #LC059: Fix example file references to non-existent sample projects
+  - **Component**: examples/basic_usage.zig, examples/
+  - **Priority**: High
+  - **Created**: 2025-07-27
+  - **Dependencies**: #LC020 ✅ (Completed 2025-07-27)
+  - **Details**: Example files reference deleted sample project files that no longer exist
+  - **Requirements**:
+    - Fix references to "examples/sample_project/memory_issues.zig" and "examples/sample_project/test_examples.zig" in basic_usage.zig
+    - Either create the referenced sample files or update examples to use integration test sample projects
+    - Ensure all example code actually works as demonstrated
+    - Add validation to prevent future broken example references
+  - **Notes**:
+    - Found during LC020 integration testing implementation
+    - basic_usage.zig at [examples/basic_usage.zig:36-40](examples/basic_usage.zig#L36-L40) references non-existent files
+    - Examples should use the new integration test sample projects or create new minimal examples
+    - Critical for user onboarding experience
+    - Discovered during LC020 implementation
+
+- [ ] #LC060: Add CI configuration for integration test execution
+  - **Component**: build.zig, CI configuration, tests/integration/
+  - **Priority**: Medium
+  - **Created**: 2025-07-27
+  - **Dependencies**: #LC020 ✅ (Completed 2025-07-27)
+  - **Details**: Integration tests need proper CI configuration with timeouts and resource limits
+  - **Requirements**:
+    - Add CI-specific configuration for integration test execution
+    - Set appropriate timeouts for longer-running integration tests
+    - Configure resource limits for memory and performance tests
+    - Add separate CI job for integration tests vs unit tests
+    - Document integration test execution requirements
+  - **Notes**:
+    - Integration tests created in LC020 are comprehensive but may be slow
+    - Performance tests include benchmarks that may vary by CI environment
+    - Thread safety tests use multiple concurrent operations
+    - Current build.zig has separate `test-integration` step but needs CI configuration
+    - Should consider parallel execution limits in CI environments
+    - Discovered during LC020 implementation
+
+- [ ] #LC061: Clean up integration test runner unused imports
+  - **Component**: tests/integration/test_integration_runner.zig
+  - **Priority**: Low
+  - **Created**: 2025-07-27
+  - **Dependencies**: #LC020 ✅ (Completed 2025-07-27)
+  - **Details**: Integration test runner imports sub-modules but doesn't use them
+  - **Requirements**:
+    - Remove unused imports from test_integration_runner.zig
+    - Or implement proper orchestration of sub-test modules
+    - Clean up test runner organization
+    - Ensure consistent test execution patterns
+  - **Notes**:
+    - test_integration_runner.zig at [tests/integration/test_integration_runner.zig:10-14](tests/integration/test_integration_runner.zig#L10-L14) imports modules but doesn't use them
+    - Current design has each test module run independently
+    - Could either remove imports or implement proper test orchestration
+    - Minor technical debt from LC020 implementation
+    - Discovered during LC020 implementation
 
 - [ ] #LC051: Create example quality check executable
   - **Component**: examples/tools/quality_check.zig (new)
