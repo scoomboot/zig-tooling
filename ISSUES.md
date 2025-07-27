@@ -12,39 +12,6 @@
 
 *Issues found during implementation that need to be addressed*
 
-- [ ] #LC026: Document getCategoryBreakdown memory ownership
-  - **Component**: src/testing_analyzer.zig
-  - **Priority**: Low
-  - **Created**: 2025-07-27
-  - **Dependencies**: None
-  - **Details**: getCategoryBreakdown returns HashMap that caller must deinit
-  - **Requirements**:
-    - Add doc comment explaining caller owns returned HashMap
-    - Consider returning a struct that's easier to manage
-    - Add example usage showing proper cleanup
-  - **Notes**:
-    - Method definition at src/testing_analyzer.zig:694-709
-    - Returns std.StringHashMap(u32) without ownership documentation
-    - Similar pattern to LC023 but for testing analyzer
-    - Example of proper usage needed for library consumers
-
-- [ ] #LC027: Add buffer size validation for category formatting
-  - **Component**: src/testing_analyzer.zig
-  - **Priority**: Low
-  - **Created**: 2025-07-27
-  - **Dependencies**: None
-  - **Details**: Fixed-size buffers used for category string building could overflow
-  - **Requirements**:
-    - Check buffer sizes before formatting
-    - Return appropriate errors on overflow
-    - Consider dynamic allocation for safety
-  - **Notes**:
-    - determineTestCategory() at src/testing_analyzer.zig:590-618 uses 256-byte buffer (line 594)
-    - Issue generation in generateTestIssues() at src/testing_analyzer.zig:400-469
-    - Category list building uses 512-byte buffer at src/testing_analyzer.zig:429-441
-    - Could overflow with many categories or long category names
-    - Consider using ArrayList or growable buffer instead
-
 - [ ] #LC028: Add allocator pattern validation
   - **Component**: src/memory_analyzer.zig
   - **Priority**: Low
@@ -259,6 +226,35 @@
 ## ✅ Completed
 
 *Finished issues for reference*
+
+- [x] #LC027: Add buffer size validation for category formatting
+  - **Component**: src/testing_analyzer.zig
+  - **Priority**: Low
+  - **Created**: 2025-07-27
+  - **Completed**: 2025-07-27
+  - **Dependencies**: None
+  - **Details**: Fixed-size buffers used for category string building could overflow
+  - **Resolution**:
+    - Replaced fixed 256-byte buffer in determineTestCategory() with dynamic allocation using allocPrint()
+    - Replaced fixed 512-byte buffer in generateTestIssues() with ArrayList for building category lists
+    - Both changes prevent buffer overflow when handling long category names or many categories
+    - Added comprehensive test in test_api.zig with 300+ character category names to verify the fix
+    - All tests pass successfully with no buffer overflow issues
+
+- [x] #LC026: Document getCategoryBreakdown memory ownership
+  - **Component**: src/testing_analyzer.zig
+  - **Priority**: Low
+  - **Created**: 2025-07-27
+  - **Completed**: 2025-07-27
+  - **Dependencies**: None
+  - **Details**: getCategoryBreakdown returns HashMap that caller must deinit
+  - **Resolution**:
+    - Added comprehensive doc comment explaining memory ownership (following LC023 pattern)
+    - Documented that caller must call deinit() on the returned HashMap
+    - Added example usage showing proper cleanup with defer statement
+    - Included design note explaining why HashMap is returned instead of struct
+    - Added unit test demonstrating proper HashMap cleanup pattern
+    - All tests pass successfully
 
 - [x] #LC025: Fix memory lifetime issues in TestPattern
   - **Component**: src/testing_analyzer.zig
@@ -499,5 +495,5 @@
 
 ---
 
-*Last Updated: 2025-07-27 (LC025 completed; fixed memory lifetime issues in TestPattern)*
+*Last Updated: 2025-07-27 (LC027 completed; fixed buffer overflow in testing analyzer)*
 *Focus: Library Conversion Project*

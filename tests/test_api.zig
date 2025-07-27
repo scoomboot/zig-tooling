@@ -632,3 +632,47 @@ test "unit: API: analyzeTests category strings survive config deallocation (LC02
     // No issues expected since all tests have proper categories
     try testing.expectEqual(@as(u32, 0), result.issues_found);
 }
+
+test "LC027: testing analyzer handles long category names without buffer overflow" {
+    // Create a very long category name that would overflow the old 256-byte buffer
+    const long_category = "very_long_category_name_that_would_definitely_overflow_a_fixed_size_buffer_this_is_intentionally_made_long_to_test_the_dynamic_allocation_fix_for_issue_LC027_where_we_replaced_fixed_buffers_with_dynamic_allocation_to_prevent_buffer_overflows_when_dealing_with_extremely_long_category_names_in_tests";
+    
+    const config = zig_tooling.Config{
+        .testing = .{
+            .enforce_categories = true,
+            .allowed_categories = &[_][]const u8{ long_category, "unit", "integration" },
+        },
+    };
+    
+    const source =
+        \\test "very_long_category_name_that_would_definitely_overflow_a_fixed_size_buffer_this_is_intentionally_made_long_to_test_the_dynamic_allocation_fix_for_issue_LC027_where_we_replaced_fixed_buffers_with_dynamic_allocation_to_prevent_buffer_overflows_when_dealing_with_extremely_long_category_names_in_tests: test with extremely long category" {
+        \\    try std.testing.expect(true);
+        \\}
+        \\test "unit: normal test" {
+        \\    try std.testing.expect(true);
+        \\}
+        \\test "missing category test" {
+        \\    try std.testing.expect(true);
+        \\}
+    ;
+    
+    const result = try zig_tooling.analyzeTests(testing.allocator, source, "test.zig", config);
+    defer testing.allocator.free(result.issues);
+    defer for (result.issues) |issue| {
+        testing.allocator.free(issue.file_path);
+        testing.allocator.free(issue.message);
+        if (issue.suggestion) |s| testing.allocator.free(s);
+    };
+    
+    // Should have 1 issue (the test without category)
+    try testing.expectEqual(@as(u32, 1), result.issues_found);
+    
+    // Verify the suggestion includes the long category name
+    const issue = result.issues[0];
+    try testing.expect(issue.suggestion != null);
+    
+    // The suggestion should contain all three categories including the very long one
+    try testing.expect(std.mem.indexOf(u8, issue.suggestion.?, long_category) != null);
+    try testing.expect(std.mem.indexOf(u8, issue.suggestion.?, "unit") != null);
+    try testing.expect(std.mem.indexOf(u8, issue.suggestion.?, "integration") != null);
+}

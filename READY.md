@@ -3,26 +3,12 @@
 **Current Focus**: Library conversion from CLI tools to pure Zig library package.
 
 ## 📊 Progress Summary
-- **Completed**: 14/30 issues (LC001 ✅, LC002 ✅, LC003 ✅, LC004 ✅, LC005 ✅, LC006 ✅, LC007 ✅, LC008 ✅, LC009 ✅, LC010 ✅, LC022 ✅, LC023 ✅, LC024 ✅, LC025 ✅)
-- **Ready to Start**: LC011, LC012, LC013, LC014, LC015, LC026, LC027, LC028, LC029, LC030 (10 issues)
+- **Completed**: 16/30 issues (LC001 ✅, LC002 ✅, LC003 ✅, LC004 ✅, LC005 ✅, LC006 ✅, LC007 ✅, LC008 ✅, LC009 ✅, LC010 ✅, LC022 ✅, LC023 ✅, LC024 ✅, LC025 ✅, LC026 ✅, LC027 ✅)
+- **Ready to Start**: LC011, LC012, LC013, LC014, LC015, LC028, LC029, LC030 (8 issues)
 - **In Progress**: None
 - **Blocked**: 6 issues awaiting dependencies
 
 ## 🟢 No Dependencies - Start Immediately
-
-- **#LC026**: Document getCategoryBreakdown memory ownership
-  - **Component**: src/testing_analyzer.zig
-  - **Status**: Ready
-  - **Dependencies**: None
-  - **Details**: getCategoryBreakdown returns HashMap that caller must deinit
-  - **Notes**: Similar to LC023 but for testing analyzer
-
-- **#LC027**: Add buffer size validation for category formatting
-  - **Component**: src/testing_analyzer.zig
-  - **Status**: Ready
-  - **Dependencies**: None
-  - **Details**: Fixed-size buffers used for category string building could overflow
-  - **Notes**: Could overflow with many/long category names
 
 - **#LC028**: Add allocator pattern validation
   - **Component**: src/memory_analyzer.zig
@@ -109,11 +95,11 @@ This path unlocks the most work and enables parallel development.
 
 ## 🎯 Quick Reference
 
-- **Start Now**: #LC011, #LC012, #LC013, #LC014, #LC015, #LC026, #LC027, #LC028, #LC029, #LC030 (10 issues ready)
+- **Start Now**: #LC011, #LC012, #LC013, #LC014, #LC015, #LC027, #LC028, #LC029, #LC030 (9 issues ready)
 - **Total Issues**: 30
 - **Critical Issues**: 6
 - **Estimated Time**: 12-17 hours total
 
 ---
 
-*This file tracks library conversion issues from ISSUES.md. Updated: 2025-07-27 (LC025 completed; fixed memory lifetime issues in TestPattern)*
+*This file tracks library conversion issues from ISSUES.md. Updated: 2025-07-27 (LC027 completed; fixed buffer overflow in testing analyzer)*

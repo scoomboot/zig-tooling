@@ -408,13 +408,12 @@ pub const TestingAnalyzer = struct {
         // Check for uncategorized tests
         if (test_pattern.category == null and self.config.enforce_categories) {
             // Build list of allowed categories for suggestion
-            var categories_buf: [512]u8 = undefined;
-            var stream = std.io.fixedBufferStream(&categories_buf);
-            const writer = stream.writer();
+            var categories_list = std.ArrayList(u8).init(self.allocator);
+            defer categories_list.deinit();
             
             for (self.config.allowed_categories, 0..) |cat, i| {
-                if (i > 0) try writer.writeAll(", ");
-                try writer.writeAll(cat);
+                if (i > 0) try categories_list.appendSlice(", ");
+                try categories_list.appendSlice(cat);
             }
             
             const issue = Issue{
@@ -431,7 +430,7 @@ pub const TestingAnalyzer = struct {
                 .suggestion = try std.fmt.allocPrint(
                     self.allocator,
                     "Add category prefix: {s}",
-                    .{categories_buf[0..stream.pos]}
+                    .{categories_list.items}
                 ),
                 .code_snippet = null,
             };
@@ -593,8 +592,8 @@ pub const TestingAnalyzer = struct {
         // Check each allowed category to see if test name starts with it
         for (self.config.allowed_categories) |category| {
             // Build the expected prefix pattern: "category:"
-            var buf: [256]u8 = undefined;
-            const prefix = std.fmt.bufPrint(&buf, "{s}:", .{category}) catch continue;
+            const prefix = std.fmt.allocPrint(self.allocator, "{s}:", .{category}) catch continue;
+            defer self.allocator.free(prefix);
             
             if (std.mem.indexOf(u8, test_name, prefix) != null) {
                 return category;
@@ -693,6 +692,31 @@ pub const TestingAnalyzer = struct {
         return @intCast(self.tests.items.len);
     }
     
+    /// Returns a HashMap containing the count of tests in each category.
+    /// 
+    /// # Memory Ownership
+    /// This function returns a new HashMap that is owned by the caller. The caller is
+    /// responsible for calling `deinit()` on the returned HashMap to free its memory.
+    /// Failure to call `deinit()` will result in a memory leak.
+    /// 
+    /// # Example
+    /// ```zig
+    /// const breakdown = try analyzer.getCategoryBreakdown(allocator);
+    /// defer breakdown.deinit();
+    /// 
+    /// // Use the breakdown data
+    /// var iterator = breakdown.iterator();
+    /// while (iterator.next()) |entry| {
+    ///     std.debug.print("Category: {s}, Count: {}\n", .{ entry.key_ptr.*, entry.value_ptr.* });
+    /// }
+    /// ```
+    /// 
+    /// # Design Note
+    /// This function returns a HashMap rather than a fixed struct to accommodate
+    /// dynamic category configurations. Users can define arbitrary categories in their
+    /// configuration, so a flexible data structure is necessary. For simpler use cases
+    /// where memory management is a concern, consider using getComplianceReport() which
+    /// returns a struct with predefined fields.
     pub fn getCategoryBreakdown(self: *TestingAnalyzer, allocator: std.mem.Allocator) !std.StringHashMap(u32) {
         var breakdown = std.StringHashMap(u32).init(allocator);
         
@@ -813,4 +837,43 @@ test "integration: testing analyzer detects improper naming" {
     // Should find naming issue
     try std.testing.expect(analyzer.issues.items.len > 0);
     try std.testing.expect(analyzer.issues.items[0].issue_type == .invalid_test_naming);
+}
+
+test "unit: getCategoryBreakdown returns HashMap with proper ownership" {
+    var analyzer = TestingAnalyzer.init(std.testing.allocator);
+    defer analyzer.deinit();
+    
+    // Add various tests with different categories
+    const test_source =
+        \\test "unit: module_a: test one" {
+        \\    try std.testing.expect(true);
+        \\}
+        \\test "unit: module_a: test two" {
+        \\    try std.testing.expect(true);
+        \\}
+        \\test "integration: module_b: test one" {
+        \\    try std.testing.expect(true);
+        \\}
+        \\test "e2e: full system test" {
+        \\    try std.testing.expect(true);
+        \\}
+        \\test "no category test" {
+        \\    try std.testing.expect(true);
+        \\}
+    ;
+    
+    try analyzer.analyzeSourceCode("test.zig", test_source);
+    
+    // Get category breakdown - caller owns the returned HashMap
+    var breakdown = try analyzer.getCategoryBreakdown(std.testing.allocator);
+    defer breakdown.deinit(); // Important: caller must deinit the HashMap
+    
+    // Verify the breakdown contains expected categories
+    try std.testing.expect(breakdown.count() == 3); // unit, integration, e2e
+    try std.testing.expect(breakdown.get("unit").? == 2);
+    try std.testing.expect(breakdown.get("integration").? == 1);
+    try std.testing.expect(breakdown.get("e2e").? == 1);
+    try std.testing.expect(breakdown.get("no_category") == null);
+    
+    // The HashMap is owned by the caller and will be properly cleaned up by defer
 }
