@@ -627,6 +627,10 @@ pub const MemoryAnalyzer = struct {
             }
             
             if (!is_allowed) {
+                // Format allowed allocators list and ensure it's freed after use
+                const allowed_list = try self.formatAllowedAllocators();
+                defer self.allocator.free(allowed_list);
+                
                 const issue = Issue{
                     .file_path = try self.allocator.dupe(u8, file_path),
                     .line = location.line,
@@ -641,7 +645,7 @@ pub const MemoryAnalyzer = struct {
                     .suggestion = try std.fmt.allocPrint(
                         self.allocator,
                         "Use one of the allowed allocators: {s}",
-                        .{try self.formatAllowedAllocators()}
+                        .{allowed_list}
                     ),
                     .code_snippet = null,
                 };
@@ -675,6 +679,22 @@ pub const MemoryAnalyzer = struct {
         }
     }
     
+    /// Formats the list of allowed allocators into a comma-separated string.
+    /// 
+    /// **Memory ownership**: This function returns a newly allocated string that must be
+    /// freed by the caller using the same allocator. Failure to free the returned string
+    /// will result in a memory leak.
+    /// 
+    /// Example usage:
+    /// ```zig
+    /// const allowed_list = try analyzer.formatAllowedAllocators();
+    /// defer analyzer.allocator.free(allowed_list);
+    /// // Use allowed_list...
+    /// ```
+    /// 
+    /// Note: This function allocates memory to provide flexibility in the size of the
+    /// allowed allocators list. Alternative approaches (writer pattern, static buffer)
+    /// were considered but deemed overly complex for this low-frequency operation.
     fn formatAllowedAllocators(self: *MemoryAnalyzer) ![]const u8 {
         if (self.config.allowed_allocators.len == 0) {
             return try self.allocator.dupe(u8, "(none configured)");
