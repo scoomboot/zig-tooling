@@ -168,6 +168,31 @@ pub const AnalysisOptions = struct {
     continue_on_error: bool = true,
 };
 
+/// Configuration for scope tracking
+pub const ScopeConfig = struct {
+    /// Custom patterns to identify ownership transfer functions
+    /// Default includes common patterns like "create", "generate", "build", etc.
+    ownership_patterns: []const []const u8 = &.{},
+    
+    /// Whether to track arena allocator usage
+    track_arena_allocators: bool = true,
+    
+    /// Whether to analyze variable lifecycles
+    track_variable_lifecycles: bool = true,
+    
+    /// Whether to track defer statements
+    track_defer_statements: bool = true,
+    
+    /// Maximum depth of scope nesting to track (0 = unlimited)
+    max_scope_depth: u32 = 0,
+    
+    /// Whether to use lazy parsing for large files
+    lazy_parsing: bool = false,
+    
+    /// Minimum line count to trigger lazy parsing
+    lazy_parsing_threshold: u32 = 10000,
+};
+
 /// Analysis errors that can occur during code analysis operations
 /// 
 /// These errors represent various failure conditions that may occur when

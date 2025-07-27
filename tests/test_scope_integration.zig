@@ -67,7 +67,7 @@ pub const EnhancedMemoryAnalyzer = struct {
     /// Enhance the memory analysis results using scope tracking information
     fn enhanceWithScopeAnalysis(self: *EnhancedMemoryAnalyzer) !void {
         // Get all test scopes
-        const test_scopes = self.scope_tracker.getTestScopes();
+        const test_scopes = try self.scope_tracker.getTestScopes();
         defer test_scopes.deinit();
         
         // For each allocation in the memory analyzer
@@ -99,7 +99,11 @@ pub const EnhancedMemoryAnalyzer = struct {
         test_scopes_found: u32,
         defer_patterns_fixed: u32,
     } {
-        const test_scopes = self.scope_tracker.getTestScopes();
+        const test_scopes = self.scope_tracker.getTestScopes() catch return .{
+            .allocations_found = @intCast(self.memory_analyzer.allocations.items.len),
+            .test_scopes_found = 0,
+            .defer_patterns_fixed = 0,
+        };
         defer test_scopes.deinit();
         
         var defer_patterns_fixed: u32 = 0;
@@ -120,7 +124,7 @@ pub const EnhancedMemoryAnalyzer = struct {
     
     /// Check if the critical defer detection bug is fixed
     pub fn isDeferDetectionFixed(self: *EnhancedMemoryAnalyzer) bool {
-        const test_scopes = self.scope_tracker.getTestScopes();
+        const test_scopes = self.scope_tracker.getTestScopes() catch return false;
         defer test_scopes.deinit();
         
         // If we found test scopes and allocations with defer, the fix is working
@@ -344,7 +348,7 @@ test "performance: scope analysis overhead measurement" {
     const scopes = scope_tracker.getScopes();
     try std.testing.expect(scopes.len >= 2); // Should find test and regular function scopes
     
-    const test_scopes = scope_tracker.getTestScopes();
+    const test_scopes = try scope_tracker.getTestScopes();
     defer test_scopes.deinit();
     try std.testing.expect(test_scopes.items.len >= 1); // Should find at least one test scope
 }

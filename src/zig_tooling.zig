@@ -25,7 +25,14 @@ const types = @import("types.zig");
 // Re-export core analyzers
 pub const MemoryAnalyzer = @import("memory_analyzer.zig").MemoryAnalyzer;
 pub const TestingAnalyzer = @import("testing_analyzer.zig").TestingAnalyzer;
-pub const ScopeTracker = @import("scope_tracker.zig").ScopeTracker;
+
+// Re-export scope tracking components
+const scope_tracker_module = @import("scope_tracker.zig");
+pub const ScopeTracker = scope_tracker_module.ScopeTracker;
+pub const ScopeTrackerBuilder = scope_tracker_module.ScopeTrackerBuilder;
+pub const ScopeType = scope_tracker_module.ScopeType;
+pub const ScopeInfo = scope_tracker_module.ScopeInfo;
+pub const VariableInfo = scope_tracker_module.VariableInfo;
 
 // Re-export types from types.zig
 pub const Issue = types.Issue;
@@ -35,6 +42,7 @@ pub const AnalysisResult = types.AnalysisResult;
 pub const Config = types.Config;
 pub const MemoryConfig = types.MemoryConfig;
 pub const TestingConfig = types.TestingConfig;
+pub const ScopeConfig = types.ScopeConfig;
 pub const PatternConfig = types.PatternConfig;
 pub const AnalysisOptions = types.AnalysisOptions;
 pub const AnalysisError = types.AnalysisError;

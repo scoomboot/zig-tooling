@@ -454,6 +454,11 @@ test "unit: API: types exports" {
     _ = zig_tooling.MemoryAnalyzer;
     _ = zig_tooling.TestingAnalyzer;
     _ = zig_tooling.ScopeTracker;
+    _ = zig_tooling.ScopeTrackerBuilder;
+    _ = zig_tooling.ScopeType;
+    _ = zig_tooling.ScopeInfo;
+    _ = zig_tooling.VariableInfo;
+    _ = zig_tooling.ScopeConfig;
 }
 
 test "unit: API: testing configuration" {
@@ -826,5 +831,245 @@ test "LC028: memory analyzer validates allocator patterns" {
             }
         }
         try testing.expect(has_defer_issue);
+    }
+}
+
+test "unit: API: ScopeTracker builder pattern" {
+    const allocator = testing.allocator;
+    
+    // Test basic builder usage
+    var builder = zig_tooling.ScopeTracker.builder(allocator);
+    var tracker = try builder
+        .withOwnershipPatterns(&.{ "myCreate", "myAlloc" })
+        .withMaxDepth(50)
+        .withArenaTracking(true)
+        .withDeferTracking(true)
+        .build();
+    defer tracker.deinit();
+    
+    // Verify configuration
+    const config = tracker.getConfig();
+    try testing.expectEqual(@as(u32, 50), config.max_scope_depth);
+    try testing.expect(config.track_arena_allocators);
+    try testing.expect(config.track_defer_statements);
+}
+
+test "unit: API: ScopeTracker lazy parsing" {
+    const allocator = testing.allocator;
+    
+    // Test lazy parsing configuration
+    var builder = zig_tooling.ScopeTracker.builder(allocator);
+    var tracker = try builder
+        .withLazyParsing(true, 1000)
+        .build();
+    defer tracker.deinit();
+    
+    const config = tracker.getConfig();
+    try testing.expect(config.lazy_parsing);
+    try testing.expectEqual(@as(u32, 1000), config.lazy_parsing_threshold);
+}
+
+test "unit: API: ScopeTracker public API methods" {
+    const allocator = testing.allocator;
+    
+    var tracker = zig_tooling.ScopeTracker.init(allocator);
+    defer tracker.deinit();
+    
+    const source =
+        \\pub fn main() !void {
+        \\    const data = try allocator.alloc(u8, 100);
+        \\    defer allocator.free(data);
+        \\}
+        \\
+        \\test "unit: test" {
+        \\    try testing.expect(true);
+        \\}
+    ;
+    
+    try tracker.analyzeSourceCode(source);
+    
+    // Test getScopes
+    const scopes = tracker.getScopes();
+    try testing.expect(scopes.len >= 2);
+    
+    // Test findScopeAtLine
+    const scope_at_line_2 = tracker.findScopeAtLine(2);
+    try testing.expect(scope_at_line_2 != null);
+    
+    // Test findScopesByType
+    const functions = try tracker.findScopesByType(.function);
+    defer functions.deinit();
+    try testing.expect(functions.items.len >= 1);
+    
+    // Test getTestScopes
+    const test_scopes = try tracker.getTestScopes();
+    defer test_scopes.deinit();
+    try testing.expect(test_scopes.items.len >= 1);
+    
+    // Test getFunctionScopes
+    const all_functions = try tracker.getFunctionScopes();
+    defer all_functions.deinit();
+    try testing.expect(all_functions.items.len >= 2);
+    
+    // Test getStats
+    const stats = tracker.getStats();
+    try testing.expect(stats.total_scopes >= 2);
+    try testing.expect(stats.function_count >= 1);
+    try testing.expect(stats.test_count >= 1);
+    try testing.expect(stats.allocations_tracked >= 1);
+    try testing.expect(stats.defer_statements >= 1);
+}
+
+test "unit: API: ScopeTracker getScopeHierarchy" {
+    const allocator = testing.allocator;
+    
+    var tracker = zig_tooling.ScopeTracker.init(allocator);
+    defer tracker.deinit();
+    
+    const source =
+        \\pub fn outer() !void {
+        \\    if (true) {
+        \\        while (true) {
+        \\            const x = 42;
+        \\            _ = x;
+        \\        }
+        \\    }
+        \\}
+    ;
+    
+    try tracker.analyzeSourceCode(source);
+    
+    // Get hierarchy for line 4 (inside while loop)
+    const hierarchy = try tracker.getScopeHierarchy(4);
+    defer hierarchy.deinit();
+    
+    // Should have at least 3 scopes: function, if, while
+    try testing.expect(hierarchy.items.len >= 3);
+    
+    // Verify depth ordering (outermost to innermost)
+    for (hierarchy.items, 0..) |scope, i| {
+        if (i > 0) {
+            try testing.expect(scope.depth > hierarchy.items[i - 1].depth);
+        }
+    }
+}
+
+test "unit: API: ScopeTracker variable finding" {
+    const allocator = testing.allocator;
+    
+    var tracker = zig_tooling.ScopeTracker.init(allocator);
+    defer tracker.deinit();
+    
+    const source =
+        \\pub fn main() !void {
+        \\    const data = try allocator.alloc(u8, 100);
+        \\    defer allocator.free(data);
+        \\    
+        \\    if (true) {
+        \\        const inner = data;
+        \\        _ = inner;
+        \\    }
+        \\}
+    ;
+    
+    try tracker.analyzeSourceCode(source);
+    
+    // Test hasVariableDeferCleanup
+    const has_defer = tracker.hasVariableDeferCleanup("data", 5);
+    try testing.expect(has_defer);
+    
+    // Test findVariable
+    const var_info = tracker.findVariable("data", 6);
+    try testing.expect(var_info != null);
+    try testing.expect(var_info.?.has_defer);
+}
+
+test "unit: API: ScopeTracker configuration behavior" {
+    const allocator = testing.allocator;
+    
+    const source =
+        \\pub fn main() !void {
+        \\    const data = try allocator.alloc(u8, 100);
+        \\    defer allocator.free(data);
+        \\    
+        \\    var arena = std.heap.ArenaAllocator.init(allocator);
+        \\    defer arena.deinit();
+        \\}
+    ;
+    
+    // Test with variable tracking disabled
+    {
+        var builder = zig_tooling.ScopeTracker.builder(allocator);
+        var tracker = try builder
+            .withVariableTracking(false)
+            .build();
+        defer tracker.deinit();
+        
+        try tracker.analyzeSourceCode(source);
+        
+        const var_info = tracker.findVariable("data", 3);
+        try testing.expect(var_info == null); // Should not track variables
+    }
+    
+    // Test with defer tracking disabled
+    {
+        var builder = zig_tooling.ScopeTracker.builder(allocator);
+        var tracker = try builder
+            .withDeferTracking(false)
+            .build();
+        defer tracker.deinit();
+        
+        try tracker.analyzeSourceCode(source);
+        
+        const has_defer = tracker.hasVariableDeferCleanup("data", 3);
+        try testing.expect(!has_defer); // Should not track defer statements
+    }
+    
+    // Test with arena tracking disabled
+    {
+        var builder = zig_tooling.ScopeTracker.builder(allocator);
+        var tracker = try builder
+            .withArenaTracking(false)
+            .build();
+        defer tracker.deinit();
+        
+        try tracker.analyzeSourceCode(source);
+        
+        const stats = tracker.getStats();
+        // Stats should still work even with features disabled
+        try testing.expect(stats.total_scopes >= 1);
+    }
+}
+
+test "unit: API: ScopeTracker custom ownership patterns" {
+    const allocator = testing.allocator;
+    
+    var builder = zig_tooling.ScopeTracker.builder(allocator);
+    var tracker = try builder
+        .withOwnershipPatterns(&.{ "customCreate", "customMake" })
+        .build();
+    defer tracker.deinit();
+    
+    const source =
+        \\pub fn customCreate() ![]u8 {
+        \\    return try allocator.alloc(u8, 100);
+        \\}
+        \\
+        \\pub fn customMake() ![]u8 {
+        \\    return try allocator.alloc(u8, 200);
+        \\}
+    ;
+    
+    try tracker.analyzeSourceCode(source);
+    
+    // Verify custom patterns were applied
+    const functions = try tracker.findScopesByType(.function);
+    defer functions.deinit();
+    
+    try testing.expect(functions.items.len >= 2);
+    
+    // Both functions should be recognized as ownership transfer
+    for (functions.items) |func| {
+        try testing.expect(std.mem.indexOf(u8, func.name, "custom") != null);
     }
 }

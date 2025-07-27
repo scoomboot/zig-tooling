@@ -20,6 +20,7 @@
 const std = @import("std");
 const ArrayList = std.ArrayList;
 const HashMap = std.HashMap;
+const types = @import("types.zig");
 
 /// Represents different types of scopes in Zig code
 pub const ScopeType = enum {
@@ -173,7 +174,99 @@ pub const ScopeInfo = struct {
     }
 };
 
+/// Builder for creating configured ScopeTracker instances
+/// 
+/// Provides a fluent API for configuring scope tracking behavior.
+/// 
+/// ## Example
+/// ```zig
+/// var tracker = try ScopeTracker.builder(allocator)
+///     .withOwnershipPatterns(&.{ "allocate", "construct" })
+///     .withMaxDepth(50)
+///     .withLazyParsing(true, 5000)
+///     .build();
+/// defer tracker.deinit();
+/// ```
+pub const ScopeTrackerBuilder = struct {
+    allocator: std.mem.Allocator,
+    config: types.ScopeConfig,
+    custom_patterns: ?[]const []const u8,
+    
+    /// Initialize a new builder with default configuration
+    pub fn init(allocator: std.mem.Allocator) ScopeTrackerBuilder {
+        return .{
+            .allocator = allocator,
+            .config = .{},
+            .custom_patterns = null,
+        };
+    }
+    
+    /// Set custom ownership transfer patterns
+    /// These patterns are used to identify functions that transfer memory ownership
+    pub fn withOwnershipPatterns(self: *ScopeTrackerBuilder, patterns: []const []const u8) *ScopeTrackerBuilder {
+        self.custom_patterns = patterns;
+        return self;
+    }
+    
+    /// Set whether to track arena allocators
+    pub fn withArenaTracking(self: *ScopeTrackerBuilder, enabled: bool) *ScopeTrackerBuilder {
+        self.config.track_arena_allocators = enabled;
+        return self;
+    }
+    
+    /// Set whether to track variable lifecycles
+    pub fn withVariableTracking(self: *ScopeTrackerBuilder, enabled: bool) *ScopeTrackerBuilder {
+        self.config.track_variable_lifecycles = enabled;
+        return self;
+    }
+    
+    /// Set whether to track defer statements
+    pub fn withDeferTracking(self: *ScopeTrackerBuilder, enabled: bool) *ScopeTrackerBuilder {
+        self.config.track_defer_statements = enabled;
+        return self;
+    }
+    
+    /// Set maximum scope depth (0 = unlimited)
+    pub fn withMaxDepth(self: *ScopeTrackerBuilder, depth: u32) *ScopeTrackerBuilder {
+        self.config.max_scope_depth = depth;
+        return self;
+    }
+    
+    /// Enable lazy parsing for large files
+    pub fn withLazyParsing(self: *ScopeTrackerBuilder, enabled: bool, threshold: u32) *ScopeTrackerBuilder {
+        self.config.lazy_parsing = enabled;
+        self.config.lazy_parsing_threshold = threshold;
+        return self;
+    }
+    
+    /// Build the configured ScopeTracker
+    pub fn build(self: *ScopeTrackerBuilder) !ScopeTracker {
+        return ScopeTracker.initWithConfig(self.allocator, self.config, self.custom_patterns);
+    }
+};
+
 /// Main scope tracking structure
+/// 
+/// Provides hierarchical scope analysis for Zig source code with configurable
+/// behavior for ownership tracking, variable lifecycle analysis, and performance
+/// optimization.
+/// 
+/// ## Basic Usage
+/// ```zig
+/// var tracker = ScopeTracker.init(allocator);
+/// defer tracker.deinit();
+/// try tracker.analyzeSourceCode(source);
+/// const scopes = tracker.getScopes();
+/// ```
+/// 
+/// ## Advanced Usage with Builder
+/// ```zig
+/// var tracker = try ScopeTracker.builder(allocator)
+///     .withOwnershipPatterns(&.{ "myCreate", "myAlloc" })
+///     .withMaxDepth(100)
+///     .build();
+/// defer tracker.deinit();
+/// ```
 pub const ScopeTracker = struct {
     allocator: std.mem.Allocator,
     scopes: ArrayList(ScopeInfo),
@@ -181,19 +274,22 @@ pub const ScopeTracker = struct {
     scope_stack: ArrayList(u32), // Stack of scope indices for proper nesting
     arena_allocators: std.StringHashMap([]const u8), // Maps arena variable names to their sources
     ownership_patterns: []const []const u8, // Configurable ownership transfer patterns
+    config: types.ScopeConfig,
+    arena_allocator: ?std.heap.ArenaAllocator, // Optional arena for performance
     
+    // Default ownership transfer patterns (expanded from Phase 5 analysis)
+    const default_patterns = [_][]const u8{
+        "create", "generate", "build", "make", "new", "clone",
+        "getPrimary", "getSecondary", "toString", "toJson", "format",
+        "Responsibilities", "Buffer", "duplicate",
+        // Additional patterns identified in Phase 5 analysis
+        "parse", "read", "load", "fetch", "extract", "copy",
+        "serialize", "deserialize", "encode", "decode", "convert",
+        "process", "transform", "render", "compile", "construct"
+    };
+    
+    /// Create a new ScopeTracker with default configuration
     pub fn init(allocator: std.mem.Allocator) ScopeTracker {
-        // Default ownership transfer patterns (expanded from Phase 5 analysis)
-        const default_patterns = [_][]const u8{
-            "create", "generate", "build", "make", "new", "clone",
-            "getPrimary", "getSecondary", "toString", "toJson", "format",
-            "Responsibilities", "Buffer", "duplicate",
-            // Additional patterns identified in Phase 5 analysis
-            "parse", "read", "load", "fetch", "extract", "copy",
-            "serialize", "deserialize", "encode", "decode", "convert",
-            "process", "transform", "render", "compile", "construct"
-        };
-        
         return ScopeTracker{
             .allocator = allocator,
             .scopes = ArrayList(ScopeInfo).init(allocator),
@@ -201,7 +297,39 @@ pub const ScopeTracker = struct {
             .scope_stack = ArrayList(u32).init(allocator),
             .arena_allocators = std.StringHashMap([]const u8).init(allocator),
             .ownership_patterns = &default_patterns,
+            .config = .{},
+            .arena_allocator = null,
         };
+    }
+    
+    /// Create a new ScopeTracker with custom configuration
+    pub fn initWithConfig(
+        allocator: std.mem.Allocator,
+        config: types.ScopeConfig,
+        custom_patterns: ?[]const []const u8,
+    ) !ScopeTracker {
+        var tracker = ScopeTracker{
+            .allocator = allocator,
+            .scopes = ArrayList(ScopeInfo).init(allocator),
+            .current_depth = 0,
+            .scope_stack = ArrayList(u32).init(allocator),
+            .arena_allocators = std.StringHashMap([]const u8).init(allocator),
+            .ownership_patterns = custom_patterns orelse &default_patterns,
+            .config = config,
+            .arena_allocator = null,
+        };
+        
+        // Initialize arena allocator for performance if configured
+        if (config.lazy_parsing) {
+            tracker.arena_allocator = std.heap.ArenaAllocator.init(allocator);
+        }
+        
+        return tracker;
+    }
+    
+    /// Create a builder for configuring a ScopeTracker
+    pub fn builder(allocator: std.mem.Allocator) ScopeTrackerBuilder {
+        return ScopeTrackerBuilder.init(allocator);
     }
     
     pub fn deinit(self: *ScopeTracker) void {
@@ -221,6 +349,11 @@ pub const ScopeTracker = struct {
             self.allocator.free(entry.value_ptr.*);
         }
         self.arena_allocators.deinit();
+        
+        // Clean up optional arena allocator
+        if (self.arena_allocator) |*arena| {
+            arena.deinit();
+        }
     }
     
     /// Reset the tracker for analyzing a new file
@@ -247,17 +380,83 @@ pub const ScopeTracker = struct {
     }
     
     /// Analyze source code and build scope hierarchy
+    /// 
+    /// Processes the source code line by line to build a hierarchical representation
+    /// of scopes, variables, and their relationships. Performance is optimized based
+    /// on configuration settings.
+    /// 
+    /// ## Parameters
+    /// - `source`: The source code to analyze
+    /// 
+    /// ## Returns
+    /// Error if analysis fails due to memory allocation or depth limits
     pub fn analyzeSourceCode(self: *ScopeTracker, source: []const u8) !void {
         // Clear previous analysis
         self.clearScopes();
         
+        // Check if lazy parsing should be used
+        const line_count = std.mem.count(u8, source, "\n");
+        const use_lazy_parsing = self.config.lazy_parsing and 
+                                line_count >= self.config.lazy_parsing_threshold;
+        
+        if (use_lazy_parsing) {
+            try self.analyzeSourceCodeLazy(source);
+        } else {
+            try self.analyzeSourceCodeEager(source);
+        }
+    }
+    
+    /// Standard eager parsing - processes all lines immediately
+    fn analyzeSourceCodeEager(self: *ScopeTracker, source: []const u8) !void {
         var lines = std.mem.splitScalar(u8, source, '\n');
         var line_number: u32 = 1;
         
         while (lines.next()) |line| {
             defer line_number += 1;
             
+            // Check depth limit
+            if (self.config.max_scope_depth > 0 and self.current_depth >= self.config.max_scope_depth) {
+                continue; // Skip processing if we're too deep
+            }
+            
             try self.processLine(line, line_number);
+        }
+        
+        // Close any remaining open scopes
+        try self.closeRemainingScopes();
+    }
+    
+    /// Lazy parsing for large files - only processes relevant sections
+    fn analyzeSourceCodeLazy(self: *ScopeTracker, source: []const u8) !void {
+        var lines = std.mem.splitScalar(u8, source, '\n');
+        var line_number: u32 = 1;
+        
+        while (lines.next()) |line| {
+            defer line_number += 1;
+            
+            // Skip large comment blocks or string literals in lazy mode
+            if (std.mem.startsWith(u8, std.mem.trim(u8, line, " \t"), "///") or
+                std.mem.startsWith(u8, std.mem.trim(u8, line, " \t"), "//!")) {
+                continue;
+            }
+            
+            // Only process lines that could contain scope or variable information
+            const trimmed = std.mem.trim(u8, line, " \t\r\n");
+            if (trimmed.len == 0) continue;
+            
+            const has_relevant_content = 
+                std.mem.indexOf(u8, line, "fn ") != null or
+                std.mem.indexOf(u8, line, "test ") != null or
+                std.mem.indexOf(u8, line, "{") != null or
+                std.mem.indexOf(u8, line, "}") != null or
+                std.mem.indexOf(u8, line, "const ") != null or
+                std.mem.indexOf(u8, line, "var ") != null or
+                std.mem.indexOf(u8, line, "defer ") != null or
+                std.mem.indexOf(u8, line, "errdefer ") != null;
+            
+            if (has_relevant_content) {
+                try self.processLine(line, line_number);
+            }
         }
         
         // Close any remaining open scopes
@@ -392,6 +591,9 @@ pub const ScopeTracker = struct {
     
     /// Detect variable declarations and allocations
     fn detectVariableDeclaration(self: *ScopeTracker, line: []const u8, line_number: u32) !void {
+        // Skip if variable tracking is disabled
+        if (!self.config.track_variable_lifecycles) return;
+        
         // Variable declaration pattern: "const varname = " or "var varname = "
         if (std.mem.indexOf(u8, line, "const ") != null or std.mem.indexOf(u8, line, "var ") != null) {
             if (self.extractVariableName(line)) |var_name| {
@@ -403,10 +605,12 @@ pub const ScopeTracker = struct {
                     var_info.allocation_type = self.extractAllocationType(line);
                     var_info.allocator_source = self.extractAllocatorVariable(line);
                     
-                    // Check if this is arena allocated
-                    if (var_info.allocator_source) |allocator_var| {
-                        if (self.isArenaAllocator(allocator_var)) {
-                            var_info.markAsArenaAllocated();
+                    // Check if this is arena allocated (if tracking enabled)
+                    if (self.config.track_arena_allocators) {
+                        if (var_info.allocator_source) |allocator_var| {
+                            if (self.isArenaAllocator(allocator_var)) {
+                                var_info.markAsArenaAllocated();
+                            }
                         }
                     }
                     
@@ -423,12 +627,17 @@ pub const ScopeTracker = struct {
             }
         }
         
-        // Detect arena allocator creation
-        try self.detectArenaAllocatorCreation(line);
+        // Detect arena allocator creation (if tracking enabled)
+        if (self.config.track_arena_allocators) {
+            try self.detectArenaAllocatorCreation(line);
+        }
     }
     
     /// Detect defer and errdefer statements
     fn detectDeferStatements(self: *ScopeTracker, line: []const u8, line_number: u32) !void {
+        // Skip if defer tracking is disabled
+        if (!self.config.track_defer_statements) return;
+        
         // Defer statement detection
         if (std.mem.indexOf(u8, line, "defer ") != null) {
             if (self.extractVariableFromDeferStatement(line)) |var_name| {
@@ -668,42 +877,214 @@ pub const ScopeTracker = struct {
     // Public interface methods
     
     /// Get all detected scopes
+    /// 
+    /// Returns a slice containing all scopes found during analysis.
+    /// The slice is owned by the ScopeTracker and remains valid until
+    /// the next call to analyzeSourceCode or deinit.
     pub fn getScopes(self: *ScopeTracker) []ScopeInfo {
         return self.scopes.items;
     }
     
+    /// Get the current configuration
+    pub fn getConfig(self: *ScopeTracker) types.ScopeConfig {
+        return self.config;
+    }
+    
     /// Find a scope by line number
+    /// 
+    /// Returns the innermost scope that contains the given line number.
+    /// Useful for determining the context of a specific code location.
     pub fn findScopeAtLine(self: *ScopeTracker, line_number: u32) ?*ScopeInfo {
+        var best_match: ?*ScopeInfo = null;
+        var best_depth: u32 = 0;
+        
         for (self.scopes.items) |*scope| {
             if (scope.start_line <= line_number and 
                 (scope.end_line == null or scope.end_line.? >= line_number)) {
-                return scope;
+                if (scope.depth >= best_depth) {
+                    best_match = scope;
+                    best_depth = scope.depth;
+                }
             }
         }
-        return null;
+        return best_match;
+    }
+    
+    /// Find all scopes of a specific type
+    /// 
+    /// Caller owns the returned ArrayList and must call deinit() on it.
+    /// 
+    /// ## Example
+    /// ```zig
+    /// const functions = try tracker.findScopesByType(.function);
+    /// defer functions.deinit();
+    /// ```
+    pub fn findScopesByType(self: *ScopeTracker, scope_type: ScopeType) !ArrayList(*ScopeInfo) {
+        var scopes = ArrayList(*ScopeInfo).init(self.allocator);
+        errdefer scopes.deinit();
+        
+        for (self.scopes.items) |*scope| {
+            if (scope.scope_type == scope_type) {
+                try scopes.append(scope);
+            }
+        }
+        
+        return scopes;
     }
     
     /// Find all test function scopes
-    pub fn getTestScopes(self: *ScopeTracker) ArrayList(*ScopeInfo) {
-        var test_scopes = ArrayList(*ScopeInfo).init(self.allocator);
+    /// 
+    /// Convenience method that returns all test function scopes.
+    /// Caller owns the returned ArrayList and must call deinit() on it.
+    pub fn getTestScopes(self: *ScopeTracker) !ArrayList(*ScopeInfo) {
+        return self.findScopesByType(.test_function);
+    }
+    
+    /// Find all function scopes (including test functions)
+    /// 
+    /// Caller owns the returned ArrayList and must call deinit() on it.
+    pub fn getFunctionScopes(self: *ScopeTracker) !ArrayList(*ScopeInfo) {
+        var scopes = ArrayList(*ScopeInfo).init(self.allocator);
+        errdefer scopes.deinit();
         
         for (self.scopes.items) |*scope| {
-            if (scope.scope_type == .test_function) {
-                test_scopes.append(scope) catch {}; // Ignore allocation errors for now
+            if (scope.scope_type.isFunctionScope()) {
+                try scopes.append(scope);
             }
         }
         
-        return test_scopes;
+        return scopes;
+    }
+    
+    /// Get scope hierarchy for a given line
+    /// 
+    /// Returns all scopes from outermost to innermost that contain the line.
+    /// Caller owns the returned ArrayList and must call deinit() on it.
+    pub fn getScopeHierarchy(self: *ScopeTracker, line_number: u32) !ArrayList(*ScopeInfo) {
+        var hierarchy = ArrayList(*ScopeInfo).init(self.allocator);
+        errdefer hierarchy.deinit();
+        
+        // First, collect all scopes that contain the line
+        var candidates = ArrayList(*ScopeInfo).init(self.allocator);
+        defer candidates.deinit();
+        
+        for (self.scopes.items) |*scope| {
+            if (scope.start_line <= line_number and 
+                (scope.end_line == null or scope.end_line.? >= line_number)) {
+                try candidates.append(scope);
+            }
+        }
+        
+        // Sort by depth (ascending)
+        const Context = struct {
+            fn lessThan(_: void, a: *ScopeInfo, b: *ScopeInfo) bool {
+                return a.depth < b.depth;
+            }
+        };
+        std.mem.sort(*ScopeInfo, candidates.items, {}, Context.lessThan);
+        
+        // Copy to result
+        for (candidates.items) |scope| {
+            try hierarchy.append(scope);
+        }
+        
+        return hierarchy;
     }
     
     /// Check if a variable has proper defer cleanup in any accessible scope
     pub fn hasVariableDeferCleanup(self: *ScopeTracker, var_name: []const u8, from_line: u32) bool {
         if (self.findScopeAtLine(from_line)) |scope| {
-            if (scope.findVariable(var_name)) |var_info| {
-                return var_info.has_defer or var_info.has_errdefer;
+            var current_scope: ?*ScopeInfo = scope;
+            
+            // Check current scope and all parent scopes
+            while (current_scope) |s| {
+                if (s.findVariable(var_name)) |var_info| {
+                    return var_info.has_defer or var_info.has_errdefer;
+                }
+                
+                // Move to parent scope
+                if (s.parent_scope) |parent_idx| {
+                    if (parent_idx < self.scopes.items.len) {
+                        current_scope = &self.scopes.items[parent_idx];
+                    } else {
+                        break;
+                    }
+                } else {
+                    break;
+                }
             }
         }
         return false;
+    }
+    
+    /// Find a variable by name within a specific scope or its parents
+    pub fn findVariable(self: *ScopeTracker, var_name: []const u8, from_line: u32) ?VariableInfo {
+        if (self.findScopeAtLine(from_line)) |scope| {
+            var current_scope: ?*ScopeInfo = scope;
+            
+            // Check current scope and all parent scopes
+            while (current_scope) |s| {
+                if (s.findVariable(var_name)) |var_info| {
+                    return var_info;
+                }
+                
+                // Move to parent scope
+                if (s.parent_scope) |parent_idx| {
+                    if (parent_idx < self.scopes.items.len) {
+                        current_scope = &self.scopes.items[parent_idx];
+                    } else {
+                        break;
+                    }
+                } else {
+                    break;
+                }
+            }
+        }
+        return null;
+    }
+    
+    /// Get analysis statistics
+    pub const AnalysisStats = struct {
+        total_scopes: u32,
+        function_count: u32,
+        test_count: u32,
+        max_depth: u32,
+        total_variables: u32,
+        allocations_tracked: u32,
+        defer_statements: u32,
+    };
+    
+    /// Get statistics about the analyzed code
+    pub fn getStats(self: *ScopeTracker) AnalysisStats {
+        var stats = AnalysisStats{
+            .total_scopes = @intCast(self.scopes.items.len),
+            .function_count = 0,
+            .test_count = 0,
+            .max_depth = 0,
+            .total_variables = 0,
+            .allocations_tracked = 0,
+            .defer_statements = 0,
+        };
+        
+        for (self.scopes.items) |*scope| {
+            if (scope.scope_type == .function) stats.function_count += 1;
+            if (scope.scope_type == .test_function) stats.test_count += 1;
+            if (scope.depth > stats.max_depth) stats.max_depth = scope.depth;
+            
+            stats.total_variables += @intCast(scope.variables.count());
+            
+            var var_iter = scope.variables.iterator();
+            while (var_iter.next()) |entry| {
+                if (entry.value_ptr.allocation_type != null) {
+                    stats.allocations_tracked += 1;
+                }
+                if (entry.value_ptr.has_defer) {
+                    stats.defer_statements += 1;
+                }
+            }
+        }
+        
+        return stats;
     }
     
     /// Extract allocator variable name from allocation line
