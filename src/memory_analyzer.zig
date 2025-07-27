@@ -213,6 +213,7 @@ pub const MemoryAnalyzer = struct {
         for (self.issues.items) |issue| {
             if (issue.file_path.len > 0) self.allocator.free(issue.file_path);
             if (issue.message.len > 0) self.allocator.free(issue.message);
+            // All suggestions are heap-allocated and must be freed
             if (issue.suggestion) |suggestion| if (suggestion.len > 0) self.allocator.free(suggestion);
         }
         
@@ -893,7 +894,11 @@ pub const MemoryAnalyzer = struct {
                     .severity = .warning,
                     .issue_type = .incorrect_allocator,
                     .message = warning_msg,
-                    .suggestion = "Consider using a more specific pattern to avoid false matches",
+                    .suggestion = try std.fmt.allocPrint(
+                        self.allocator,
+                        "Consider using a more specific pattern to avoid false matches",
+                        .{}
+                    ),
                 });
             }
             
@@ -921,7 +926,11 @@ pub const MemoryAnalyzer = struct {
                     .severity = .warning,
                     .issue_type = .incorrect_allocator,
                     .message = warning_msg,
-                    .suggestion = "Consider using a different name to avoid confusion",
+                    .suggestion = try std.fmt.allocPrint(
+                        self.allocator,
+                        "Consider using a different name to avoid confusion",
+                        .{}
+                    ),
                 });
             }
         }
@@ -1543,4 +1552,32 @@ test "memory: memory analyzer detects missing defer" {
     // Should find missing defer issue
     try std.testing.expect(analyzer.issues.items.len > 0);
     try std.testing.expect(analyzer.issues.items[0].issue_type == .missing_defer);
+}
+
+test "memory: memory analyzer handles allocator pattern validation without segfault" {
+    const config = types.Config{
+        .memory = .{
+            .check_defer = true,
+            .check_allocator_usage = true,
+            .allocator_patterns = &.{
+                // Add patterns that would trigger validation warnings
+                .{ .name = "SingleChar", .pattern = "a", .is_regex = false },
+                .{ .name = "GPA", .pattern = "gpa", .is_regex = false }, // Conflicts with default
+            },
+        },
+    };
+    var analyzer = MemoryAnalyzer.initWithFullConfig(std.testing.allocator, config);
+    defer analyzer.deinit(); // This should not segfault even with validation warnings
+    
+    const test_source =
+        \\pub fn testFunction(allocator: std.mem.Allocator) !void {
+        \\    const data = try allocator.alloc(u8, 100);
+        \\    defer allocator.free(data);
+        \\}
+    ;
+    
+    // This should generate validation warnings with suggestions that are heap-allocated
+    try analyzer.analyzeSourceCode("test.zig", test_source);
+    
+    // The test passes if deinit doesn't segfault
 }
