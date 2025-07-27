@@ -4,6 +4,8 @@
 
 *Issues that block core functionality or development*
 
+*No critical issues currently*
+
 ## 🔧 In Progress
 
 *Currently being worked on*
@@ -262,6 +264,22 @@
     - No mechanism to ensure config outlives logger
     - Could lead to use-after-free if misused
     - Discovered during LC012 implementation
+    - **String Lifetime Lessons from LC056**: Documentation should explicitly cover:
+      - String field ownership patterns: "All string fields must be either all heap-allocated or all literals"
+      - Never mix allocation strategies for the same field across different code paths
+      - Example anti-pattern from LC056: `.suggestion` was sometimes literal, sometimes allocPrint
+      - Document in Issue struct: "All optional string fields MUST be heap-allocated if non-null"
+      - Add code example showing correct pattern:
+        ```zig
+        // WRONG: Mixing allocation types
+        .suggestion = if (simple) "Use defer" else try allocPrint(...);
+        
+        // RIGHT: Consistent allocation
+        .suggestion = try allocPrint(allocator, "{s}", .{
+            if (simple) "Use defer" else complex_message
+        });
+        ```
+      - Critical for preventing segfaults in cleanup code
 
 ### Build Integration & Performance (3 issues)
 
@@ -419,6 +437,13 @@
     - Fixed at [src/patterns.zig:132-137](src/patterns.zig#L132-L137) with proper error conversion
     - Would catch error handling gaps before production
     - Discovered during LC019 implementation
+    - **Memory Management Testing from LC056**: Should include specific tests for:
+      - Consistent memory allocation patterns (all heap or all stack for same field type)
+      - Proper cleanup in deinit() functions with various allocation patterns
+      - Test pattern: Create analyzer → Add issues with mixed allocation types → Call deinit()
+      - Test case from LC056: [src/memory_analyzer.zig:1557-1583](src/memory_analyzer.zig#L1557-L1583)
+      - Edge cases: optional fields with null, empty strings, very long strings
+      - Would have caught the segfault during testing phase
 
 - [ ] #LC049: Add static analysis for recursive function call detection
   - **Component**: Static analysis tooling, CI/CD configuration
@@ -439,6 +464,11 @@
     - **Prevention**: Static analysis could catch patterns like `self.methodName()` within the same method definition
     - **Tools**: Could use `rg "fn (\w+).*self\.\1\("` or similar patterns to detect
     - Discovered during LC015 implementation - represents critical gap in our quality assurance
+    - **Additional Pattern from LC056**: Should also detect inconsistent memory management patterns:
+      - Mixing string literals with heap-allocated strings in the same field type
+      - Pattern to detect: fields that are sometimes assigned literals (`= "..."`) and sometimes allocPrint
+      - Example regex: `\.(field_name)\s*=\s*"[^"]*"` vs `\.(field_name)\s*=\s*try.*allocPrint`
+      - Would have caught the LC056 segfault issue before production
 
 ### Library Usability & Examples (5 issues)
 
@@ -531,6 +561,23 @@
     - Would better categorize custom analysis results
     - Discovered during LC017 implementation
 
+- [ ] #LC058: Add memory ownership tracking type system
+  - **Component**: src/types.zig, src/utils.zig
+  - **Priority**: Low
+  - **Created**: 2025-07-27
+  - **Dependencies**: None
+  - **Details**: String fields can be either heap-allocated or literals, causing memory management bugs
+  - **Requirements**:
+    - Create a tagged union type that tracks whether a string is owned or borrowed
+    - Add helper functions for safe string assignment and cleanup
+    - Update Issue struct to use ownership-aware string type
+    - Provide migration path for existing code
+  - **Notes**:
+    - Would prevent issues like LC056 and LC057 at compile time
+    - Could use something like: `const OwnedString = union(enum) { owned: []const u8, borrowed: []const u8 };`
+    - Would make memory ownership explicit in the type system
+    - Discovered during LC057 resolution - pattern of mixing literals with heap strings is error-prone
+
 ## 📋 Archive: Original Phase Organization
 
 *The library conversion was originally organized by phases, but has been replaced by the tier system above for better prioritization and clearer v1.0 focus.*
@@ -546,6 +593,40 @@
 ## ✅ Completed
 
 *Finished issues for reference*
+
+- [x] #LC057: Fix segfault in memory_analyzer.findFunctionContext when freeing return_type
+  - **Component**: src/memory_analyzer.zig
+  - **Priority**: Critical
+  - **Created**: 2025-07-27
+  - **Started**: 2025-07-27
+  - **Completed**: 2025-07-27
+  - **Dependencies**: None
+  - **Details**: Segmentation fault occurs when freeing current_function.return_type in findFunctionContext
+  - **Stack Trace**: Crash at memory_analyzer.zig:1275 when calling temp_allocator.free(current_function.return_type)
+  - **Version**: v0.1.1 (different from LC056 which was v0.1.0)
+  - **Resolution**:
+    - Root cause: parseFunctionSignature initialized variables with string literals "unknown"
+    - Fixed by ensuring all strings in parseFunctionSignature are heap-allocated
+    - Changed initialization from string literals to temp_allocator.dupe() calls
+    - Added proper errdefer cleanup and memory management
+    - Added test case "LC057: Function context parsing memory safety" to prevent regression
+    - All tests pass successfully with no memory issues
+
+- [x] #LC056: Fix segfault in memory_analyzer.deinit when freeing suggestion strings
+  - **Component**: src/memory_analyzer.zig
+  - **Priority**: Critical
+  - **Created**: 2025-07-27
+  - **Started**: 2025-07-27
+  - **Completed**: 2025-07-27
+  - **Dependencies**: None
+  - **Details**: Segmentation fault occurs when freeing suggestion strings during cleanup
+  - **Resolution**:
+    - Identified root cause: some suggestions were string literals, others were heap-allocated
+    - Changed lines 896 and 924 to use std.fmt.allocPrint instead of string literals
+    - Added defensive comment in deinit function documenting that all suggestions are heap-allocated
+    - Added test case to verify allocator pattern validation doesn't cause segfault
+    - All tests pass successfully with no memory issues
+    - Library can now be safely used in production environments
 
 - [x] #LC016: API documentation
   - **Component**: All public modules
@@ -979,5 +1060,5 @@
 
 ---
 
-*Last Updated: 2025-07-27 (Added LC051-LC055: New issues discovered during LC017 implementation - library usability improvements and missing utilities)*
+*Last Updated: 2025-07-27 (LC057 resolved - fixed v0.1.1 segfault in findFunctionContext)*
 *Focus: Library Conversion Project*

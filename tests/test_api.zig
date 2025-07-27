@@ -1782,3 +1782,43 @@ test "unit: formatters: AnalysisOptions integration with analysis" {
     // Should contain the limited issues
     try testing.expect(std.mem.indexOf(u8, output, "test.zig") != null);
 }
+
+test "LC057: Function context parsing memory safety" {
+    const allocator = testing.allocator;
+    
+    // This test verifies that parseFunctionSignature and findFunctionContext
+    // properly manage memory when parsing function signatures
+    const source = 
+        \\fn simpleFunction() void {}
+        \\pub fn allocFunction() !void {
+        \\    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+        \\    const allocator = gpa.allocator();
+        \\    const data = try allocator.alloc(u8, 100);
+        \\}
+        \\fn errorFunction() !MyError {}
+        \\// This is a comment with fn in it
+        \\const fn_ptr = struct { fn call() void {} };
+    ;
+    
+    // This should not crash with segfault (LC057)
+    const result = try zig_tooling.analyzeMemory(allocator, source, "test_lc057.zig", null);
+    defer allocator.free(result.issues);
+    defer for (result.issues) |issue| {
+        allocator.free(issue.file_path);
+        allocator.free(issue.message);
+        if (issue.suggestion) |s| allocator.free(s);
+    };
+    
+    // Should find at least one missing defer issue
+    try testing.expect(result.hasErrors());
+    
+    // Verify issue is for the allocation
+    var found_missing_defer = false;
+    for (result.issues) |issue| {
+        if (issue.issue_type == .missing_defer) {
+            found_missing_defer = true;
+            break;
+        }
+    }
+    try testing.expect(found_missing_defer);
+}

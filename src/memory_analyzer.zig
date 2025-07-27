@@ -1271,6 +1271,7 @@ pub const MemoryAnalyzer = struct {
                 const fn_info = self.parseFunctionSignature(line, temp_allocator) catch continue;
                 
                 // Free previous function info
+                // Safe to free because parseFunctionSignature always returns heap-allocated strings
                 temp_allocator.free(current_function.name);
                 temp_allocator.free(current_function.return_type);
                 
@@ -1294,13 +1295,18 @@ pub const MemoryAnalyzer = struct {
     fn parseFunctionSignature(self: *MemoryAnalyzer, line: []const u8, temp_allocator: std.mem.Allocator) !FunctionInfo {
         _ = self;
         
-        var name: []const u8 = "unknown";
-        var return_type: []const u8 = "unknown";
+        // Always allocate strings to ensure consistent memory management
+        var name = try temp_allocator.dupe(u8, "unknown");
+        errdefer temp_allocator.free(name);
+        var return_type = try temp_allocator.dupe(u8, "unknown");
+        errdefer temp_allocator.free(return_type);
         
         // Extract function name
         if (std.mem.indexOf(u8, line, "fn ")) |fn_pos| {
             const name_start = fn_pos + 3;
             if (std.mem.indexOf(u8, line[name_start..], "(")) |paren_pos| {
+                // Free the old name before allocating new one
+                temp_allocator.free(name);
                 name = try temp_allocator.dupe(u8, line[name_start..name_start + paren_pos]);
             }
         }
@@ -1309,12 +1315,16 @@ pub const MemoryAnalyzer = struct {
         if (std.mem.indexOf(u8, line, "!")) |excl_pos| {
             const type_start = excl_pos + 1;
             if (std.mem.indexOf(u8, line[type_start..], " ")) |space_pos| {
+                // Free the old return_type before allocating new one
+                temp_allocator.free(return_type);
                 return_type = try temp_allocator.dupe(u8, line[type_start..type_start + space_pos]);
             } else {
                 // No space found, take rest of line up to {
                 if (std.mem.indexOf(u8, line[type_start..], "{")) |brace_pos| {
+                    temp_allocator.free(return_type);
                     return_type = try temp_allocator.dupe(u8, line[type_start..type_start + brace_pos]);
                 } else {
+                    temp_allocator.free(return_type);
                     return_type = try temp_allocator.dupe(u8, line[type_start..]);
                 }
             }
