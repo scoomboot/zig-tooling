@@ -402,3 +402,62 @@ test "unit: API: testing configuration" {
     }
     try testing.expect(found_uncategorized);
 }
+
+test "unit: API: arena allocator variable tracking" {
+    const allocator = testing.allocator;
+    
+    const source =
+        \\pub fn main() !void {
+        \\    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+        \\    defer arena.deinit();
+        \\    
+        \\    // This pattern should be tracked
+        \\    const arena_allocator = arena.allocator();
+        \\    
+        \\    // This allocation should not require defer because it's arena-managed
+        \\    const data1 = try arena_allocator.alloc(u8, 100);
+        \\    _ = data1;
+        \\    
+        \\    // Test another common pattern
+        \\    const alloc = arena.allocator();
+        \\    const data2 = try alloc.alloc(u8, 200);
+        \\    _ = data2;
+        \\    
+        \\    // Test with temporary arena
+        \\    var temp_arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+        \\    defer temp_arena.deinit();
+        \\    const temp_alloc = temp_arena.allocator();
+        \\    const data3 = try temp_alloc.alloc(u8, 300);
+        \\    _ = data3;
+        \\}
+    ;
+    
+    const result = try zig_tooling.analyzeMemory(allocator, source, "arena_test.zig", null);
+    defer allocator.free(result.issues);
+    defer for (result.issues) |issue| {
+        allocator.free(issue.file_path);
+        allocator.free(issue.message);
+        if (issue.suggestion) |s| allocator.free(s);
+    };
+    
+    // There should be no missing defer issues for arena allocations
+    for (result.issues) |issue| {
+        if (issue.issue_type == .missing_defer) {
+            std.debug.print("Unexpected missing defer issue: {s}\n", .{issue.message});
+        }
+        try testing.expect(issue.issue_type != .missing_defer);
+    }
+    
+    // The test passes if we have no defer-related issues
+    const defer_issues = blk: {
+        var count: u32 = 0;
+        for (result.issues) |issue| {
+            if (issue.issue_type == .missing_defer or issue.issue_type == .missing_errdefer) {
+                count += 1;
+            }
+        }
+        break :blk count;
+    };
+    
+    try testing.expectEqual(@as(u32, 0), defer_issues);
+}

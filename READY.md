@@ -3,19 +3,12 @@
 **Current Focus**: Library conversion from CLI tools to pure Zig library package.
 
 ## 📊 Progress Summary
-- **Completed**: 10/27 issues (LC001 ✅, LC002 ✅, LC003 ✅, LC004 ✅, LC005 ✅, LC006 ✅, LC007 ✅, LC008 ✅, LC009 ✅, LC010 ✅)
-- **Ready to Start**: LC011, LC012, LC013, LC014, LC015, LC022, LC023, LC024, LC025, LC026, LC027 (11 issues)
+- **Completed**: 11/27 issues (LC001 ✅, LC002 ✅, LC003 ✅, LC004 ✅, LC005 ✅, LC006 ✅, LC007 ✅, LC008 ✅, LC009 ✅, LC010 ✅, LC022 ✅)
+- **Ready to Start**: LC011, LC012, LC013, LC014, LC015, LC023, LC024, LC025, LC026, LC027 (10 issues)
 - **In Progress**: None
 - **Blocked**: 6 issues awaiting dependencies
 
 ## 🟢 No Dependencies - Start Immediately
-
-- **#LC022**: Fix arena allocator tracking
-  - **Component**: src/memory_analyzer.zig
-  - **Status**: Ready
-  - **Dependencies**: None
-  - **Details**: Arena allocator variable tracking is broken
-  - **Notes**: trackArenaAllocatorVars() never called, breaks arena detection
 
 - **#LC023**: Document memory management for helper functions
   - **Component**: src/memory_analyzer.zig
@@ -116,11 +109,11 @@ This path unlocks the most work and enables parallel development.
 
 ## 🎯 Quick Reference
 
-- **Start Now**: #LC011, #LC012, #LC013, #LC014, #LC015, #LC022, #LC023, #LC024, #LC025, #LC026, #LC027 (11 issues ready)
+- **Start Now**: #LC011, #LC012, #LC013, #LC014, #LC015, #LC023, #LC024, #LC025, #LC026, #LC027 (10 issues ready)
 - **Total Issues**: 27
 - **Critical Issues**: 6
 - **Estimated Time**: 11-16 hours total
 
 ---
 
-*This file tracks library conversion issues from ISSUES.md. Updated: 2025-07-27 (LC010 completed, 3 new issues discovered)*
+*This file tracks library conversion issues from ISSUES.md. Updated: 2025-07-27 (LC022 completed - arena allocator tracking fixed)*

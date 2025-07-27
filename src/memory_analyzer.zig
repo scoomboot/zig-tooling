@@ -177,6 +177,7 @@ pub const MemoryAnalyzer = struct {
             
             try self.identifyAllocationsScoped(file_path, line, line_number, temp_allocator);
             try self.identifyArenas(file_path, line, line_number, temp_allocator);
+            try self.trackArenaAllocatorVars(file_path, line, line_number, temp_allocator);
         }
         
         // Scope-aware defer/errdefer analysis
