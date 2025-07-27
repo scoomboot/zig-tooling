@@ -36,6 +36,14 @@ pub fn build(b: *std.Build) void {
     });
     test_api.root_module.addImport("zig_tooling", zig_tooling_module);
 
+    // Patterns library tests
+    const test_patterns = b.addTest(.{
+        .root_source_file = b.path("tests/test_patterns.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    test_patterns.root_module.addImport("zig_tooling", zig_tooling_module);
+
     // Unit tests for the library itself
     const lib_tests = b.addTest(.{
         .root_source_file = b.path("src/zig_tooling.zig"),
@@ -47,5 +55,6 @@ pub fn build(b: *std.Build) void {
     const test_step = b.step("test", "Run all tests");
     test_step.dependOn(&test_scope_integration.step);
     test_step.dependOn(&test_api.step);
+    test_step.dependOn(&test_patterns.step);
     test_step.dependOn(&lib_tests.step);
 }

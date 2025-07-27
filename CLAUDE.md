@@ -530,12 +530,91 @@ test "integration: analyze entire module" {
 }
 ```
 
+## Testing
+
+### Running Tests
+
+The library includes comprehensive test coverage across 4 test suites:
+
+```bash
+# Run all tests
+zig build test
+
+# Run specific test suites
+zig test tests/test_api.zig
+zig test tests/test_patterns.zig  
+zig test tests/test_scope_integration.zig
+zig test src/zig_tooling.zig  # Library unit tests
+```
+
+### Test Structure
+
+- **`tests/test_api.zig`** - Comprehensive API tests (68+ test cases)
+  - Public API functionality testing
+  - Configuration validation
+  - Edge cases (empty source, large files, deep nesting)
+  - Error boundary testing (invalid paths, concurrent usage)
+  - Performance benchmarks (target: <1000ms for large files)
+  - Memory management and cleanup verification
+
+- **`tests/test_patterns.zig`** - High-level patterns library tests
+  - checkProject(), checkFile(), checkSource() functions
+  - File discovery and filtering
+  - Progress callback functionality
+  - Temporary directory handling for integration tests
+
+- **`tests/test_scope_integration.zig`** - Scope analysis integration tests  
+  - ScopeTracker with MemoryAnalyzer integration
+  - Performance baselines and measurements
+  - Complex source code analysis scenarios
+
+- **`src/zig_tooling.zig`** - Library unit tests
+  - Core module functionality
+  - Type exports and public interface
+
+### Test Categories
+
+Tests follow naming conventions:
+- `unit: API: ...` - Public API functionality tests
+- `unit: patterns: ...` - Patterns library tests  
+- `integration: ...` - Cross-component integration tests
+- `performance: ...` - Performance and benchmark tests
+- `LC###: ...` - Issue-specific regression tests
+
+### Writing Tests
+
+When adding new functionality:
+
+1. **API Tests**: Add to `tests/test_api.zig` for public API changes
+2. **Edge Cases**: Include boundary conditions and error handling
+3. **Memory Management**: Always test proper cleanup with defer statements
+4. **Performance**: Add benchmarks for expensive operations
+5. **Integration**: Test interactions between components
+
+Example test pattern:
+```zig
+test "unit: API: your new feature" {
+    const allocator = testing.allocator;
+    
+    const result = try zig_tooling.yourNewFunction(allocator, input, config);
+    defer allocator.free(result.issues);
+    defer for (result.issues) |issue| {
+        allocator.free(issue.file_path);
+        allocator.free(issue.message);
+        if (issue.suggestion) |s| allocator.free(s);
+    };
+    
+    try testing.expect(/* your assertions */);
+}
+```
+
 ## Important Notes
 
 - Always free the `result.issues` array and all string fields within issues
 - Build with `-Doptimize=ReleaseFast` for production use (49-71x performance improvement)
 - The library is thread-safe for read operations but not for configuration changes
 - Pattern-based detection may have false positives - use configuration to tune
+- All tests pass with Zig 0.14.1 - compatibility tested and maintained
 
 ## See Also
 

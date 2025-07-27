@@ -100,7 +100,7 @@ test "unit: patterns: checkFile with valid file" {
     ;
     
     // Write to a temporary file
-    const test_dir = testing.tmpDir(.{});
+    var test_dir = testing.tmpDir(.{});
     defer test_dir.cleanup();
     
     const file = try test_dir.dir.createFile("test_add.zig", .{});
@@ -130,7 +130,7 @@ test "unit: patterns: checkProject with sample directory" {
     const allocator = testing.allocator;
     
     // Create a temporary directory structure
-    const test_dir = testing.tmpDir(.{});
+    var test_dir = testing.tmpDir(.{});
     defer test_dir.cleanup();
     
     // Create src directory with some files
@@ -170,31 +170,28 @@ test "unit: patterns: checkProject with sample directory" {
     defer allocator.free(dir_path);
     
     // Track progress
-    var progress_calls: u32 = 0;
-    const ProgressTracker = struct {
-        calls: *u32,
+    const progressCallback = struct {
+        var calls: u32 = 0;
         
-        fn callback(calls: *u32, files_processed: u32, total_files: u32, current_file: []const u8) void {
+        fn callback(files_processed: u32, total_files: u32, current_file: []const u8) void {
             _ = files_processed;
             _ = total_files;
             _ = current_file;
-            calls.* += 1;
+            calls += 1;
         }
     };
-    
-    var tracker = ProgressTracker{ .calls = &progress_calls };
     
     const result = try patterns.checkProject(
         allocator, 
         dir_path, 
         null, 
-        @ptrCast(&tracker.callback)
+        progressCallback.callback
     );
     defer patterns.freeProjectResult(allocator, result);
     
     // Should have analyzed 2 files
     try testing.expectEqual(@as(u32, 2), result.files_analyzed);
-    try testing.expect(progress_calls > 0);
+    try testing.expect(progressCallback.calls > 0);
     
     // Files should be clean
     try testing.expect(!result.hasErrors());
@@ -205,7 +202,7 @@ test "unit: patterns: checkProject with memory issues" {
     const allocator = testing.allocator;
     
     // Create a temporary directory structure
-    const test_dir = testing.tmpDir(.{});
+    var test_dir = testing.tmpDir(.{});
     defer test_dir.cleanup();
     
     // Create src directory
@@ -243,7 +240,7 @@ test "unit: patterns: checkProject respects exclude patterns" {
     const allocator = testing.allocator;
     
     // Create a temporary directory structure
-    const test_dir = testing.tmpDir(.{});
+    var test_dir = testing.tmpDir(.{});
     defer test_dir.cleanup();
     
     // Create directories

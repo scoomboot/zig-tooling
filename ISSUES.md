@@ -12,19 +12,6 @@
 
 *Minimum viable complete library - focus on these first*
 
-- [ ] #LC019: Update test suite
-  - **Component**: tests/
-  - **Priority**: Critical
-  - **Created**: 2025-07-25
-  - **Dependencies**: #LC005 ✅-#LC012 ✅ (All completed 2025-07-27)
-  - **Details**: Remove CLI tests, add API usage tests
-  - **Requirements**:
-    - Remove CLI-specific tests
-    - Add API tests
-    - Error condition tests
-    - Performance benchmarks
-  - **Why Tier 1**: Blocks all further testing work and quality validation
-
 - [ ] #LC015: Result formatting utilities
   - **Component**: src/formatters.zig (new)
   - **Priority**: Medium
@@ -404,6 +391,59 @@
     - Would improve test maintainability and readability
     - Discovered during LC014 implementation
 
+### Development Process & Quality (3 issues)
+
+- [ ] #LC046: Add systematic Zig version compatibility testing
+  - **Component**: build.zig, tests/, CI configuration
+  - **Priority**: Low
+  - **Created**: 2025-07-27  
+  - **Dependencies**: #LC019 ✅
+  - **Details**: Compatibility issues with Zig versions not caught until runtime
+  - **Requirements**:
+    - Add automated testing against multiple Zig versions
+    - Create compatibility test matrix for CI
+    - Add version-specific compatibility documentation
+    - Implement early detection of breaking API changes
+  - **Notes**:
+    - Discovered during LC019 when tmpDir const qualifier failed with Zig 0.14.1
+    - Fixed at [tests/test_patterns.zig:103](tests/test_patterns.zig#L103) - changed const to var
+    - Would prevent compatibility regressions in future
+    - Discovered during LC019 implementation
+
+- [ ] #LC047: Add build configuration validation
+  - **Component**: build.zig, tests/
+  - **Priority**: Low
+  - **Created**: 2025-07-27
+  - **Dependencies**: #LC019 ✅
+  - **Details**: Missing test files in build configuration not automatically detected
+  - **Requirements**:
+    - Add build step to validate all test files are included
+    - Create script to detect orphaned test files
+    - Add build configuration completeness check
+    - Integrate validation into CI pipeline
+  - **Notes**:
+    - Discovered during LC019 when test_patterns.zig was missing from build.zig
+    - Fixed at [build.zig:39-45](build.zig#L39-L45) by adding missing test configuration
+    - Would prevent test files from being accidentally excluded
+    - Discovered during LC019 implementation
+
+- [ ] #LC048: Enhance error boundary testing framework
+  - **Component**: tests/, src/patterns.zig
+  - **Priority**: Low
+  - **Created**: 2025-07-27
+  - **Dependencies**: #LC019 ✅
+  - **Details**: Error handling gaps found during implementation not systematically tested
+  - **Requirements**:
+    - Add comprehensive error injection testing framework
+    - Create systematic error boundary test cases
+    - Add filesystem error simulation utilities
+    - Implement error path coverage validation
+  - **Notes**:
+    - Discovered during LC019 when walkProjectDirectory() error handling was incomplete
+    - Fixed at [src/patterns.zig:132-137](src/patterns.zig#L132-L137) with proper error conversion
+    - Would catch error handling gaps before production
+    - Discovered during LC019 implementation
+
 ## 📋 Archive: Original Phase Organization
 
 *The library conversion was originally organized by phases, but has been replaced by the tier system above for better prioritization and clearer v1.0 focus.*
@@ -419,6 +459,25 @@
 ## ✅ Completed
 
 *Finished issues for reference*
+
+- [x] #LC019: Update test suite
+  - **Component**: tests/
+  - **Priority**: Critical
+  - **Created**: 2025-07-25
+  - **Started**: 2025-07-27
+  - **Completed**: 2025-07-27
+  - **Dependencies**: #LC005 ✅-#LC012 ✅ (All completed 2025-07-27)
+  - **Details**: Remove CLI tests, add API usage tests
+  - **Resolution**:
+    - Added test_patterns.zig to build.zig test configuration (missing from test suite)
+    - Fixed compatibility issues with tmpDir const qualifier for Zig 0.14.1
+    - Enhanced test_api.zig with comprehensive edge case and error boundary tests
+    - Added performance benchmarks for large file analysis (target: <1000ms for large files)
+    - Added concurrent analysis testing to verify thread safety
+    - Added tests for empty source, deeply nested scopes, problematic file paths
+    - All 4 test suites now pass: test_api.zig, test_patterns.zig, test_scope_integration.zig, lib tests
+    - No CLI tests found to remove (already cleaned up in earlier phases)
+    - Comprehensive API coverage with 68+ test cases covering all public APIs
 
 - [x] #LC014: Common patterns library
   - **Component**: src/patterns.zig (new)
@@ -778,5 +837,5 @@
 
 ---
 
-*Last Updated: 2025-07-27 (Added 2 new issues LC044-LC045 discovered during LC014 implementation - code duplication and test utility improvements)*
+*Last Updated: 2025-07-27 (Completed LC019 and added 3 new TIER 3 issues LC046-LC048 for development process improvements discovered during implementation)*
 *Focus: Library Conversion Project*

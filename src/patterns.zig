@@ -129,7 +129,12 @@ pub fn checkProject(
         file_list.deinit();
     }
     
-    try walkProjectDirectory(allocator, &file_list, project_path, analysis_config.patterns);
+    walkProjectDirectory(allocator, &file_list, project_path, analysis_config.patterns) catch |err| switch (err) {
+        error.FileNotFound => return AnalysisError.FileNotFound,
+        error.AccessDenied => return AnalysisError.AccessDenied, 
+        error.OutOfMemory => return AnalysisError.OutOfMemory,
+        else => return AnalysisError.FileReadError,
+    };
     
     // Track results and failures
     var all_issues = std.ArrayList(Issue).init(allocator);

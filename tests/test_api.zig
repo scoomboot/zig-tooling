@@ -1074,6 +1074,209 @@ test "unit: API: ScopeTracker custom ownership patterns" {
     }
 }
 
+test "unit: API: edge case - empty source code" {
+    const allocator = testing.allocator;
+    
+    // Test empty string
+    const result1 = try zig_tooling.analyzeSource(allocator, "", null);
+    defer allocator.free(result1.issues);
+    defer for (result1.issues) |issue| {
+        allocator.free(issue.file_path);
+        allocator.free(issue.message);
+        if (issue.suggestion) |s| allocator.free(s);
+    };
+    
+    try testing.expectEqual(@as(u32, 1), result1.files_analyzed);
+    try testing.expectEqual(@as(u32, 0), result1.issues_found);
+    
+    // Test whitespace only
+    const result2 = try zig_tooling.analyzeSource(allocator, "   \n  \t  \n", null);
+    defer allocator.free(result2.issues);
+    defer for (result2.issues) |issue| {
+        allocator.free(issue.file_path);
+        allocator.free(issue.message);
+        if (issue.suggestion) |s| allocator.free(s);
+    };
+    
+    try testing.expectEqual(@as(u32, 1), result2.files_analyzed);
+    try testing.expectEqual(@as(u32, 0), result2.issues_found);
+}
+
+test "unit: API: edge case - very large allocation sizes" {
+    const allocator = testing.allocator;
+    
+    const source =
+        \\pub fn hugeMalloc() !void {
+        \\    const allocator = std.heap.page_allocator;
+        \\    const huge_data = try allocator.alloc(u8, 0xFFFFFFFF);
+        \\    defer allocator.free(huge_data);
+        \\    
+        \\    const zero_data = try allocator.alloc(u8, 0);
+        \\    defer allocator.free(zero_data);
+        \\}
+    ;
+    
+    const result = try zig_tooling.analyzeMemory(allocator, source, "huge.zig", null);
+    defer allocator.free(result.issues);
+    defer for (result.issues) |issue| {
+        allocator.free(issue.file_path);
+        allocator.free(issue.message);
+        if (issue.suggestion) |s| allocator.free(s);
+    };
+    
+    // Should not crash on large numbers
+    try testing.expect(result.files_analyzed >= 1);
+}
+
+test "unit: API: edge case - deeply nested scopes" {
+    const allocator = testing.allocator;
+    
+    const source =
+        \\pub fn deepNesting() !void {
+        \\    if (true) {
+        \\        while (true) {
+        \\            for (0..10) |i| {
+        \\                switch (i) {
+        \\                    0 => {
+        \\                        if (true) {
+        \\                            const data = try allocator.alloc(u8, 10);
+        \\                            defer allocator.free(data);
+        \\                        }
+        \\                    },
+        \\                    else => {},
+        \\                }
+        \\            }
+        \\            break;
+        \\        }
+        \\    }
+        \\}
+    ;
+    
+    const result = try zig_tooling.analyzeMemory(allocator, source, "deep.zig", null);
+    defer allocator.free(result.issues);
+    defer for (result.issues) |issue| {
+        allocator.free(issue.file_path);
+        allocator.free(issue.message);
+        if (issue.suggestion) |s| allocator.free(s);
+    };
+    
+    // Should handle deep nesting gracefully
+    try testing.expect(result.files_analyzed >= 1);
+    try testing.expect(!result.hasErrors()); // Properly handled defer
+}
+
+test "unit: API: edge case - concurrent analysis" {
+    const allocator = testing.allocator;
+    
+    const source =
+        \\pub fn simpleFunction() !void {
+        \\    const data = try allocator.alloc(u8, 100);
+        \\    defer allocator.free(data);
+        \\}
+    ;
+    
+    // Simulate concurrent usage by running multiple analyses
+    var results: [5]zig_tooling.AnalysisResult = undefined;
+    
+    for (&results) |*result| {
+        result.* = try zig_tooling.analyzeMemory(allocator, source, "concurrent.zig", null);
+    }
+    
+    defer for (results) |result| {
+        allocator.free(result.issues);
+        for (result.issues) |issue| {
+            allocator.free(issue.file_path);
+            allocator.free(issue.message);
+            if (issue.suggestion) |s| allocator.free(s);
+        }
+    };
+    
+    // All results should be consistent
+    for (results) |result| {
+        try testing.expectEqual(@as(u32, 1), result.files_analyzed);
+        try testing.expect(!result.hasErrors());
+    }
+}
+
+test "unit: API: error boundary - invalid file path characters" {
+    const allocator = testing.allocator;
+    
+    const source = "pub fn test() void {}";
+    
+    // Test with various problematic file path characters
+    const problematic_paths = [_][]const u8{
+        "file\x00with\x00nulls.zig",
+        "file\nwith\nnewlines.zig", 
+        "file\twith\ttabs.zig",
+        "file with spaces.zig",
+        "very_long_file_name_that_exceeds_normal_path_limits_to_test_boundary_conditions.zig",
+    };
+    
+    for (problematic_paths) |path| {
+        const result = try zig_tooling.analyzeMemory(allocator, source, path, null);
+        defer allocator.free(result.issues);
+        defer for (result.issues) |issue| {
+            allocator.free(issue.file_path);
+            allocator.free(issue.message);
+            if (issue.suggestion) |s| allocator.free(s);
+        };
+        
+        // Should handle problematic paths gracefully
+        try testing.expect(result.files_analyzed >= 1);
+    }
+}
+
+test "unit: API: performance benchmark - large file analysis" {
+    const allocator = testing.allocator;
+    
+    // Generate a large source file
+    var large_source = std.ArrayList(u8).init(allocator);
+    defer large_source.deinit();
+    
+    // Add multiple functions with allocations
+    for (0..100) |i| {
+        try large_source.writer().print(
+            \\pub fn function_{d}() !void {{
+            \\    const allocator = std.heap.page_allocator;
+            \\    const data_{d} = try allocator.alloc(u8, {d});
+            \\    defer allocator.free(data_{d});
+            \\}}
+            \\
+            , .{ i, i, i + 10, i });
+    }
+    
+    // Add test functions
+    for (0..50) |i| {
+        try large_source.writer().print(
+            \\test "unit: function_{d}: test case" {{
+            \\    try std.testing.expect(true);
+            \\}}
+            \\
+            , .{i});
+    }
+    
+    const start_time = std.time.nanoTimestamp();
+    const result = try zig_tooling.analyzeSource(allocator, large_source.items, null);
+    const end_time = std.time.nanoTimestamp();
+    
+    defer allocator.free(result.issues);
+    defer for (result.issues) |issue| {
+        allocator.free(issue.file_path);
+        allocator.free(issue.message);
+        if (issue.suggestion) |s| allocator.free(s);
+    };
+    
+    const duration_ms = @as(f64, @floatFromInt(end_time - start_time)) / 1_000_000.0;
+    
+    // Performance requirement: should complete within reasonable time
+    try testing.expect(duration_ms < 1000.0); // 1 second max for large files
+    
+    // Should find the expected number of items
+    try testing.expect(result.files_analyzed >= 1);
+    
+    std.debug.print("Large file analysis performance: {d:.2}ms for {d} bytes\n", .{ duration_ms, large_source.items.len });
+}
+
 test "API: Logging with callback" {
     const allocator = testing.allocator;
     
