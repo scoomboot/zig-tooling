@@ -3,10 +3,10 @@
 **Current Focus**: Library conversion from CLI tools to pure Zig library package.
 
 ## 📊 Progress Summary
-- **Completed**: 9/24 issues (LC001 ✅, LC002 ✅, LC003 ✅, LC004 ✅, LC005 ✅, LC006 ✅, LC007 ✅, LC008 ✅, LC009 ✅)
-- **Ready to Start**: LC010, LC011, LC012, LC015, LC022, LC023, LC024 (7 issues)
+- **Completed**: 10/27 issues (LC001 ✅, LC002 ✅, LC003 ✅, LC004 ✅, LC005 ✅, LC006 ✅, LC007 ✅, LC008 ✅, LC009 ✅, LC010 ✅)
+- **Ready to Start**: LC011, LC012, LC013, LC014, LC015, LC022, LC023, LC024, LC025, LC026, LC027 (11 issues)
 - **In Progress**: None
-- **Blocked**: 7 issues awaiting dependencies
+- **Blocked**: 6 issues awaiting dependencies
 
 ## 🟢 No Dependencies - Start Immediately
 
@@ -31,17 +31,28 @@
   - **Details**: Current allocator type detection is limited to known patterns
   - **Notes**: Custom allocators with non-standard names won't be detected
 
-## 🟢 All Dependencies Completed - Ready to Start
-
-- **#LC010**: Refactor testing analyzer  
+- **#LC025**: Fix memory lifetime issues in TestPattern
   - **Component**: src/testing_analyzer.zig
   - **Status**: Ready
-  - **Dependencies**: #LC008 ✅ (Completed 2025-07-26)
-  - **Details**: Make test categories configurable, return structured results
-  - **Notes**: 
-    - TestCategory enum hardcoded (src/testing_analyzer.zig:43-63)
-    - Remove legacy alias: `pub const TestingIssue = Issue;` (line 14)
-    - Clean up duplicate type imports from LC008 work
+  - **Dependencies**: None
+  - **Details**: TestPattern stores reference to category string from config, not a copy
+  - **Notes**: Could cause use-after-free if config is deallocated while results are in use
+
+- **#LC026**: Document getCategoryBreakdown memory ownership
+  - **Component**: src/testing_analyzer.zig
+  - **Status**: Ready
+  - **Dependencies**: None
+  - **Details**: getCategoryBreakdown returns HashMap that caller must deinit
+  - **Notes**: Similar to LC023 but for testing analyzer
+
+- **#LC027**: Add buffer size validation for category formatting
+  - **Component**: src/testing_analyzer.zig
+  - **Status**: Ready
+  - **Dependencies**: None
+  - **Details**: Fixed-size buffers used for category string building could overflow
+  - **Notes**: Could overflow with many/long category names
+
+## 🟢 All Dependencies Completed - Ready to Start
 
 - **#LC011**: Optimize scope tracker
   - **Component**: src/scope_tracker.zig
@@ -72,10 +83,10 @@
 
 
 
-### After #LC010 (Testing analyzer refactored)
-- **#LC013**: Build system integration helpers (depends on LC009 ✅ + LC010)
+### Ready Now (LC010 completed ✅)
+- **#LC013**: Build system integration helpers (depends on LC009 ✅ + LC010 ✅)
   - Note: PatternConfig not implemented (src/types.zig:140-145)
-- **#LC014**: Common patterns library (depends on LC009 ✅ + LC010)
+- **#LC014**: Common patterns library (depends on LC009 ✅ + LC010 ✅)
 
 ### After multiple dependencies complete
 - **#LC016**: API documentation (needs #LC005-#LC015)
@@ -105,11 +116,11 @@ This path unlocks the most work and enables parallel development.
 
 ## 🎯 Quick Reference
 
-- **Start Now**: #LC010, #LC011, #LC012, #LC015, #LC022, #LC023, #LC024 (7 issues ready)
-- **Total Issues**: 24
-- **Critical Issues**: 7
+- **Start Now**: #LC011, #LC012, #LC013, #LC014, #LC015, #LC022, #LC023, #LC024, #LC025, #LC026, #LC027 (11 issues ready)
+- **Total Issues**: 27
+- **Critical Issues**: 6
 - **Estimated Time**: 11-16 hours total
 
 ---
 
-*This file tracks library conversion issues from ISSUES.md. Updated: 2025-07-26 (LC009 completed, 3 new issues discovered)*
+*This file tracks library conversion issues from ISSUES.md. Updated: 2025-07-27 (LC010 completed, 3 new issues discovered)*

@@ -8,40 +8,15 @@ const types = @import("types.zig");
 
 // Using unified types from types.zig
 const Issue = types.Issue;
-pub const IssueType = types.IssueType;
-pub const Severity = types.Severity;
+const IssueType = types.IssueType;
+const Severity = types.Severity;
 const AnalysisError = types.AnalysisError;
-
-// Legacy alias for backward compatibility during migration
-pub const TestingIssue = Issue;
-
-pub const TestCategory = enum {
-    unit,
-    integration,
-    simulation,
-    data_validation,
-    performance,
-    memory_safety,
-    unknown,
-    
-    pub fn expectedNamingPattern(self: TestCategory) []const u8 {
-        return switch (self) {
-            .unit => "test \"module_name: specific behavior\"",
-            .integration => "test \"integration: component1 + component2\"",
-            .simulation => "test \"simulation: scenario description\"",
-            .data_validation => "test \"data validation: csv/data specific test\"",
-            .performance => "test \"performance: operation benchmark\"",
-            .memory_safety => "test \"memory: allocator strategy/pattern\"",
-            .unknown => "test \"category: descriptive name\"",
-        };
-    }
-};
 
 pub const TestPattern = struct {
     line: u32,
     column: u32,
     test_name: []const u8,
-    category: TestCategory,
+    category: ?[]const u8,  // null if no category detected
     has_proper_naming: bool,
     has_memory_safety: bool,
     uses_testing_allocator: bool,
@@ -411,18 +386,35 @@ pub const TestingAnalyzer = struct {
                     "Test '{s}' on line {d} does not follow naming convention",
                     .{test_pattern.test_name, test_pattern.line}
                 ),
-                .suggestion = try std.fmt.allocPrint(
-                    self.allocator,
-                    "Use pattern: {s}",
-                    .{test_pattern.category.expectedNamingPattern()}
-                ),
+                .suggestion = if (test_pattern.category) |cat|
+                    try std.fmt.allocPrint(
+                        self.allocator,
+                        "Use pattern: test \"{s}: description\"",
+                        .{cat}
+                    )
+                else
+                    try std.fmt.allocPrint(
+                        self.allocator,
+                        "Use pattern: test \"category: description\"",
+                        .{}
+                    ),
                 .code_snippet = null,
             };
             try self.issues.append(issue);
         }
         
         // Check for uncategorized tests
-        if (test_pattern.category == .unknown and self.config.enforce_categories) {
+        if (test_pattern.category == null and self.config.enforce_categories) {
+            // Build list of allowed categories for suggestion
+            var categories_buf: [512]u8 = undefined;
+            var stream = std.io.fixedBufferStream(&categories_buf);
+            const writer = stream.writer();
+            
+            for (self.config.allowed_categories, 0..) |cat, i| {
+                if (i > 0) try writer.writeAll(", ");
+                try writer.writeAll(cat);
+            }
+            
             const issue = Issue{
                 .file_path = try self.allocator.dupe(u8, file_path),
                 .line = test_pattern.line,
@@ -436,8 +428,8 @@ pub const TestingAnalyzer = struct {
                 ),
                 .suggestion = try std.fmt.allocPrint(
                     self.allocator,
-                    "Add category prefix: unit, integration, simulation, data validation, performance, or memory",
-                    .{}
+                    "Add category prefix: {s}",
+                    .{categories_buf[0..stream.pos]}
                 ),
                 .code_snippet = null,
             };
@@ -595,41 +587,62 @@ pub const TestingAnalyzer = struct {
         return try temp_allocator.dupe(u8, "unknown_test");
     }
     
-    fn determineTestCategory(self: *TestingAnalyzer, test_name: []const u8) TestCategory {
-        _ = self;
+    fn determineTestCategory(self: *TestingAnalyzer, test_name: []const u8) ?[]const u8 {
+        // Check each allowed category to see if test name starts with it
+        for (self.config.allowed_categories) |category| {
+            // Build the expected prefix pattern: "category:"
+            var buf: [256]u8 = undefined;
+            const prefix = std.fmt.bufPrint(&buf, "{s}:", .{category}) catch continue;
+            
+            if (std.mem.indexOf(u8, test_name, prefix) != null) {
+                return category;
+            }
+        }
         
-        if (std.mem.indexOf(u8, test_name, "integration:") != null) return .integration;
-        if (std.mem.indexOf(u8, test_name, "simulation:") != null) return .simulation;
-        if (std.mem.indexOf(u8, test_name, "data validation:") != null) return .data_validation;
-        if (std.mem.indexOf(u8, test_name, "performance:") != null) return .performance;
-        if (std.mem.indexOf(u8, test_name, "memory:") != null) return .memory_safety;
-        if (std.mem.indexOf(u8, test_name, ":") != null) return .unit; // Assume unit if has colon but no specific category
+        // Check if it has a colon (might be a category we don't recognize)
+        if (std.mem.indexOf(u8, test_name, ":") != null) {
+            // Extract the category part before the colon
+            if (std.mem.indexOf(u8, test_name, ":")) |colon_pos| {
+                const potential_category = test_name[0..colon_pos];
+                // Check if this matches any allowed category
+                for (self.config.allowed_categories) |category| {
+                    if (std.mem.eql(u8, potential_category, category)) {
+                        return category;
+                    }
+                }
+            }
+        }
         
-        return .unknown;
+        return null; // No category detected
     }
     
-    fn checkTestNaming(self: *TestingAnalyzer, test_name: []const u8, category: TestCategory) bool {
+    fn checkTestNaming(self: *TestingAnalyzer, test_name: []const u8, category: ?[]const u8) bool {
         _ = self;
         
-        // Check if test name follows the expected pattern for its category
-        return switch (category) {
-            .unit => std.mem.indexOf(u8, test_name, ":") != null,
-            .integration => std.mem.indexOf(u8, test_name, "integration:") != null,
-            .simulation => std.mem.indexOf(u8, test_name, "simulation:") != null,
-            .data_validation => std.mem.indexOf(u8, test_name, "data validation:") != null,
-            .performance => std.mem.indexOf(u8, test_name, "performance:") != null,
-            .memory_safety => std.mem.indexOf(u8, test_name, "memory:") != null,
-            .unknown => false,
-        };
+        // If no category detected, check if test has any category prefix
+        if (category == null) {
+            return std.mem.indexOf(u8, test_name, ":") != null;
+        }
+        
+        // Check if test name contains the category prefix
+        var buf: [256]u8 = undefined;
+        const prefix = std.fmt.bufPrint(&buf, "{s}:", .{category.?}) catch return false;
+        
+        return std.mem.indexOf(u8, test_name, prefix) != null;
     }
     
     fn shouldHaveMemorySafety(self: *TestingAnalyzer, test_pattern: TestPattern) bool {
         _ = self;
         
         // Tests that should use memory safety patterns
-        return test_pattern.category == .memory_safety or 
-               test_pattern.category == .integration or
-               std.mem.indexOf(u8, test_pattern.test_name, "alloc") != null or
+        if (test_pattern.category) |cat| {
+            if (std.mem.eql(u8, cat, "memory") or 
+                std.mem.eql(u8, cat, "integration")) {
+                return true;
+            }
+        }
+        
+        return std.mem.indexOf(u8, test_pattern.test_name, "alloc") != null or
                std.mem.indexOf(u8, test_pattern.test_name, "memory") != null;
     }
     
@@ -671,6 +684,94 @@ pub const TestingAnalyzer = struct {
     pub fn getIssues(self: *TestingAnalyzer) []const Issue {
         return self.issues.items;
     }
+    
+    // Structured compliance data methods
+    
+    pub fn getTestCount(self: *TestingAnalyzer) u32 {
+        return @intCast(self.tests.items.len);
+    }
+    
+    pub fn getCategoryBreakdown(self: *TestingAnalyzer, allocator: std.mem.Allocator) !std.StringHashMap(u32) {
+        var breakdown = std.StringHashMap(u32).init(allocator);
+        
+        for (self.tests.items) |test_pattern| {
+            if (test_pattern.category) |cat| {
+                const result = try breakdown.getOrPut(cat);
+                if (result.found_existing) {
+                    result.value_ptr.* += 1;
+                } else {
+                    result.value_ptr.* = 1;
+                }
+            }
+        }
+        
+        return breakdown;
+    }
+    
+    pub fn getTestsWithoutCategory(self: *TestingAnalyzer) u32 {
+        var count: u32 = 0;
+        for (self.tests.items) |test_pattern| {
+            if (test_pattern.category == null) count += 1;
+        }
+        return count;
+    }
+    
+    pub fn getTestsWithMemorySafety(self: *TestingAnalyzer) u32 {
+        var count: u32 = 0;
+        for (self.tests.items) |test_pattern| {
+            if (test_pattern.has_memory_safety) count += 1;
+        }
+        return count;
+    }
+    
+    pub fn getComplianceReport(self: *TestingAnalyzer) TestComplianceReport {
+        return TestComplianceReport{
+            .total_tests = @intCast(self.tests.items.len),
+            .tests_with_proper_naming = self.countTestsWithProperNaming(),
+            .tests_with_categories = self.countTestsWithCategories(),
+            .tests_with_memory_safety = self.getTestsWithMemorySafety(),
+            .total_issues = @intCast(self.issues.items.len),
+            .error_count = self.countIssuesBySeverity(.err),
+            .warning_count = self.countIssuesBySeverity(.warning),
+            .info_count = self.countIssuesBySeverity(.info),
+        };
+    }
+    
+    fn countTestsWithProperNaming(self: *TestingAnalyzer) u32 {
+        var count: u32 = 0;
+        for (self.tests.items) |test_pattern| {
+            if (test_pattern.has_proper_naming) count += 1;
+        }
+        return count;
+    }
+    
+    fn countTestsWithCategories(self: *TestingAnalyzer) u32 {
+        var count: u32 = 0;
+        for (self.tests.items) |test_pattern| {
+            if (test_pattern.category != null) count += 1;
+        }
+        return count;
+    }
+    
+    fn countIssuesBySeverity(self: *TestingAnalyzer, severity: Severity) u32 {
+        var count: u32 = 0;
+        for (self.issues.items) |issue| {
+            if (issue.severity == severity) count += 1;
+        }
+        return count;
+    }
+};
+
+// Structure to return compliance report data
+pub const TestComplianceReport = struct {
+    total_tests: u32,
+    tests_with_proper_naming: u32,
+    tests_with_categories: u32,
+    tests_with_memory_safety: u32,
+    total_issues: u32,
+    error_count: u32,
+    warning_count: u32,
+    info_count: u32,
 };
 
 // Test the testing analyzer
@@ -709,5 +810,5 @@ test "integration: testing analyzer detects improper naming" {
     
     // Should find naming issue
     try std.testing.expect(analyzer.issues.items.len > 0);
-    try std.testing.expect(analyzer.issues.items[0].issue_type == .improper_test_naming);
+    try std.testing.expect(analyzer.issues.items[0].issue_type == .invalid_test_naming);
 }

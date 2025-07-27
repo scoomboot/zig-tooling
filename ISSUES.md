@@ -23,8 +23,10 @@
     - Ensure arena-derived allocators are properly tracked
     - Add tests for arena allocator detection
   - **Notes**:
-    - trackArenaAllocatorVars() function exists at line 306 but is never called
-    - This breaks the isArenaAllocation() check for arena.allocator_vars
+    - trackArenaAllocatorVars() function at src/memory_analyzer.zig:306-320 is never called
+    - Should be called in analyzeSourceCode() at src/memory_analyzer.zig:148-227
+    - This breaks isArenaAllocation() check at src/memory_analyzer.zig:522-534
+    - arena.allocator_vars HashMap at src/memory_analyzer.zig:85 remains empty
     - Discovered during LC009 implementation
 
 - [ ] #LC023: Document memory management for helper functions
@@ -38,8 +40,10 @@
     - Add doc comments about memory ownership
     - Consider using a different pattern to avoid allocation
   - **Notes**:
-    - formatAllowedAllocators() at line 672 returns allocated memory
+    - formatAllowedAllocators() at src/memory_analyzer.zig:672-689 returns allocated memory
+    - Called from validateAllocatorChoice() at src/memory_analyzer.zig:460
     - Callers must free this memory to avoid leaks
+    - Consider returning a static buffer or using writer pattern instead
 
 - [ ] #LC024: Improve allocator type detection
   - **Component**: src/memory_analyzer.zig
@@ -52,8 +56,61 @@
     - Allow users to register custom allocator patterns
     - Better handling of wrapper allocators
   - **Notes**:
-    - extractAllocatorType() at line 648 uses simple pattern matching
+    - extractAllocatorType() at src/memory_analyzer.zig:648-670 uses simple pattern matching
+    - Called from validateAllocatorChoice() at src/memory_analyzer.zig:457
+    - Hardcoded patterns: "GeneralPurposeAllocator", "ArenaAllocator", "FixedBufferAllocator", etc.
     - Custom allocators with non-standard names won't be detected
+    - Consider adding allocator_patterns field to MemoryConfig
+
+- [ ] #LC025: Fix memory lifetime issues in TestPattern
+  - **Component**: src/testing_analyzer.zig
+  - **Priority**: Medium
+  - **Created**: 2025-07-27
+  - **Dependencies**: None
+  - **Details**: TestPattern stores reference to category string from config, not a copy
+  - **Requirements**:
+    - TestPattern.category should be a copy, not a reference
+    - Ensure proper memory management when config is freed
+    - Add test to verify category strings survive config deallocation
+  - **Notes**:
+    - See TestPattern struct definition at src/testing_analyzer.zig:40-50
+    - Problem occurs in identifyTests() at src/testing_analyzer.zig:284 where determineTestCategory returns reference
+    - TestPattern creation at src/testing_analyzer.zig:290-302
+    - Could cause use-after-free if config is deallocated while results are in use
+    - Discovered during LC010 implementation
+
+- [ ] #LC026: Document getCategoryBreakdown memory ownership
+  - **Component**: src/testing_analyzer.zig
+  - **Priority**: Low
+  - **Created**: 2025-07-27
+  - **Dependencies**: None
+  - **Details**: getCategoryBreakdown returns HashMap that caller must deinit
+  - **Requirements**:
+    - Add doc comment explaining caller owns returned HashMap
+    - Consider returning a struct that's easier to manage
+    - Add example usage showing proper cleanup
+  - **Notes**:
+    - Method definition at src/testing_analyzer.zig:694-709
+    - Returns std.StringHashMap(u32) without ownership documentation
+    - Similar pattern to LC023 but for testing analyzer
+    - Example of proper usage needed for library consumers
+
+- [ ] #LC027: Add buffer size validation for category formatting
+  - **Component**: src/testing_analyzer.zig
+  - **Priority**: Low
+  - **Created**: 2025-07-27
+  - **Dependencies**: None
+  - **Details**: Fixed-size buffers used for category string building could overflow
+  - **Requirements**:
+    - Check buffer sizes before formatting
+    - Return appropriate errors on overflow
+    - Consider dynamic allocation for safety
+  - **Notes**:
+    - determineTestCategory() at src/testing_analyzer.zig:590-618 uses 256-byte buffer (line 594)
+    - Issue generation in generateTestIssues() at src/testing_analyzer.zig:400-469
+    - Category list building uses 512-byte buffer at src/testing_analyzer.zig:429-441
+    - Could overflow with many categories or long category names
+    - Consider using ArrayList or growable buffer instead
 
 ## 📋 Backlog
 
@@ -65,25 +122,6 @@
 
 
 ### Phase 3: Core Component Updates
-
-- [ ] #LC010: Refactor testing analyzer
-  - **Component**: src/testing_analyzer.zig
-  - **Priority**: High
-  - **Created**: 2025-07-25
-  - **Dependencies**: #LC008
-  - **Details**: Make test categories configurable, return structured results
-  - **Requirements**:
-    - Remove hardcoded categories
-    - Configurable naming rules
-    - Return compliance data
-    - Simplify validation logic
-  - **Notes**:
-    - TestCategory enum still hardcoded in src/testing_analyzer.zig:43-63  
-    - Config has allowed_categories field but analyzer doesn't use it yet
-    - See determineTestCategory() at src/testing_analyzer.zig:618
-    - Legacy type alias: `pub const TestingIssue = Issue;` (line 14) - remove after migration
-    - Duplicate imports can be cleaned up: `const IssueType = types.IssueType;` (line 9)
-    - Field renamed from description to message in all issue creation (LC008)
 
 - [ ] #LC011: Optimize scope tracker
   - **Component**: src/scope_tracker.zig
@@ -391,6 +429,23 @@
     - All allocator usage is now validated against the configured allowed list
     - Library is now fully generic and suitable for any Zig project
 
+- [x] #LC010: Refactor testing analyzer
+  - **Component**: src/testing_analyzer.zig
+  - **Priority**: High
+  - **Created**: 2025-07-25
+  - **Completed**: 2025-07-27
+  - **Dependencies**: #LC008
+  - **Details**: Make test categories configurable, return structured results
+  - **Resolution**:
+    - Removed hardcoded TestCategory enum and replaced with dynamic string-based categories
+    - Updated TestPattern to use optional string category instead of enum
+    - Rewrote determineTestCategory() to use config.allowed_categories
+    - Updated all category-related functions to work with configurable categories
+    - Removed legacy TestingIssue type alias and duplicate imports
+    - Added structured compliance data methods (getComplianceReport, getCategoryBreakdown, etc.)
+    - Added TestComplianceReport struct for detailed analysis results
+    - All tests pass, library builds successfully
+
 ## Issue Guidelines
 
 1. **Issue Format**: `#LCXXX: Clear, action-oriented title` (LC = Library Conversion)
@@ -402,5 +457,5 @@
 
 ---
 
-*Last Updated: 2025-07-26 (LC009 completed, LC022-LC024 added)*
+*Last Updated: 2025-07-27 (LC010 completed, LC025-LC027 added)*
 *Focus: Library Conversion Project*

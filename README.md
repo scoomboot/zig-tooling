@@ -9,14 +9,11 @@ A comprehensive library for code quality and analysis in Zig projects, providing
 - Ownership transfer pattern detection
 - Arena allocator pattern support
 - Test allocator pattern recognition
-- 47% false positive reduction with enhanced scope tracking
-- Performance: ~3.23ms per file with ReleaseFast builds
 
 ### Testing Analyzer
 - Enforces test naming conventions and memory safety in tests
 - Categorizes tests by type (Unit, Integration, Simulation, etc.)
 - Validates test organization and colocation
-- Performance: ~0.84ms per file with ReleaseFast builds
 
 ### Logging System
 - Structured logging with consistent format
@@ -36,12 +33,6 @@ The library conversion will provide:
 - Composable analyzers for custom tooling
 
 See [Library Conversion Plan](docs/implementation/library-conversion-plan.md) for details.
-
-## Performance
-
-With ReleaseFast builds:
-- Memory checker: ~3.23ms per file (49x improvement over Debug)
-- Testing compliance: ~0.84ms per file (71x improvement over Debug)
 
 ## Known Limitations
 
