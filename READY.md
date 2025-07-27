@@ -3,19 +3,12 @@
 **Current Focus**: Library conversion from CLI tools to pure Zig library package.
 
 ## 📊 Progress Summary
-- **Completed**: 12/27 issues (LC001 ✅, LC002 ✅, LC003 ✅, LC004 ✅, LC005 ✅, LC006 ✅, LC007 ✅, LC008 ✅, LC009 ✅, LC010 ✅, LC022 ✅, LC023 ✅)
-- **Ready to Start**: LC011, LC012, LC013, LC014, LC015, LC024, LC025, LC026, LC027 (9 issues)
+- **Completed**: 13/30 issues (LC001 ✅, LC002 ✅, LC003 ✅, LC004 ✅, LC005 ✅, LC006 ✅, LC007 ✅, LC008 ✅, LC009 ✅, LC010 ✅, LC022 ✅, LC023 ✅, LC024 ✅)
+- **Ready to Start**: LC011, LC012, LC013, LC014, LC015, LC025, LC026, LC027, LC028, LC029, LC030 (11 issues)
 - **In Progress**: None
 - **Blocked**: 6 issues awaiting dependencies
 
 ## 🟢 No Dependencies - Start Immediately
-
-- **#LC024**: Improve allocator type detection
-  - **Component**: src/memory_analyzer.zig
-  - **Status**: Ready
-  - **Dependencies**: None
-  - **Details**: Current allocator type detection is limited to known patterns
-  - **Notes**: Custom allocators with non-standard names won't be detected
 
 - **#LC025**: Fix memory lifetime issues in TestPattern
   - **Component**: src/testing_analyzer.zig
@@ -38,6 +31,13 @@
   - **Details**: Fixed-size buffers used for category string building could overflow
   - **Notes**: Could overflow with many/long category names
 
+- **#LC028**: Add allocator pattern validation
+  - **Component**: src/memory_analyzer.zig
+  - **Status**: Ready
+  - **Dependencies**: None
+  - **Details**: No validation of allocator patterns in configuration
+  - **Notes**: Empty or duplicate patterns could cause issues
+
 ## 🟢 All Dependencies Completed - Ready to Start
 
 - **#LC011**: Optimize scope tracker
@@ -59,6 +59,20 @@
   - **Dependencies**: #LC008 ✅ (Completed 2025-07-26)
   - **Details**: Format analysis results for different outputs
   - **Notes**: AnalysisOptions fields unused (src/types.zig:147-154)
+
+- **#LC029**: Implement regex support for allocator patterns
+  - **Component**: src/memory_analyzer.zig, src/types.zig
+  - **Status**: Ready
+  - **Dependencies**: #LC024 ✅ (Completed 2025-07-27)
+  - **Details**: AllocatorPattern.is_regex field exists but is not implemented
+  - **Notes**: Would enable precise pattern matching like "^my_.*_allocator$"
+
+- **#LC030**: Add option to disable default allocator patterns
+  - **Component**: src/memory_analyzer.zig, src/types.zig
+  - **Status**: Ready
+  - **Dependencies**: #LC024 ✅ (Completed 2025-07-27)
+  - **Details**: No way to use only custom patterns without defaults
+  - **Notes**: Users might want complete control over pattern matching
 
 ## 🔄 Next Wave (1 Dependency Away)
 
@@ -102,11 +116,11 @@ This path unlocks the most work and enables parallel development.
 
 ## 🎯 Quick Reference
 
-- **Start Now**: #LC011, #LC012, #LC013, #LC014, #LC015, #LC024, #LC025, #LC026, #LC027 (9 issues ready)
-- **Total Issues**: 27
+- **Start Now**: #LC011, #LC012, #LC013, #LC014, #LC015, #LC025, #LC026, #LC027, #LC028, #LC029, #LC030 (11 issues ready)
+- **Total Issues**: 30
 - **Critical Issues**: 6
-- **Estimated Time**: 11-16 hours total
+- **Estimated Time**: 12-17 hours total
 
 ---
 
-*This file tracks library conversion issues from ISSUES.md. Updated: 2025-07-27 (LC023 completed - documented memory management for helper functions)*
+*This file tracks library conversion issues from ISSUES.md. Updated: 2025-07-27 (LC024 completed; added LC028-LC030 for allocator pattern enhancements)*

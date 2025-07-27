@@ -28,10 +28,23 @@ const types = @import("types.zig");
 // Using unified types from types.zig
 const Issue = types.Issue;
 const AnalysisError = types.AnalysisError;
+const AllocatorPattern = types.AllocatorPattern;
 
 // Note: Component type detection has been simplified for library usage.
 // Users should configure allowed_allocators based on their project's needs
 // rather than relying on hardcoded component patterns.
+
+// Default allocator patterns for type detection
+// These match the original hardcoded behavior
+const default_allocator_patterns = [_]AllocatorPattern{
+    .{ .name = "std.heap.page_allocator", .pattern = "std.heap.page_allocator" },
+    .{ .name = "std.testing.allocator", .pattern = "std.testing.allocator" },
+    .{ .name = "std.testing.allocator", .pattern = "testing.allocator" },
+    .{ .name = "GeneralPurposeAllocator", .pattern = "gpa" },
+    .{ .name = "ArenaAllocator", .pattern = "arena" },
+    .{ .name = "FixedBufferAllocator", .pattern = "fixed_buffer" },
+    .{ .name = "std.heap.c_allocator", .pattern = "c_allocator" },
+};
 
 pub const AllocationPattern = struct {
     line: u32,
@@ -655,28 +668,27 @@ pub const MemoryAnalyzer = struct {
     }
     
     fn extractAllocatorType(self: *MemoryAnalyzer, allocator_var: []const u8) ![]const u8 {
-        // Handle common allocator patterns
-        if (std.mem.eql(u8, allocator_var, "allocator")) {
-            // Generic allocator parameter - type is unknown
-            return try self.allocator.dupe(u8, "parameter_allocator");
-        } else if (std.mem.indexOf(u8, allocator_var, "std.heap.page_allocator")) |_| {
-            return try self.allocator.dupe(u8, "std.heap.page_allocator");
-        } else if (std.mem.indexOf(u8, allocator_var, "std.testing.allocator")) |_| {
-            return try self.allocator.dupe(u8, "std.testing.allocator");
-        } else if (std.mem.indexOf(u8, allocator_var, "testing.allocator")) |_| {
-            return try self.allocator.dupe(u8, "std.testing.allocator");
-        } else if (std.mem.indexOf(u8, allocator_var, "gpa")) |_| {
-            return try self.allocator.dupe(u8, "GeneralPurposeAllocator");
-        } else if (std.mem.indexOf(u8, allocator_var, "arena")) |_| {
-            return try self.allocator.dupe(u8, "ArenaAllocator");
-        } else if (std.mem.indexOf(u8, allocator_var, "fixed_buffer")) |_| {
-            return try self.allocator.dupe(u8, "FixedBufferAllocator");
-        } else if (std.mem.indexOf(u8, allocator_var, "c_allocator")) |_| {
-            return try self.allocator.dupe(u8, "std.heap.c_allocator");
-        } else {
-            // For other cases, try to extract a meaningful type name
-            return try self.allocator.dupe(u8, allocator_var);
+        // First check custom patterns from configuration
+        for (self.config.allocator_patterns) |pattern| {
+            if (std.mem.indexOf(u8, allocator_var, pattern.pattern)) |_| {
+                return try self.allocator.dupe(u8, pattern.name);
+            }
         }
+        
+        // Special case for exact match "allocator" (parameter)
+        if (std.mem.eql(u8, allocator_var, "allocator")) {
+            return try self.allocator.dupe(u8, "parameter_allocator");
+        }
+        
+        // Then check default patterns
+        for (default_allocator_patterns) |pattern| {
+            if (std.mem.indexOf(u8, allocator_var, pattern.pattern)) |_| {
+                return try self.allocator.dupe(u8, pattern.name);
+            }
+        }
+        
+        // For other cases, return the allocator variable name as-is
+        return try self.allocator.dupe(u8, allocator_var);
     }
     
     /// Formats the list of allowed allocators into a comma-separated string.

@@ -12,23 +12,6 @@
 
 *Issues found during implementation that need to be addressed*
 
-- [ ] #LC024: Improve allocator type detection
-  - **Component**: src/memory_analyzer.zig
-  - **Priority**: Low
-  - **Created**: 2025-07-26
-  - **Dependencies**: None
-  - **Details**: Current allocator type detection is limited to known patterns
-  - **Requirements**:
-    - Support custom allocator detection
-    - Allow users to register custom allocator patterns
-    - Better handling of wrapper allocators
-  - **Notes**:
-    - extractAllocatorType() at src/memory_analyzer.zig:648-670 uses simple pattern matching
-    - Called from validateAllocatorChoice() at src/memory_analyzer.zig:457
-    - Hardcoded patterns: "GeneralPurposeAllocator", "ArenaAllocator", "FixedBufferAllocator", etc.
-    - Custom allocators with non-standard names won't be detected
-    - Consider adding allocator_patterns field to MemoryConfig
-
 - [ ] #LC025: Fix memory lifetime issues in TestPattern
   - **Component**: src/testing_analyzer.zig
   - **Priority**: Medium
@@ -78,6 +61,57 @@
     - Category list building uses 512-byte buffer at src/testing_analyzer.zig:429-441
     - Could overflow with many categories or long category names
     - Consider using ArrayList or growable buffer instead
+
+- [ ] #LC028: Add allocator pattern validation
+  - **Component**: src/memory_analyzer.zig
+  - **Priority**: Low
+  - **Created**: 2025-07-27
+  - **Dependencies**: None
+  - **Details**: No validation of allocator patterns in configuration
+  - **Requirements**:
+    - Validate pattern names are not empty
+    - Check for duplicate pattern names
+    - Warn about overly generic patterns (e.g., single characters)
+    - Consider pattern conflict detection
+  - **Notes**:
+    - extractAllocatorType() at src/memory_analyzer.zig:670-692 uses patterns without validation
+    - Empty patterns could cause all allocators to match
+    - Duplicate names could cause confusion about which pattern matched
+    - Discovered during LC024 implementation
+
+- [ ] #LC029: Implement regex support for allocator patterns
+  - **Component**: src/memory_analyzer.zig, src/types.zig
+  - **Priority**: Low
+  - **Created**: 2025-07-27
+  - **Dependencies**: #LC024
+  - **Details**: AllocatorPattern.is_regex field exists but is not implemented
+  - **Requirements**:
+    - Implement regex matching when is_regex is true
+    - Add regex compilation and caching
+    - Handle regex errors gracefully
+    - Add tests for regex patterns
+  - **Notes**:
+    - AllocatorPattern struct at src/types.zig:119-129 has is_regex field
+    - extractAllocatorType() at src/memory_analyzer.zig:670-692 only does substring matching
+    - Would allow more precise pattern matching (e.g., "^my_.*_allocator$")
+    - Discovered during LC024 implementation
+
+- [ ] #LC030: Add option to disable default allocator patterns
+  - **Component**: src/memory_analyzer.zig, src/types.zig
+  - **Priority**: Low
+  - **Created**: 2025-07-27
+  - **Dependencies**: #LC024
+  - **Details**: No way to use only custom patterns without default patterns
+  - **Requirements**:
+    - Add use_default_patterns boolean to MemoryConfig
+    - Skip default pattern matching when disabled
+    - Document the behavior clearly
+    - Add tests for pattern exclusivity
+  - **Notes**:
+    - default_allocator_patterns at src/memory_analyzer.zig:39-47
+    - extractAllocatorType() always checks defaults at src/memory_analyzer.zig:684-688
+    - Users might want complete control over pattern matching
+    - Discovered during LC024 implementation
 
 ## 📋 Backlog
 
@@ -242,6 +276,22 @@
 ## ✅ Completed
 
 *Finished issues for reference*
+
+- [x] #LC024: Improve allocator type detection
+  - **Component**: src/memory_analyzer.zig
+  - **Priority**: Low
+  - **Created**: 2025-07-26
+  - **Completed**: 2025-07-27
+  - **Dependencies**: None
+  - **Details**: Current allocator type detection was limited to known patterns
+  - **Resolution**:
+    - Added AllocatorPattern struct to types.zig for custom pattern definitions
+    - Updated MemoryConfig to include allocator_patterns field
+    - Refactored extractAllocatorType() to use pattern-based matching
+    - Custom patterns are checked first, then default patterns
+    - Added comprehensive tests for custom allocator pattern detection
+    - Updated CLAUDE.md with configuration examples
+    - All tests pass successfully
 
 - [x] #LC023: Document memory management for helper functions
   - **Component**: src/memory_analyzer.zig
@@ -452,5 +502,5 @@
 
 ---
 
-*Last Updated: 2025-07-27 (LC023 completed - documented memory management for helper functions)*
+*Last Updated: 2025-07-27 (LC024 completed; added LC028-LC030 for allocator pattern enhancements)*
 *Focus: Library Conversion Project*

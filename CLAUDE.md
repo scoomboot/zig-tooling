@@ -58,6 +58,12 @@ const config = zig_tooling.Config{
         .check_defer = true,
         .check_arena_usage = true,
         .check_allocator_usage = true,
+        .allowed_allocators = &.{ "MyCustomAllocator", "PoolAllocator" },
+        // Define custom allocator patterns for type detection
+        .allocator_patterns = &.{
+            .{ .name = "MyCustomAllocator", .pattern = "my_custom" },
+            .{ .name = "PoolAllocator", .pattern = "pool" },
+        },
     },
     .testing = .{
         .enforce_categories = true,
@@ -80,6 +86,33 @@ if (result.hasErrors()) {
 ```
 
 ## Common Usage Patterns
+
+### Custom Allocator Detection
+```zig
+// Define custom allocator patterns for your project
+const config = zig_tooling.Config{
+    .memory = .{
+        // Restrict to only allow specific allocators
+        .allowed_allocators = &.{ "MyPoolAllocator", "MyArenaAllocator" },
+        
+        // Define patterns to detect your custom allocators
+        .allocator_patterns = &.{
+            // Pattern matches substring in allocator variable name
+            .{ .name = "MyPoolAllocator", .pattern = "pool_alloc" },
+            .{ .name = "MyArenaAllocator", .pattern = "my_arena" },
+            // Multiple patterns can map to the same allocator type
+            .{ .name = "MyArenaAllocator", .pattern = "custom_arena" },
+        },
+    },
+};
+
+// Example code that will be properly detected:
+// var pool_alloc = MyPoolAllocator.init();
+// const allocator = pool_alloc.allocator(); // Detected as "MyPoolAllocator"
+// 
+// var my_arena = CustomArenaAllocator.init();
+// const arena_alloc = my_arena.allocator(); // Detected as "MyArenaAllocator"
+```
 
 ### Build System Integration
 ```zig

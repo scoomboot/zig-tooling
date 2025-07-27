@@ -171,6 +171,107 @@ test "unit: API: analyzeMemory allowed_allocators empty list allows all" {
     try testing.expect(!found_incorrect_allocator);
 }
 
+test "unit: API: analyzeMemory with custom allocator patterns" {
+    const allocator = testing.allocator;
+    
+    const source =
+        \\pub fn main() !void {
+        \\    // Custom allocator types
+        \\    var my_custom_alloc = MyCustomAllocator.init();
+        \\    const custom_allocator = my_custom_alloc.allocator();
+        \\    const data1 = try custom_allocator.alloc(u8, 100);
+        \\    defer custom_allocator.free(data1);
+        \\    
+        \\    // Pool allocator
+        \\    var pool_alloc = PoolAllocator.init();
+        \\    const pool = pool_alloc.allocator();
+        \\    const data2 = try pool.alloc(u8, 200);
+        \\    defer pool.free(data2);
+        \\    
+        \\    // This should not be allowed
+        \\    const data3 = try std.heap.page_allocator.alloc(u8, 50);
+        \\    defer std.heap.page_allocator.free(data3);
+        \\}
+    ;
+    
+    const config = zig_tooling.Config{
+        .memory = .{
+            .allowed_allocators = &.{ "MyCustomAllocator", "PoolAllocator" },
+            .allocator_patterns = &.{
+                .{ .name = "MyCustomAllocator", .pattern = "my_custom_alloc" },
+                .{ .name = "PoolAllocator", .pattern = "pool_alloc" },
+                .{ .name = "PoolAllocator", .pattern = "pool" },
+            },
+        },
+    };
+    
+    const result = try zig_tooling.analyzeMemory(allocator, source, "test.zig", config);
+    defer allocator.free(result.issues);
+    defer for (result.issues) |issue| {
+        allocator.free(issue.file_path);
+        allocator.free(issue.message);
+        if (issue.suggestion) |s| allocator.free(s);
+    };
+    
+    // Should find one issue about page_allocator not being allowed
+    try testing.expect(result.issues_found > 0);
+    
+    var found_page_allocator_issue = false;
+    var found_custom_allocator_issue = false;
+    
+    for (result.issues) |issue| {
+        if (issue.issue_type == .incorrect_allocator) {
+            // Should complain about page_allocator
+            if (std.mem.indexOf(u8, issue.message, "page_allocator") != null) {
+                found_page_allocator_issue = true;
+            }
+            // Should NOT complain about custom allocators
+            if (std.mem.indexOf(u8, issue.message, "MyCustomAllocator") != null or
+                std.mem.indexOf(u8, issue.message, "PoolAllocator") != null) {
+                found_custom_allocator_issue = true;
+            }
+        }
+    }
+    
+    try testing.expect(found_page_allocator_issue);
+    try testing.expect(!found_custom_allocator_issue);
+}
+
+test "unit: API: custom allocator patterns override defaults" {
+    const allocator = testing.allocator;
+    
+    const source =
+        \\pub fn main() !void {
+        \\    // This contains "arena" but should be detected as CustomArena
+        \\    var my_arena_allocator = CustomArenaAllocator.init();
+        \\    const arena = my_arena_allocator.allocator();
+        \\    const data = try arena.alloc(u8, 100);
+        \\    defer arena.free(data);
+        \\}
+    ;
+    
+    const config = zig_tooling.Config{
+        .memory = .{
+            .allowed_allocators = &.{ "CustomArena" },
+            .allocator_patterns = &.{
+                // This pattern should override the default "arena" pattern
+                .{ .name = "CustomArena", .pattern = "my_arena_allocator" },
+            },
+        },
+    };
+    
+    const result = try zig_tooling.analyzeMemory(allocator, source, "test.zig", config);
+    defer allocator.free(result.issues);
+    defer for (result.issues) |issue| {
+        allocator.free(issue.file_path);
+        allocator.free(issue.message);
+        if (issue.suggestion) |s| allocator.free(s);
+    };
+    
+    // Should not find any issues since CustomArena is allowed
+    try testing.expect(result.issues_found == 0);
+}
+
 test "unit: API: analyzeTests detects missing category" {
     const allocator = testing.allocator;
     

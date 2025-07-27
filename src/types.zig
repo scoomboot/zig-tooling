@@ -116,6 +116,18 @@ pub const Config = struct {
     options: AnalysisOptions = .{},
 };
 
+/// Pattern definition for custom allocator detection
+pub const AllocatorPattern = struct {
+    /// Display name for the allocator type (e.g., "MyCustomAllocator")
+    name: []const u8,
+    
+    /// Pattern to match in the allocator variable name (substring match)
+    pattern: []const u8,
+    
+    /// Future extension: whether to use regex matching (not implemented yet)
+    is_regex: bool = false,
+};
+
 /// Memory analysis specific configuration
 pub const MemoryConfig = struct {
     check_defer: bool = true,
@@ -124,6 +136,10 @@ pub const MemoryConfig = struct {
     check_ownership_transfer: bool = true,
     track_test_allocations: bool = true,
     allowed_allocators: []const []const u8 = &.{},
+    
+    /// Custom allocator patterns for type detection
+    /// These patterns are checked before the default built-in patterns
+    allocator_patterns: []const AllocatorPattern = &.{},
 };
 
 /// Testing analysis specific configuration  
