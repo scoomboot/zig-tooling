@@ -59,9 +59,6 @@ test "integration: concurrent analysis operations" {
     const num_threads = 8;
     const analyses_per_thread = 20;
     
-    var threads: [num_threads]std.Thread = undefined;
-    var results: [num_threads]AnalysisResults = undefined;
-    
     const AnalysisResults = struct {
         success: bool = false,
         total_issues: u32 = 0,
@@ -69,6 +66,9 @@ test "integration: concurrent analysis operations" {
         test_issues: u32 = 0,
         error_occurred: bool = false,
     };
+    
+    var threads: [num_threads]std.Thread = undefined;
+    var results: [num_threads]AnalysisResults = undefined;
     
     const ThreadContext = struct {
         thread_id: u32,
@@ -79,7 +79,7 @@ test "integration: concurrent analysis operations" {
     };
     
     var contexts: [num_threads]ThreadContext = undefined;
-    for (contexts, 0..) |*context, idx| {
+    for (&contexts, 0..) |*context, idx| {
         context.* = ThreadContext{
             .thread_id = @intCast(idx),
             .allocator = allocator,
@@ -161,7 +161,7 @@ test "integration: concurrent analysis operations" {
     var benchmark = PerformanceBenchmark.start(allocator, "Concurrent analysis stress test");
     
     // Start all threads
-    for (threads, 0..) |*thread, idx| {
+    for (&threads, 0..) |*thread, idx| {
         thread.* = try std.Thread.spawn(.{}, analysisWorker, .{&contexts[idx]});
     }
     
@@ -261,7 +261,7 @@ test "integration: concurrent configuration usage" {
     };
     
     var contexts: [num_threads]ConfigTestContext = undefined;
-    for (contexts, 0..) |*context, idx| {
+    for (&contexts, 0..) |*context, idx| {
         context.* = ConfigTestContext{
             .allocator = allocator,
             .source = source,
@@ -311,7 +311,7 @@ test "integration: concurrent configuration usage" {
     var benchmark = PerformanceBenchmark.start(allocator, "Concurrent configuration test");
     
     // Start all threads with different configurations
-    for (threads, 0..) |*thread, idx| {
+    for (&threads, 0..) |*thread, idx| {
         thread.* = try std.Thread.spawn(.{}, configWorker, .{&contexts[idx]});
     }
     
@@ -399,8 +399,6 @@ test "integration: concurrent patterns library usage" {
     };
     
     const num_threads = num_projects;
-    var threads: [num_threads]std.Thread = undefined;
-    var results: [num_threads]ProjectAnalysisResult = undefined;
     
     const ProjectAnalysisResult = struct {
         success: bool = false,
@@ -408,6 +406,9 @@ test "integration: concurrent patterns library usage" {
         issues_found: u32 = 0,
         analysis_time: i64 = 0,
     };
+    
+    var threads: [num_threads]std.Thread = undefined;
+    var results: [num_threads]ProjectAnalysisResult = undefined;
     
     const ProjectTestContext = struct {
         allocator: std.mem.Allocator,
@@ -417,7 +418,7 @@ test "integration: concurrent patterns library usage" {
     };
     
     var contexts: [num_threads]ProjectTestContext = undefined;
-    for (contexts, 0..) |*context, idx| {
+    for (&contexts, 0..) |*context, idx| {
         context.* = ProjectTestContext{
             .allocator = allocator,
             .project_path = project_paths[idx],
@@ -467,7 +468,7 @@ test "integration: concurrent patterns library usage" {
     var benchmark = PerformanceBenchmark.start(allocator, "Concurrent patterns library test");
     
     // Start all project analysis threads
-    for (threads, 0..) |*thread, idx| {
+    for (&threads, 0..) |*thread, idx| {
         thread.* = try std.Thread.spawn(.{}, projectWorker, .{&contexts[idx]});
     }
     
@@ -536,7 +537,7 @@ test "integration: race condition detection in shared state" {
     };
     
     var contexts: [num_threads]RaceTestContext = undefined;
-    for (contexts, 0..) |*context, idx| {
+    for (&contexts, 0..) |*context, idx| {
         context.* = RaceTestContext{
             .thread_id = @intCast(idx),
             .allocator = allocator,
@@ -630,7 +631,7 @@ test "integration: race condition detection in shared state" {
     var benchmark = PerformanceBenchmark.start(allocator, "Race condition detection test");
     
     // Start all threads simultaneously
-    for (threads, 0..) |*thread, idx| {
+    for (&threads, 0..) |*thread, idx| {
         thread.* = try std.Thread.spawn(.{}, raceWorker, .{&contexts[idx]});
     }
     

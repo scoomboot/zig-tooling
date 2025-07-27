@@ -138,7 +138,7 @@ test "integration: malformed source code handling" {
             // Some malformed code might trigger parse errors, which is acceptable
             std.debug.print("  Memory analysis returned error: {}\n", .{err});
             try testing.expect(err == zig_tooling.AnalysisError.ParseError or 
-                             err == zig_tooling.AnalysisError.InvalidInput);
+                             err == zig_tooling.AnalysisError.InvalidConfiguration);
         }
         
         // Test analysis should also handle malformed code
@@ -161,7 +161,7 @@ test "integration: malformed source code handling" {
         } else |err| {
             std.debug.print("  Test analysis returned error: {}\n", .{err});
             try testing.expect(err == zig_tooling.AnalysisError.ParseError or 
-                             err == zig_tooling.AnalysisError.InvalidInput);
+                             err == zig_tooling.AnalysisError.InvalidConfiguration);
         }
         
         std.debug.print("  ✓ {s} handled gracefully\n", .{test_case.name});
@@ -392,15 +392,15 @@ test "integration: concurrent error handling" {
     const num_threads = 8;
     const iterations_per_thread = 25;
     
-    var threads: [num_threads]std.Thread = undefined;
-    var thread_results: [num_threads]ErrorTestResult = undefined;
-    
     const ErrorTestResult = struct {
         completed: bool = false,
         successful_analyses: u32 = 0,
         errors_encountered: u32 = 0,
         unexpected_crashes: u32 = 0,
     };
+    
+    var threads: [num_threads]std.Thread = undefined;
+    var thread_results: [num_threads]ErrorTestResult = undefined;
     
     const ErrorTestContext = struct {
         thread_id: u32,
@@ -411,7 +411,7 @@ test "integration: concurrent error handling" {
     };
     
     var contexts: [num_threads]ErrorTestContext = undefined;
-    for (contexts, 0..) |*context, idx| {
+    for (&contexts, 0..) |*context, idx| {
         context.* = ErrorTestContext{
             .thread_id = @intCast(idx),
             .allocator = allocator,
@@ -425,7 +425,7 @@ test "integration: concurrent error handling" {
         fn run(context: *ErrorTestContext) void {
             var successful: u32 = 0;
             var errors: u32 = 0;
-            var crashes: u32 = 0;
+            const crashes: u32 = 0;
             
             var i: u32 = 0;
             while (i < context.iterations) : (i += 1) {
@@ -483,7 +483,7 @@ test "integration: concurrent error handling" {
     var benchmark = PerformanceBenchmark.start(allocator, "Concurrent error handling");
     
     // Start all threads
-    for (threads, 0..) |*thread, idx| {
+    for (&threads, 0..) |*thread, idx| {
         thread.* = try std.Thread.spawn(.{}, errorWorker, .{&contexts[idx]});
     }
     

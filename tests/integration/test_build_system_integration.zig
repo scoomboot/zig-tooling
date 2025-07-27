@@ -108,8 +108,17 @@ test "integration: build_integration output formatters" {
         },
     };
     
-    const result = try zig_tooling.patterns.checkProject(allocator, project_path, config, null);
-    defer zig_tooling.patterns.freeProjectResult(allocator, result);
+    // Analyze a single file to get AnalysisResult for formatter testing
+    const main_file_path = try std.fs.path.join(allocator, &.{ project_path, "src/main.zig" });
+    defer allocator.free(main_file_path);
+    
+    const result = try zig_tooling.analyzeFile(allocator, main_file_path, config);
+    defer allocator.free(result.issues);
+    defer for (result.issues) |issue| {
+        allocator.free(issue.file_path);
+        allocator.free(issue.message);
+        if (issue.suggestion) |s| allocator.free(s);
+    };
     
     try testing.expect(result.issues_found > 0);
     std.debug.print("Found {} issues for formatter testing\n", .{result.issues_found});
@@ -218,8 +227,6 @@ test "integration: build_integration pre-commit hook generation" {
 }
 
 test "integration: build_integration step creation" {
-    const allocator = testing.allocator;
-    
     std.debug.print("\n--- Testing Build Step Creation ---\n", .{});
     
     // Note: We can't actually test build step creation without a real Build instance,

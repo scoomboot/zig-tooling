@@ -192,10 +192,6 @@ examples/
 └── ci_integration.zig
 ```
 
-#### 5.3 Migration Guide [#LC018](../../ISSUES.md#lc018-migration-guide)
-- Document changes from CLI to library
-- Provide replacement patterns
-- Show before/after examples
 
 ### Phase 6: Testing and Validation (1-2 hours)
 

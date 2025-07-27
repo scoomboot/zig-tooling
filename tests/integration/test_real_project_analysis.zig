@@ -92,12 +92,12 @@ test "integration: analyze complex multi-file project" {
     
     for (result.issues) |issue| {
         if (issue.issue_type == .missing_defer or 
-            issue.issue_type == .allocator_usage or
-            issue.issue_type == .arena_usage) {
+            issue.issue_type == .allocator_mismatch or
+            issue.issue_type == .arena_in_library) {
             memory_issues = true;
         }
         if (issue.issue_type == .missing_test_category or 
-            issue.issue_type == .test_naming) {
+            issue.issue_type == .invalid_test_naming) {
             test_issues = true;
         }
     }
@@ -155,14 +155,14 @@ test "integration: analyze custom allocators project" {
     
     // Validate that custom allocator patterns were recognized
     // (fewer allocator_usage issues should be found due to allowed patterns)
-    var allocator_usage_issues: u32 = 0;
+    var allocator_mismatch_issues: u32 = 0;
     for (result.issues) |issue| {
-        if (issue.issue_type == .allocator_usage) {
-            allocator_usage_issues += 1;
+        if (issue.issue_type == .allocator_mismatch) {
+            allocator_mismatch_issues += 1;
         }
     }
     
-    std.debug.print("Found {} allocator usage issues (should be low due to allowed patterns)\n", .{allocator_usage_issues});
+    std.debug.print("Found {} allocator mismatch issues (should be low due to allowed patterns)\n", .{allocator_mismatch_issues});
     std.debug.print("✓ Custom allocator patterns correctly processed\n", .{});
 }
 
@@ -229,13 +229,20 @@ test "integration: end-to-end analysis workflow" {
     
     // Step 1: Analyze memory issues
     std.debug.print("Step 1: Memory analysis...\n", .{});
-    const memory_result = try zig_tooling.patterns.checkProject(
+    const main_file_path = try std.fs.path.join(allocator, &.{ project_path, "src/main.zig" });
+    defer allocator.free(main_file_path);
+    
+    const memory_result = try zig_tooling.analyzeFile(
         allocator,
-        project_path,
+        main_file_path,
         zig_tooling.Config{ .memory = .{ .check_defer = true } },
-        null,
     );
-    defer zig_tooling.patterns.freeProjectResult(allocator, memory_result);
+    defer allocator.free(memory_result.issues);
+    defer for (memory_result.issues) |issue| {
+        allocator.free(issue.file_path);
+        allocator.free(issue.message);
+        if (issue.suggestion) |s| allocator.free(s);
+    };
     
     try testing.expect(memory_result.issues_found > 0);
     std.debug.print("Found {} memory issues\n", .{memory_result.issues_found});
@@ -250,13 +257,20 @@ test "integration: end-to-end analysis workflow" {
         },
     };
     
-    const test_result = try zig_tooling.patterns.checkProject(
+    const test_file_path = try std.fs.path.join(allocator, &.{ project_path, "tests/test_main.zig" });
+    defer allocator.free(test_file_path);
+    
+    const test_result = try zig_tooling.analyzeFile(
         allocator,
-        project_path,
+        test_file_path,
         test_config,
-        null,
     );
-    defer zig_tooling.patterns.freeProjectResult(allocator, test_result);
+    defer allocator.free(test_result.issues);
+    defer for (test_result.issues) |issue| {
+        allocator.free(issue.file_path);
+        allocator.free(issue.message);
+        if (issue.suggestion) |s| allocator.free(s);
+    };
     
     try testing.expect(test_result.issues_found > 0);
     std.debug.print("Found {} test compliance issues\n", .{test_result.issues_found});

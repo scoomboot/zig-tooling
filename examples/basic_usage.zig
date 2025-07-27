@@ -35,7 +35,7 @@ fn analyzeFile(allocator: std.mem.Allocator) !void {
     // Analyze the sample memory issues file
     const result = try zig_tooling.analyzeFile(
         allocator,
-        "examples/sample_project/memory_issues.zig",
+        "tests/integration/sample_projects/simple_memory_issues/src/main.zig",
         null, // Use default configuration
     );
     defer allocator.free(result.issues);
@@ -126,7 +126,7 @@ fn usePatterns(allocator: std.mem.Allocator) !void {
     // Quick file check with optimized defaults
     const result = try zig_tooling.patterns.checkFile(
         allocator,
-        "examples/sample_project/test_examples.zig",
+        "tests/integration/sample_projects/complex_multi_file/tests/test_utils.zig",
         null,
     );
     defer zig_tooling.patterns.freeResult(allocator, result);
@@ -160,13 +160,13 @@ fn customConfiguration(allocator: std.mem.Allocator) !void {
             .check_defer = true,
             .check_arena_usage = false,
             .check_allocator_usage = false,
-            
+
             // Only allow specific allocators
-            .allowed_allocators = &.{ 
+            .allowed_allocators = &.{
                 "std.heap.GeneralPurposeAllocator",
                 "std.testing.allocator",
             },
-            
+
             // Custom allocator patterns
             .allocator_patterns = &.{
                 .{ .name = "MyCustomAllocator", .pattern = "custom_alloc" },
@@ -176,7 +176,7 @@ fn customConfiguration(allocator: std.mem.Allocator) !void {
             // Enforce test categories
             .enforce_categories = true,
             .enforce_naming = true,
-            
+
             // Define allowed test categories
             .allowed_categories = &.{ "unit", "integration", "e2e" },
         },

@@ -45,7 +45,7 @@ pub const TestUtils = struct {
     
     /// Create a temporary file with given content for testing
     pub fn createTempFile(self: *TestUtils, file_name: []const u8, content: []const u8) ![]const u8 {
-        try self.temp_dir.writeFile(file_name, content);
+        try self.temp_dir.writeFile(.{ .sub_path = file_name, .data = content });
         return try std.fs.path.join(self.allocator, &.{ self.temp_path, file_name });
     }
     
@@ -60,7 +60,7 @@ pub const TestUtils = struct {
                 const dir_path = file_spec.path[0..sep_idx];
                 try project_dir.makePath(dir_path);
             }
-            try project_dir.writeFile(file_spec.path, file_spec.content);
+            try project_dir.writeFile(.{ .sub_path = file_spec.path, .data = file_spec.content });
         }
         
         return project_path;
@@ -68,6 +68,7 @@ pub const TestUtils = struct {
     
     /// Clean up all temporary files and directories
     pub fn cleanup(self: *TestUtils) void {
+        _ = self; // Parameter kept for interface consistency
         // Temp directory cleanup is handled automatically by std.testing.tmpDir
     }
 };

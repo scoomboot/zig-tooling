@@ -330,7 +330,7 @@ test "integration: concurrent memory analysis safety" {
     };
     
     var contexts: [num_threads]ThreadContext = undefined;
-    for (contexts, 0..) |*context, idx| {
+    for (&contexts, 0..) |*context, idx| {
         context.* = ThreadContext{
             .allocator = allocator,
             .source = source,
@@ -368,7 +368,7 @@ test "integration: concurrent memory analysis safety" {
     var benchmark = PerformanceBenchmark.start(allocator, "Concurrent analysis");
     
     // Start all threads
-    for (threads, 0..) |*thread, idx| {
+    for (&threads, 0..) |*thread, idx| {
         thread.* = try std.Thread.spawn(.{}, analysisThread, .{&contexts[idx]});
     }
     
@@ -456,10 +456,19 @@ test "integration: formatter performance and memory usage" {
         },
     };
     
-    const result = try zig_tooling.patterns.checkProject(allocator, project_path, config, null);
-    defer zig_tooling.patterns.freeProjectResult(allocator, result);
+    // Analyze a single file to get AnalysisResult for formatter testing
+    const main_file_path = try std.fs.path.join(allocator, &.{ project_path, "src/main.zig" });
+    defer allocator.free(main_file_path);
     
-    try testing.expect(result.issues_found >= 6); // 3 memory + 3 test issues
+    const result = try zig_tooling.analyzeFile(allocator, main_file_path, config);
+    defer allocator.free(result.issues);
+    defer for (result.issues) |issue| {
+        allocator.free(issue.file_path);
+        allocator.free(issue.message);
+        if (issue.suggestion) |s| allocator.free(s);
+    };
+    
+    try testing.expect(result.issues_found >= 2); // Should have some memory or test issues
     std.debug.print("Generated {} issues for formatter testing\n", .{result.issues_found});
     
     // Test text formatter performance

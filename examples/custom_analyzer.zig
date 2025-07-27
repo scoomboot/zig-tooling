@@ -62,12 +62,12 @@ const CustomAnalyzer = struct {
     /// Check for naming convention violations
     fn checkNamingConventions(self: *Self) !void {
         const tracker = self.scope_tracker.?;
-        
+
         // Check all functions
         const functions = tracker.findScopesByType(.function);
         for (functions) |func| {
             const info = tracker.getScopeInfo(func);
-            
+
             // Check for snake_case in function names (should be camelCase)
             if (std.mem.indexOf(u8, info.name, "_")) |_| {
                 // Exception for test functions
@@ -91,7 +91,7 @@ const CustomAnalyzer = struct {
                     });
                 }
             }
-            
+
             // Check for overly short function names
             if (info.name.len < 3 and !std.mem.eql(u8, info.name, "eq")) {
                 try self.addIssue(.{
@@ -114,7 +114,7 @@ const CustomAnalyzer = struct {
         const structs = tracker.findScopesByType(.struct_type);
         for (structs) |struct_scope| {
             const info = tracker.getScopeInfo(struct_scope);
-            
+
             if (info.name.len > 0 and !std.ascii.isUpper(info.name[0])) {
                 try self.addIssue(.{
                     .file_path = try self.allocator.dupe(u8, tracker.file_name),
@@ -141,7 +141,7 @@ const CustomAnalyzer = struct {
         for (functions) |func| {
             const info = tracker.getScopeInfo(func);
             const stats = tracker.getStats();
-            
+
             // Get nested depth within function
             var max_depth: u32 = 0;
             var current = func;
@@ -205,13 +205,13 @@ const CustomAnalyzer = struct {
 
         while (lines.next()) |line| : (line_num += 1) {
             const trimmed = std.mem.trim(u8, line, " \t");
-            
+
             // Skip empty lines and comments
             if (trimmed.len == 0 or std.mem.startsWith(u8, trimmed, "//")) continue;
 
-            if (std.mem.startsWith(u8, trimmed, "const") and 
-                std.mem.indexOf(u8, trimmed, "@import")) |_| {
-                
+            if (std.mem.startsWith(u8, trimmed, "const") and
+                std.mem.indexOf(u8, trimmed, "@import")) |_|
+            {
                 if (found_non_import and last_import_line > 0) {
                     try self.addIssue(.{
                         .file_path = try self.allocator.dupe(u8, tracker.file_name),
@@ -224,8 +224,9 @@ const CustomAnalyzer = struct {
                     });
                 }
                 last_import_line = line_num;
-            } else if (!std.mem.startsWith(u8, trimmed, "pub") and 
-                      !std.mem.startsWith(u8, trimmed, "test")) {
+            } else if (!std.mem.startsWith(u8, trimmed, "pub") and
+                !std.mem.startsWith(u8, trimmed, "test"))
+            {
                 found_non_import = true;
             }
         }
@@ -238,7 +239,7 @@ const CustomAnalyzer = struct {
 
         for (functions) |func| {
             const info = tracker.getScopeInfo(func);
-            
+
             // Skip test functions
             if (std.mem.startsWith(u8, info.name, "test")) continue;
 
@@ -273,7 +274,8 @@ const CustomAnalyzer = struct {
 
                 // Check for resource allocation without errdefer
                 if (std.mem.indexOf(u8, func_source, "allocator.alloc") != null or
-                    std.mem.indexOf(u8, func_source, "allocator.create") != null) {
+                    std.mem.indexOf(u8, func_source, "allocator.create") != null)
+                {
                     if (errdefer_count == 0) {
                         try self.addIssue(.{
                             .file_path = try self.allocator.dupe(u8, tracker.file_name),
@@ -407,7 +409,7 @@ pub fn main() !void {
     defer allocator.free(output);
 
     std.debug.print("=== Combined Analysis Results ===\n{s}\n", .{output});
-    
+
     // Demonstrate scope tracker features
     std.debug.print("\n=== Scope Tracker Stats ===\n", .{});
     if (custom.scope_tracker) |tracker| {
