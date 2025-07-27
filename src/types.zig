@@ -275,6 +275,42 @@ pub const AllocatorPattern = struct {
     is_regex: bool = false,
 };
 
+/// Pattern definition for ownership transfer detection
+///
+/// Allows defining custom patterns to identify functions that transfer memory
+/// ownership to their callers. These patterns help reduce false positive
+/// "missing defer" warnings for valid ownership transfer scenarios.
+///
+/// ## Example
+/// ```zig
+/// const patterns = &[_]OwnershipPattern{
+///     .{ .function_pattern = "create", .return_type_pattern = null },
+///     .{ .function_pattern = null, .return_type_pattern = "![]u8" },
+///     .{ .function_pattern = "init", .return_type_pattern = "!*MyStruct" },
+/// };
+/// const config = Config{
+///     .memory = .{
+///         .ownership_patterns = patterns,
+///     },
+/// };
+/// ```
+pub const OwnershipPattern = struct {
+    /// Pattern to match in function names (substring match)
+    /// If null, only return_type_pattern is checked
+    function_pattern: ?[]const u8 = null,
+    
+    /// Pattern to match in return types (substring match) 
+    /// If null, only function_pattern is checked
+    /// Examples: "[]u8", "![]u8", "*MyStruct", "?*T"
+    return_type_pattern: ?[]const u8 = null,
+    
+    /// Description of this pattern for documentation/debugging
+    description: ?[]const u8 = null,
+    
+    /// Future extension: whether to use regex matching (not implemented yet)
+    is_regex: bool = false,
+};
+
 /// Configuration options for memory safety analysis
 ///
 /// Controls which memory safety checks are performed and how they behave.
@@ -320,6 +356,23 @@ pub const MemoryConfig = struct {
     /// Custom allocator patterns for type detection
     /// These patterns are checked before the default built-in patterns
     allocator_patterns: []const AllocatorPattern = &.{},
+    
+    /// Whether to use default built-in allocator patterns
+    /// Set to false to only use custom patterns defined in allocator_patterns
+    use_default_patterns: bool = true,
+    
+    /// List of default pattern names to disable
+    /// Useful for excluding specific built-in patterns that conflict with your project
+    /// Example: &.{ "std.testing.allocator" } to disable the testing allocator pattern
+    disabled_default_patterns: []const []const u8 = &.{},
+    
+    /// Custom ownership transfer patterns for detection
+    /// These patterns help identify functions that transfer allocated memory ownership
+    ownership_patterns: []const OwnershipPattern = &.{},
+    
+    /// Whether to use default built-in ownership patterns
+    /// Set to false to only use custom patterns defined in ownership_patterns
+    use_default_ownership_patterns: bool = true,
 };
 
 /// Configuration options for test compliance analysis
@@ -542,4 +595,8 @@ pub const AnalysisError = error{
     /// Allocator pattern is too generic (e.g., single character)
     /// Overly generic patterns may cause false positive matches
     PatternTooGeneric,
+    
+    /// Pattern conflict detected between custom and built-in patterns
+    /// Custom patterns should use unique names to avoid confusion
+    PatternConflict,
 };

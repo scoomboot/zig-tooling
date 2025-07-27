@@ -1822,3 +1822,360 @@ test "LC057: Function context parsing memory safety" {
     }
     try testing.expect(found_missing_defer);
 }
+
+test "unit: API: LC069: disable default patterns configuration" {
+    const allocator = testing.allocator;
+    
+    const source =
+        \\const std = @import("std");
+        \\test "test" {
+        \\    const allocator = std.testing.allocator;
+        \\    const data = try allocator.alloc(u8, 100);
+        \\}
+    ;
+    
+    // Test with default patterns disabled
+    const config = zig_tooling.Config{
+        .memory = .{
+            .use_default_patterns = false,
+            .allowed_allocators = &.{ "UnknownAllocator" },
+        },
+    };
+    
+    const result = try zig_tooling.analyzeMemory(allocator, source, "test.zig", config);
+    defer allocator.free(result.issues);
+    defer for (result.issues) |issue| {
+        allocator.free(issue.file_path);
+        allocator.free(issue.message);
+        if (issue.suggestion) |s| allocator.free(s);
+    };
+    
+    // Should treat std.testing.allocator as unknown since defaults are disabled
+    var found_allocator_issue = false;
+    for (result.issues) |issue| {
+        if (issue.issue_type == .incorrect_allocator) {
+            found_allocator_issue = true;
+            // Should mention the exact string as unknown
+            try testing.expect(std.mem.indexOf(u8, issue.message, "std.testing.allocator") != null);
+        }
+    }
+    try testing.expect(found_allocator_issue);
+}
+
+test "unit: API: LC069: selective default pattern disable" {
+    const allocator = testing.allocator;
+    
+    const source =
+        \\const std = @import("std");
+        \\test "test" {
+        \\    const allocator1 = std.testing.allocator;
+        \\    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+        \\    const allocator2 = gpa.allocator();
+        \\    
+        \\    const data1 = try allocator1.alloc(u8, 100);
+        \\    const data2 = try allocator2.alloc(u8, 100);
+        \\}
+    ;
+    
+    // Disable std.testing.allocator but keep GeneralPurposeAllocator
+    const config = zig_tooling.Config{
+        .memory = .{
+            .disabled_default_patterns = &.{ "std.testing.allocator" },
+            .allowed_allocators = &.{ "GeneralPurposeAllocator" },
+        },
+    };
+    
+    const result = try zig_tooling.analyzeMemory(allocator, source, "test.zig", config);
+    defer allocator.free(result.issues);
+    defer for (result.issues) |issue| {
+        allocator.free(issue.file_path);
+        allocator.free(issue.message);
+        if (issue.suggestion) |s| allocator.free(s);
+    };
+    
+    // Should have one incorrect allocator (std.testing.allocator disabled)
+    // and two missing defer warnings
+    var incorrect_allocator_count: u32 = 0;
+    var missing_defer_count: u32 = 0;
+    
+    for (result.issues) |issue| {
+        switch (issue.issue_type) {
+            .incorrect_allocator => incorrect_allocator_count += 1,
+            .missing_defer => missing_defer_count += 1,
+            else => {},
+        }
+    }
+    
+    try testing.expectEqual(@as(u32, 1), incorrect_allocator_count);
+    try testing.expectEqual(@as(u32, 2), missing_defer_count);
+}
+
+// Tests for LC068 - Ownership Transfer Detection
+
+test "LC068: ownership transfer - immediate return" {
+    const allocator = testing.allocator;
+    
+    // Function that immediately returns allocated memory
+    const source =
+        \\pub fn createBuffer(allocator: std.mem.Allocator) ![]u8 {
+        \\    return try allocator.alloc(u8, 100);
+        \\}
+    ;
+    
+    const result = try zig_tooling.analyzeMemory(allocator, source, "test.zig", null);
+    defer allocator.free(result.issues);
+    defer for (result.issues) |issue| {
+        allocator.free(issue.file_path);
+        allocator.free(issue.message);
+        if (issue.suggestion) |s| allocator.free(s);
+    };
+    
+    // Should not report missing defer for ownership transfer
+    for (result.issues) |issue| {
+        if (issue.issue_type == .missing_defer) {
+            std.debug.print("Unexpected missing defer issue: {s}\n", .{issue.message});
+        }
+        try testing.expect(issue.issue_type != .missing_defer);
+    }
+}
+
+test "LC068: ownership transfer - with errdefer" {
+    const allocator = testing.allocator;
+    
+    // Function that properly handles errors with errdefer
+    const source =
+        \\pub fn createWithErrdefer(allocator: std.mem.Allocator) ![]u8 {
+        \\    const buffer = try allocator.alloc(u8, 100);
+        \\    errdefer allocator.free(buffer);
+        \\    
+        \\    // Some operation that might fail
+        \\    try doSomething();
+        \\    
+        \\    return buffer;
+        \\}
+    ;
+    
+    const result = try zig_tooling.analyzeMemory(allocator, source, "test.zig", null);
+    defer allocator.free(result.issues);
+    defer for (result.issues) |issue| {
+        allocator.free(issue.file_path);
+        allocator.free(issue.message);
+        if (issue.suggestion) |s| allocator.free(s);
+    };
+    
+    // Should not report missing defer or errdefer for ownership transfer
+    for (result.issues) |issue| {
+        if (issue.issue_type == .missing_defer or issue.issue_type == .missing_errdefer) {
+            std.debug.print("Unexpected issue: {s}\n", .{issue.message});
+        }
+        try testing.expect(issue.issue_type != .missing_defer);
+        try testing.expect(issue.issue_type != .missing_errdefer);
+    }
+}
+
+test "LC068: ownership transfer - stored and returned later" {
+    const allocator = testing.allocator;
+    
+    // Function that stores allocation in variable and returns it later
+    const source =
+        \\pub fn createAndProcess(allocator: std.mem.Allocator) ![]u8 {
+        \\    const buffer = try allocator.alloc(u8, 100);
+        \\    errdefer allocator.free(buffer);
+        \\    
+        \\    // Process the buffer
+        \\    for (buffer) |*byte| {
+        \\        byte.* = 0;
+        \\    }
+        \\    
+        \\    return buffer;
+        \\}
+    ;
+    
+    const result = try zig_tooling.analyzeMemory(allocator, source, "test.zig", null);
+    defer allocator.free(result.issues);
+    defer for (result.issues) |issue| {
+        allocator.free(issue.file_path);
+        allocator.free(issue.message);
+        if (issue.suggestion) |s| allocator.free(s);
+    };
+    
+    // Should not report missing defer for ownership transfer
+    for (result.issues) |issue| {
+        try testing.expect(issue.issue_type != .missing_defer);
+    }
+}
+
+test "LC068: ownership transfer - function name patterns" {
+    const allocator = testing.allocator;
+    
+    // Functions with common ownership transfer names
+    const source =
+        \\pub fn createData(allocator: std.mem.Allocator) []u8 {
+        \\    const data = allocator.alloc(u8, 100) catch unreachable;
+        \\    return data;
+        \\}
+        \\
+        \\pub fn makeString(allocator: std.mem.Allocator) []u8 {
+        \\    const str = allocator.alloc(u8, 50) catch unreachable;
+        \\    return str;
+        \\}
+        \\
+        \\pub fn initBuffer(allocator: std.mem.Allocator) []u8 {
+        \\    const buf = allocator.alloc(u8, 200) catch unreachable;
+        \\    return buf;
+        \\}
+    ;
+    
+    const result = try zig_tooling.analyzeMemory(allocator, source, "test.zig", null);
+    defer allocator.free(result.issues);
+    defer for (result.issues) |issue| {
+        allocator.free(issue.file_path);
+        allocator.free(issue.message);
+        if (issue.suggestion) |s| allocator.free(s);
+    };
+    
+    // Should not report missing defer for functions with ownership transfer names
+    for (result.issues) |issue| {
+        try testing.expect(issue.issue_type != .missing_defer);
+    }
+}
+
+test "LC068: ownership transfer - complex return types" {
+    const allocator = testing.allocator;
+    
+    // Functions with various return types
+    const source =
+        \\pub fn optionalAlloc(allocator: std.mem.Allocator) ?[]u8 {
+        \\    const data = allocator.alloc(u8, 100) catch return null;
+        \\    return data;
+        \\}
+        \\
+        \\pub fn errorUnionAlloc(allocator: std.mem.Allocator) anyerror![]u8 {
+        \\    const data = try allocator.alloc(u8, 100);
+        \\    return data;
+        \\}
+        \\
+        \\pub fn pointerReturn(allocator: std.mem.Allocator) !*MyStruct {
+        \\    const ptr = try allocator.create(MyStruct);
+        \\    return ptr;
+        \\}
+    ;
+    
+    const result = try zig_tooling.analyzeMemory(allocator, source, "test.zig", null);
+    defer allocator.free(result.issues);
+    defer for (result.issues) |issue| {
+        allocator.free(issue.file_path);
+        allocator.free(issue.message);
+        if (issue.suggestion) |s| allocator.free(s);
+    };
+    
+    // Should not report missing defer for ownership transfer return types
+    for (result.issues) |issue| {
+        try testing.expect(issue.issue_type != .missing_defer);
+    }
+}
+
+test "LC068: ownership transfer - custom patterns" {
+    const allocator = testing.allocator;
+    
+    // Function that doesn't match default patterns
+    const source =
+        \\pub fn getBuffer(allocator: std.mem.Allocator) ![]u8 {
+        \\    const buffer = try allocator.alloc(u8, 100);
+        \\    return buffer;
+        \\}
+    ;
+    
+    // Configure custom ownership patterns
+    const config = zig_tooling.Config{
+        .memory = .{
+            .ownership_patterns = &.{
+                .{ .function_pattern = "get", .description = "Custom getter pattern" },
+            },
+        },
+    };
+    
+    const result = try zig_tooling.analyzeMemory(allocator, source, "test.zig", config);
+    defer allocator.free(result.issues);
+    defer for (result.issues) |issue| {
+        allocator.free(issue.file_path);
+        allocator.free(issue.message);
+        if (issue.suggestion) |s| allocator.free(s);
+    };
+    
+    // Should not report missing defer with custom pattern
+    for (result.issues) |issue| {
+        try testing.expect(issue.issue_type != .missing_defer);
+    }
+}
+
+test "LC068: ownership transfer - should still require defer when not returning" {
+    const allocator = testing.allocator;
+    
+    // Function that allocates but doesn't return the allocation
+    const source =
+        \\pub fn processData(allocator: std.mem.Allocator) !void {
+        \\    const buffer = try allocator.alloc(u8, 100);
+        \\    // Missing defer - this should still be flagged
+        \\    doSomethingWithBuffer(buffer);
+        \\}
+        \\
+        \\pub fn createButReturnVoid(allocator: std.mem.Allocator) !void {
+        \\    const data = try allocator.alloc(u8, 50);
+        \\    // Missing defer - even though function name has "create"
+        \\    // it doesn't return the allocation
+        \\}
+    ;
+    
+    const result = try zig_tooling.analyzeMemory(allocator, source, "test.zig", null);
+    defer allocator.free(result.issues);
+    defer for (result.issues) |issue| {
+        allocator.free(issue.file_path);
+        allocator.free(issue.message);
+        if (issue.suggestion) |s| allocator.free(s);
+    };
+    
+    // Should report missing defer for allocations not returned
+    var missing_defer_count: u32 = 0;
+    for (result.issues) |issue| {
+        if (issue.issue_type == .missing_defer) {
+            missing_defer_count += 1;
+        }
+    }
+    try testing.expectEqual(@as(u32, 2), missing_defer_count);
+}
+
+test "LC068: ownership transfer - struct initialization pattern" {
+    const allocator = testing.allocator;
+    
+    // Function that returns struct with allocated field
+    const source =
+        \\const MyStruct = struct {
+        \\    data: []u8,
+        \\    size: usize,
+        \\};
+        \\
+        \\pub fn createStruct(allocator: std.mem.Allocator) !MyStruct {
+        \\    const buffer = try allocator.alloc(u8, 100);
+        \\    errdefer allocator.free(buffer);
+        \\    
+        \\    return MyStruct{
+        \\        .data = buffer,
+        \\        .size = 100,
+        \\    };
+        \\}
+    ;
+    
+    const result = try zig_tooling.analyzeMemory(allocator, source, "test.zig", null);
+    defer allocator.free(result.issues);
+    defer for (result.issues) |issue| {
+        allocator.free(issue.file_path);
+        allocator.free(issue.message);
+        if (issue.suggestion) |s| allocator.free(s);
+    };
+    
+    // Should not report missing defer for ownership transfer via struct
+    for (result.issues) |issue| {
+        try testing.expect(issue.issue_type != .missing_defer);
+    }
+}

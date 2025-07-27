@@ -3,8 +3,8 @@
 **Current Focus**: Library conversion from CLI tools to pure Zig library package.
 
 ## 📊 Progress Summary
-- **Completed**: 31/68 issues (LC001 ✅, LC002 ✅, LC003 ✅, LC004 ✅, LC005 ✅, LC006 ✅, LC007 ✅, LC008 ✅, LC009 ✅, LC010 ✅, LC011 ✅, LC012 ✅, LC013 ✅, LC014 ✅, LC015 ✅, LC016 ✅, LC017 ✅, LC019 ✅, LC020 ✅, LC021 ✅, LC022 ✅, LC023 ✅, LC024 ✅, LC025 ✅, LC026 ✅, LC027 ✅, LC028 ✅, LC050 ✅, LC056 ✅, LC057 ✅, LC062 ✅)
-- **Ready to Start**: 36 issues (0 CRITICAL, 1 HIGH, 12 TIER 2, 24 TIER 3)
+- **Completed**: 34/69 issues (LC001 ✅, LC002 ✅, LC003 ✅, LC004 ✅, LC005 ✅, LC006 ✅, LC007 ✅, LC008 ✅, LC009 ✅, LC010 ✅, LC011 ✅, LC012 ✅, LC013 ✅, LC014 ✅, LC015 ✅, LC016 ✅, LC017 ✅, LC019 ✅, LC020 ✅, LC021 ✅, LC022 ✅, LC023 ✅, LC024 ✅, LC025 ✅, LC026 ✅, LC027 ✅, LC028 ✅, LC030 ✅, LC050 ✅, LC056 ✅, LC057 ✅, LC062 ✅, LC068 ✅, LC069 ✅)
+- **Ready to Start**: 34 issues (0 CRITICAL, 0 HIGH, 9 TIER 2, 25 TIER 3)
 - **In Progress**: None
 - **Blocked**: None
 
@@ -19,21 +19,6 @@
 *All TIER 1 issues have been completed! The library now has all critical components for v1.0.*
 
 ### 🏆 TIER 2: Professional Polish (After TIER 1)
-
-#### User-Reported Issues (Highest Priority)
-- **#LC069**: Fix built-in pattern conflicts with std.testing.allocator (GitHub Issue #3) *[TIER 2 - HIGH PRIORITY]*
-  - **Component**: src/memory_analyzer.zig, src/types.zig
-  - **Status**: Ready
-  - **Dependencies**: None
-  - **Details**: Persistent pattern name conflicts with std.testing.allocator across multiple files
-  - **Notes**: Reported in GitHub issue #3, affects v0.1.2, makes tool analysis unreliable
-
-- **#LC068**: Improve memory ownership transfer detection (GitHub Issue #2) *[TIER 2 - HIGH PRIORITY]*
-  - **Component**: src/memory_analyzer.zig
-  - **Status**: Ready
-  - **Dependencies**: None
-  - **Details**: False positive "missing defer" warnings for valid Zig memory ownership patterns
-  - **Notes**: Reported in GitHub issue #2, affects v0.1.2, causes unnecessary code modifications
 
 #### Security/Correctness
 - **#LC052**: Add proper JSON/XML escape functions to formatters *[TIER 2 - HIGH PRIORITY]*
@@ -104,6 +89,13 @@
 ### ✨ TIER 3: Future Enhancements (Defer Until Later)
 
 #### Development Process & Quality (Higher Value)
+- **#LC070**: Add compile-time validation for default allocator patterns *[TIER 3]*
+  - **Component**: src/memory_analyzer.zig, build.zig
+  - **Status**: Ready
+  - **Dependencies**: None
+  - **Details**: Default patterns are validated at runtime but could have compile-time checks
+  - **Notes**: Discovered during LC069, would catch library bugs during development
+
 - **#LC049**: Add static analysis for recursive function call detection *[TIER 3]*
   - **Component**: Static analysis tooling, CI/CD configuration
   - **Status**: Ready
@@ -197,13 +189,6 @@
   - **Notes**: Minor technical debt from LC020 implementation
 
 #### Allocator Pattern Enhancements
-- **#LC030**: Add option to disable default allocator patterns *[TIER 3]*
-  - **Component**: src/memory_analyzer.zig, src/types.zig
-  - **Status**: Ready
-  - **Dependencies**: #LC024 ✅ (Completed 2025-07-27)
-  - **Details**: No way to use only custom patterns without defaults
-  - **Notes**: Users might want complete control over pattern matching
-
 - **#LC031**: Add pattern conflict detection *[TIER 3]*
   - **Component**: src/memory_analyzer.zig
   - **Status**: Ready
@@ -321,15 +306,15 @@ This path unlocks the most work and enables parallel development.
 ### Recommended Work Order for v1.0:
 1. **🎯 TIER 1 Complete**: All critical v1.0 blockers are done! ✅
 2. **🏆 TIER 2 Polish** (in priority order):
-   - User-Reported: #LC069, #LC068 (GitHub issues)
+   - User-Reported: #LC068 (GitHub issue #2)
    - Security/Correctness: #LC052, #LC066
    - API Usability: #LC064, #LC063, #LC051, #LC039
    - Performance/Infrastructure: #LC043, #LC060, #LC038
 3. **✨ TIER 3 Later**: 25 future enhancement issues (defer until v1.1+)
 
 ### Current Status:
-- **Ready to Start**: 36 issues total (0 CRITICAL, 0 TIER 1, 11 TIER 2, 25 TIER 3)
-- **Total Project**: 67 issues (31 completed, 0 blocked, 36 ready)
+- **Ready to Start**: 35 issues total (0 CRITICAL, 0 TIER 1, 10 TIER 2, 25 TIER 3)
+- **Total Project**: 69 issues (33 completed, 0 blocked, 35 ready)
 - **v1.0 Progress**: All critical issues resolved! Ready for TIER 2 polish work.
 
 ### Focus Strategy:
@@ -337,4 +322,4 @@ This path unlocks the most work and enables parallel development.
 
 ---
 
-*This file tracks library conversion issues from ISSUES.md. Updated: 2025-07-27 (Added LC068 and LC069 from GitHub issues #2 and #3)*
+*This file tracks library conversion issues from ISSUES.md. Updated: 2025-07-27 (Completed LC068 - Improved ownership transfer detection)*

@@ -21,48 +21,6 @@
 
 ### User-Reported Issues (Highest Priority)
 
-- [ ] #LC069: Fix built-in pattern conflicts with std.testing.allocator (GitHub Issue #3)
-  - **Component**: src/memory_analyzer.zig, src/types.zig
-  - **Priority**: High
-  - **Created**: 2025-07-27
-  - **Dependencies**: None
-  - **Details**: Persistent pattern name conflicts with std.testing.allocator across multiple files
-  - **Requirements**:
-    - Add configuration option to disable specific built-in patterns
-    - Improve conflict resolution between built-in and custom patterns
-    - Fix std.testing.allocator conflict specifically
-    - Support pattern name disambiguation or overrides
-    - Provide better error handling for pattern conflicts
-    - Add tests for pattern conflict scenarios
-    - Document pattern precedence and conflict resolution
-  - **Notes**:
-    - Reported in GitHub issue #3 by @emoessner
-    - Affects zig-tooling v0.1.2 with Zig 0.14.1
-    - Makes tool analysis unreliable due to persistent configuration errors
-    - Related to LC031 (pattern conflict detection) but more specific to built-in vs custom conflicts
-    - LC030 (disable default patterns) could be part of the solution
-
-- [ ] #LC068: Improve memory ownership transfer detection (GitHub Issue #2)
-  - **Component**: src/memory_analyzer.zig
-  - **Priority**: High
-  - **Created**: 2025-07-27
-  - **Dependencies**: None
-  - **Details**: False positive "missing defer" warnings for valid Zig memory ownership patterns
-  - **Requirements**:
-    - Detect functions that return allocated memory to caller
-    - Check for proper errdefer cleanup in error paths
-    - Skip "missing defer" warnings for ownership transfers
-    - Recognize patterns where memory is allocated and returned from functions
-    - Support allocation patterns in returnable structs/arrays
-    - Document ownership transfer patterns in analyzer
-    - Add tests for common ownership transfer scenarios
-  - **Notes**:
-    - Reported in GitHub issue #2 by @emoessner
-    - Affects zig-tooling v0.1.2 with Zig 0.14.1
-    - Causes unnecessary code modifications and reduces tool credibility
-    - Example: Function allocating memory with errdefer cleanup correctly transfers ownership but still gets flagged
-    - Would improve accuracy of memory leak detection significantly
-
 ### Security/Correctness
 
 - [ ] #LC052: Add proper JSON/XML escape functions to formatters
@@ -230,6 +188,23 @@
 *Nice-to-have features that don't block library adoption*
 
 ### Development Process & Quality (Higher Value)
+
+- [ ] #LC070: Add compile-time validation for default allocator patterns
+  - **Component**: src/memory_analyzer.zig, build.zig
+  - **Priority**: Low
+  - **Created**: 2025-07-27
+  - **Dependencies**: None
+  - **Details**: Default patterns are validated at runtime but could have compile-time checks
+  - **Requirements**:
+    - Add build-time validation to ensure no duplicate names in default_allocator_patterns
+    - Consider using comptime validation in Zig
+    - Ensure patterns are non-empty and valid
+    - Fail build if default patterns have issues
+  - **Notes**:
+    - Discovered during LC069 when we added runtime validation
+    - Runtime check at [src/memory_analyzer.zig:879-917](src/memory_analyzer.zig#L879-L917)
+    - Would catch library bugs during development rather than at runtime
+    - Could use comptime asserts or build script validation
 
 - [ ] #LC049: Add static analysis for recursive function call detection
   - **Component**: Static analysis tooling, CI/CD configuration
@@ -491,22 +466,19 @@
 
 ### Allocator Pattern Enhancements
 
-- [ ] #LC030: Add option to disable default allocator patterns
+- [x] #LC030: Add option to disable default allocator patterns
   - **Component**: src/memory_analyzer.zig, src/types.zig
   - **Priority**: Low
   - **Created**: 2025-07-27
+  - **Completed**: 2025-07-27
   - **Dependencies**: #LC024 ✅
   - **Details**: No way to use only custom patterns without default patterns
-  - **Requirements**:
-    - Add use_default_patterns boolean to MemoryConfig
-    - Skip default pattern matching when disabled
-    - Document the behavior clearly
-    - Add tests for pattern exclusivity
-  - **Notes**:
-    - default_allocator_patterns at src/memory_analyzer.zig:39-47
-    - extractAllocatorType() always checks defaults at src/memory_analyzer.zig:684-688
-    - Users might want complete control over pattern matching
-    - Discovered during LC024 implementation
+  - **Resolution**:
+    - Implemented as part of LC069 pattern conflict resolution
+    - Added `use_default_patterns: bool = true` to MemoryConfig
+    - Updated extractAllocatorType() to skip defaults when flag is false
+    - Added comprehensive tests in test_allocator_patterns.zig
+    - Documented in CLAUDE.md Pattern Conflict Resolution section
 
 - [ ] #LC031: Add pattern conflict detection
   - **Component**: src/memory_analyzer.zig
@@ -542,6 +514,22 @@
     - extractAllocatorType() logic at src/memory_analyzer.zig:675-697
     - Discovered during LC028 implementation
 
+- [ ] #LC071: Add ownership pattern testing utilities
+  - **Component**: src/memory_analyzer.zig
+  - **Priority**: Low
+  - **Created**: 2025-07-27
+  - **Dependencies**: #LC068 ✅
+  - **Details**: No way to test ownership patterns before using them (similar to LC033 for allocator patterns)
+  - **Requirements**:
+    - Add public testOwnershipPattern() function to test patterns against sample function signatures
+    - Test both function name and return type patterns
+    - Show which pattern matched and why
+    - Useful for debugging ownership transfer detection
+  - **Notes**:
+    - Would help users understand why functions are/aren't detected as ownership transfers
+    - Similar need as allocator pattern testing (LC033)
+    - Discovered during LC068 implementation
+
 - [ ] #LC029: Implement regex support for allocator patterns
   - **Component**: src/memory_analyzer.zig, src/types.zig
   - **Priority**: Low
@@ -558,40 +546,6 @@
     - extractAllocatorType() at src/memory_analyzer.zig:670-692 only does substring matching
     - Would allow more precise pattern matching (e.g., "^my_.*_allocator$")
     - Discovered during LC024 implementation
-
-- [ ] #LC030: Add option to disable default allocator patterns
-  - **Component**: src/memory_analyzer.zig, src/types.zig
-  - **Priority**: Low
-  - **Created**: 2025-07-27
-  - **Dependencies**: #LC024 ✅
-  - **Details**: No way to use only custom patterns without default patterns
-  - **Requirements**:
-    - Add use_default_patterns boolean to MemoryConfig
-    - Skip default pattern matching when disabled
-    - Document the behavior clearly
-    - Add tests for pattern exclusivity
-  - **Notes**:
-    - default_allocator_patterns at src/memory_analyzer.zig:39-47
-    - extractAllocatorType() always checks defaults at src/memory_analyzer.zig:684-688
-    - Users might want complete control over pattern matching
-    - Discovered during LC024 implementation
-
-- [ ] #LC031: Add pattern conflict detection
-  - **Component**: src/memory_analyzer.zig
-  - **Priority**: Low
-  - **Created**: 2025-07-27
-  - **Dependencies**: #LC028 ✅
-  - **Details**: Patterns that overlap can cause unexpected matches
-  - **Requirements**:
-    - Detect when patterns could match the same string (e.g., "alloc" and "allocator")
-    - Warn about overlapping patterns during validation
-    - Consider pattern specificity ordering
-    - Add tests for conflict scenarios
-  - **Notes**:
-    - validateAllocatorPatterns() at src/memory_analyzer.zig:733-799
-    - Currently only checks for duplicate names, not pattern overlap
-    - Example: pattern "alloc" would match before "allocator" in "my_allocator_var"
-    - Discovered during LC028 implementation
 
 - [ ] #LC032: Add case-insensitive pattern matching option
   - **Component**: src/memory_analyzer.zig, src/types.zig
@@ -745,6 +699,30 @@
 
 *Finished issues for reference*
 
+- [x] #LC068: Improve memory ownership transfer detection (GitHub Issue #2)
+  - **Component**: src/memory_analyzer.zig, src/types.zig
+  - **Priority**: High
+  - **Created**: 2025-07-27
+  - **Started**: 2025-07-27
+  - **Completed**: 2025-07-27
+  - **Dependencies**: None
+  - **Details**: False positive "missing defer" warnings for valid Zig memory ownership patterns
+  - **Resolution**:
+    - Added OwnershipPattern type to types.zig for configurable ownership transfer detection
+    - Enhanced return type detection to handle error unions, optionals, and complex types
+    - Implemented allocation-to-return tracking to detect variables returned later
+    - Added default ownership patterns for common function names and return types
+    - Added pattern validation similar to allocator pattern validation
+    - Created comprehensive test suite with 8 test cases covering various scenarios
+    - Added detailed documentation in CLAUDE.md explaining ownership transfer patterns
+    - Successfully reduces false positives for factory functions, builders, and similar patterns
+  - **Implementation Details**:
+    - Modified isOwnershipTransferReturnType() to use configurable patterns and handle complex types
+    - Added isAllocationReturnedLater() for data flow analysis
+    - Added default_ownership_patterns with common patterns (create, init, make, etc.)
+    - Added ownership_patterns and use_default_ownership_patterns to MemoryConfig
+    - All tests pass successfully
+
 - [x] #LC057: Fix segfault in memory_analyzer.findFunctionContext when freeing return_type
   - **Component**: src/memory_analyzer.zig
   - **Priority**: Critical
@@ -778,6 +756,39 @@
     - Added test case to verify allocator pattern validation doesn't cause segfault
     - All tests pass successfully with no memory issues
     - Library can now be safely used in production environments
+
+- [x] #LC069: Fix built-in pattern conflicts with std.testing.allocator (GitHub Issue #3)
+  - **Component**: src/memory_analyzer.zig, src/types.zig
+  - **Priority**: High
+  - **Created**: 2025-07-27
+  - **Started**: 2025-07-27
+  - **Completed**: 2025-07-27
+  - **Dependencies**: None
+  - **Details**: Persistent pattern name conflicts with std.testing.allocator across multiple files
+  - **Resolution**:
+    - Fixed duplicate pattern names in default_allocator_patterns (renamed second "std.testing.allocator" to "testing.allocator")
+    - Added `use_default_patterns: bool = true` configuration field to disable all built-in patterns
+    - Added `disabled_default_patterns: []const []const u8 = &.{}` for selective pattern disabling
+    - Enhanced validateAllocatorPatterns() to detect duplicates within default patterns
+    - Updated extractAllocatorType() to respect pattern disable configuration
+    - Added comprehensive test suite in tests/test_allocator_patterns.zig
+    - Updated CLAUDE.md with pattern conflict resolution documentation
+    - All tests pass successfully
+
+- [x] #LC030: Add option to disable default allocator patterns
+  - **Component**: src/memory_analyzer.zig, src/types.zig
+  - **Priority**: Low
+  - **Created**: 2025-07-27
+  - **Started**: 2025-07-27
+  - **Completed**: 2025-07-27
+  - **Dependencies**: #LC024 ✅
+  - **Details**: No way to use only custom patterns without default patterns
+  - **Resolution**:
+    - Implemented as part of LC069 pattern conflict resolution
+    - Added `use_default_patterns: bool = true` to MemoryConfig at [src/types.zig:326](src/types.zig#L326)
+    - Updated extractAllocatorType() to check flag before using defaults
+    - Added test case "pattern disable functionality - disable all default patterns"
+    - Functionality fully integrated and tested
 
 - [x] #LC016: API documentation
   - **Component**: All public modules
@@ -1302,5 +1313,5 @@
     - Multiple files affected: [tests/integration/test_thread_safety.zig](tests/integration/test_thread_safety.zig), [tests/integration/test_error_boundaries.zig](tests/integration/test_error_boundaries.zig), [tests/integration/test_integration_runner.zig](tests/integration/test_integration_runner.zig), and others
     - Critical for ensuring comprehensive testing and production readiness
 
-*Last Updated: 2025-07-27 (Added LC068 and LC069 from GitHub issues #2 and #3)*
+*Last Updated: 2025-07-27 (Completed LC069 - Fixed pattern conflicts)*
 *Focus: Library Conversion Project*

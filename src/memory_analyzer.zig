@@ -48,6 +48,7 @@ const app_logger = @import("app_logger.zig");
 const Issue = types.Issue;
 const AnalysisError = types.AnalysisError;
 const AllocatorPattern = types.AllocatorPattern;
+const OwnershipPattern = types.OwnershipPattern;
 
 // Note: Component type detection has been simplified for library usage.
 // Users should configure allowed_allocators based on their project's needs
@@ -58,11 +59,44 @@ const AllocatorPattern = types.AllocatorPattern;
 const default_allocator_patterns = [_]AllocatorPattern{
     .{ .name = "std.heap.page_allocator", .pattern = "std.heap.page_allocator" },
     .{ .name = "std.testing.allocator", .pattern = "std.testing.allocator" },
-    .{ .name = "std.testing.allocator", .pattern = "testing.allocator" },
+    .{ .name = "testing.allocator", .pattern = "testing.allocator" },
     .{ .name = "GeneralPurposeAllocator", .pattern = "gpa" },
     .{ .name = "ArenaAllocator", .pattern = "arena" },
     .{ .name = "FixedBufferAllocator", .pattern = "fixed_buffer" },
     .{ .name = "std.heap.c_allocator", .pattern = "c_allocator" },
+};
+
+// Default ownership transfer patterns for common scenarios
+// These patterns help identify functions that transfer memory ownership
+const default_ownership_patterns = [_]OwnershipPattern{
+    // Common function name patterns
+    .{ .function_pattern = "create", .description = "Creation functions typically return owned memory" },
+    .{ .function_pattern = "init", .description = "Init functions often return owned instances" },
+    .{ .function_pattern = "make", .description = "Make functions typically allocate and return" },
+    .{ .function_pattern = "new", .description = "New functions allocate new instances" },
+    .{ .function_pattern = "clone", .description = "Clone functions return owned copies" },
+    .{ .function_pattern = "duplicate", .description = "Duplicate functions return owned copies" },
+    .{ .function_pattern = "copy", .description = "Copy functions may return owned copies" },
+    .{ .function_pattern = "alloc", .description = "Alloc functions explicitly allocate memory" },
+    
+    // String/buffer creation patterns
+    .{ .function_pattern = "toString", .description = "String conversion often allocates" },
+    .{ .function_pattern = "toSlice", .description = "Slice conversion may allocate" },
+    .{ .function_pattern = "format", .description = "Format functions typically allocate strings" },
+    .{ .function_pattern = "print", .return_type_pattern = "[]u8", .description = "Print functions returning strings" },
+    
+    // Common return type patterns (these work alone or with function patterns)
+    .{ .return_type_pattern = "[]u8", .description = "Functions returning byte slices often transfer ownership" },
+    .{ .return_type_pattern = "[]const u8", .description = "Functions returning const byte slices" },
+    .{ .return_type_pattern = "![]u8", .description = "Error union returning byte slice" },
+    .{ .return_type_pattern = "![]const u8", .description = "Error union returning const byte slice" },
+    .{ .return_type_pattern = "?[]u8", .description = "Optional byte slice" },
+    .{ .return_type_pattern = "?[]const u8", .description = "Optional const byte slice" },
+    
+    // Pointer return patterns
+    .{ .return_type_pattern = "*", .description = "Functions returning pointers often transfer ownership" },
+    .{ .return_type_pattern = "!*", .description = "Error union returning pointer" },
+    .{ .return_type_pattern = "?*", .description = "Optional pointer" },
 };
 
 pub const AllocationPattern = struct {
@@ -285,6 +319,11 @@ pub const MemoryAnalyzer = struct {
         
         // Validate allocator patterns before analysis
         if (try self.validateAllocatorPatterns()) |validation_error| {
+            return validation_error;
+        }
+        
+        // Validate ownership patterns before analysis
+        if (try self.validateOwnershipPatterns()) |validation_error| {
             return validation_error;
         }
         
@@ -817,10 +856,19 @@ pub const MemoryAnalyzer = struct {
             return try self.allocator.dupe(u8, "parameter_allocator");
         }
         
-        // Then check default patterns
-        for (default_allocator_patterns) |pattern| {
-            if (std.mem.indexOf(u8, allocator_var, pattern.pattern)) |_| {
-                return try self.allocator.dupe(u8, pattern.name);
+        // Then check default patterns if enabled
+        if (self.config.use_default_patterns) {
+            pattern_loop: for (default_allocator_patterns) |pattern| {
+                // Check if this pattern is disabled
+                for (self.config.disabled_default_patterns) |disabled_name| {
+                    if (std.mem.eql(u8, pattern.name, disabled_name)) {
+                        continue :pattern_loop;
+                    }
+                }
+                
+                if (std.mem.indexOf(u8, allocator_var, pattern.pattern)) |_| {
+                    return try self.allocator.dupe(u8, pattern.name);
+                }
             }
         }
         
@@ -864,8 +912,48 @@ pub const MemoryAnalyzer = struct {
     /// Returns any validation errors found, or null if all patterns are valid.
     fn validateAllocatorPatterns(self: *MemoryAnalyzer) !?AnalysisError {
         // Track pattern names to detect duplicates
-        var seen_names = std.StringHashMap(void).init(self.allocator);
+        var seen_names = std.StringHashMap([]const u8).init(self.allocator);
         defer seen_names.deinit();
+        
+        // First, check for duplicates within default patterns if they're enabled
+        if (self.config.use_default_patterns) {
+            for (default_allocator_patterns) |default_pattern| {
+                // Skip disabled patterns
+                var is_disabled = false;
+                for (self.config.disabled_default_patterns) |disabled_name| {
+                    if (std.mem.eql(u8, default_pattern.name, disabled_name)) {
+                        is_disabled = true;
+                        break;
+                    }
+                }
+                if (is_disabled) continue;
+                
+                const result = try seen_names.getOrPut(default_pattern.name);
+                if (result.found_existing) {
+                    // Found duplicate in default patterns - this is a library bug
+                    const warning_msg = try std.fmt.allocPrint(
+                        self.allocator,
+                        "Built-in pattern name '{s}' appears multiple times with patterns '{s}' and '{s}'",
+                        .{ default_pattern.name, result.value_ptr.*, default_pattern.pattern }
+                    );
+                    try self.addIssue(Issue{
+                        .file_path = try self.allocator.dupe(u8, "configuration"),
+                        .line = 0,
+                        .column = 0,
+                        .severity = .warning,
+                        .issue_type = .incorrect_allocator,
+                        .message = warning_msg,
+                        .suggestion = try std.fmt.allocPrint(
+                            self.allocator,
+                            "Consider disabling this pattern with disabled_default_patterns = &.{{\"{s}\"}}",
+                            .{default_pattern.name}
+                        ),
+                    });
+                } else {
+                    result.value_ptr.* = default_pattern.pattern;
+                }
+            }
+        }
         
         // Check custom patterns
         for (self.config.allocator_patterns) |pattern| {
@@ -905,19 +993,108 @@ pub const MemoryAnalyzer = struct {
             // Check for duplicate names
             const result = try seen_names.getOrPut(pattern.name);
             if (result.found_existing) {
-                return AnalysisError.DuplicatePatternName;
+                // Check if it's a conflict with default patterns
+                var is_default = false;
+                if (self.config.use_default_patterns) {
+                    for (default_allocator_patterns) |default_pattern| {
+                        if (std.mem.eql(u8, default_pattern.name, pattern.name)) {
+                            is_default = true;
+                            break;
+                        }
+                    }
+                }
+                
+                if (is_default) {
+                    // Custom pattern conflicts with default pattern
+                    const warning_msg = try std.fmt.allocPrint(
+                        self.allocator,
+                        "Custom pattern name '{s}' conflicts with built-in pattern. Custom pattern will take precedence",
+                        .{pattern.name}
+                    );
+                    try self.addIssue(Issue{
+                        .file_path = try self.allocator.dupe(u8, "configuration"),
+                        .line = 0,
+                        .column = 0,
+                        .severity = .info,
+                        .issue_type = .incorrect_allocator,
+                        .message = warning_msg,
+                        .suggestion = try std.fmt.allocPrint(
+                            self.allocator,
+                            "Consider using a unique name or disable the built-in pattern with disabled_default_patterns",
+                            .{}
+                        ),
+                    });
+                } else {
+                    // Duplicate within custom patterns
+                    return AnalysisError.DuplicatePatternName;
+                }
             }
         }
         
-        // Also check that custom patterns don't conflict with default patterns
-        for (default_allocator_patterns) |default_pattern| {
-            const result = try seen_names.getOrPut(default_pattern.name);
+        return null;
+    }
+    
+    /// Validates ownership patterns in the configuration to prevent matching errors.
+    /// Returns any validation errors found, or null if all patterns are valid.
+    fn validateOwnershipPatterns(self: *MemoryAnalyzer) !?AnalysisError {
+        // Track pattern combinations to detect duplicates
+        var seen_patterns = std.StringHashMap(void).init(self.allocator);
+        defer seen_patterns.deinit();
+        
+        // Validate custom patterns
+        for (self.config.ownership_patterns) |pattern| {
+            // Check that at least one pattern is specified
+            if (pattern.function_pattern == null and pattern.return_type_pattern == null) {
+                const error_msg = try std.fmt.allocPrint(
+                    self.allocator,
+                    "Ownership pattern must specify at least one of function_pattern or return_type_pattern",
+                    .{}
+                );
+                try self.addIssue(Issue{
+                    .file_path = try self.allocator.dupe(u8, "configuration"),
+                    .line = 0,
+                    .column = 0,
+                    .severity = .err,
+                    .issue_type = .incorrect_allocator,
+                    .message = error_msg,
+                    .suggestion = try self.allocator.dupe(u8, "Add either function_pattern or return_type_pattern to the ownership pattern"),
+                });
+                return AnalysisError.InvalidConfiguration;
+            }
+            
+            // Check for empty patterns
+            if (pattern.function_pattern) |func| {
+                if (func.len == 0) {
+                    return AnalysisError.EmptyPattern;
+                }
+            }
+            if (pattern.return_type_pattern) |ret| {
+                if (ret.len == 0) {
+                    return AnalysisError.EmptyPattern;
+                }
+            }
+            
+            // Create a unique key for this pattern combination
+            const key = try std.fmt.allocPrint(
+                self.allocator,
+                "func:{s}|ret:{s}",
+                .{ 
+                    pattern.function_pattern orelse "null",
+                    pattern.return_type_pattern orelse "null" 
+                }
+            );
+            defer self.allocator.free(key);
+            
+            // Check for duplicate patterns
+            const result = try seen_patterns.getOrPut(key);
             if (result.found_existing) {
-                // Custom pattern has same name as default pattern
                 const warning_msg = try std.fmt.allocPrint(
                     self.allocator,
-                    "Custom pattern name '{s}' conflicts with built-in pattern name",
-                    .{default_pattern.name}
+                    "Duplicate ownership pattern detected with function_pattern='{s}' and return_type_pattern='{s}'",
+                    .{ 
+                        pattern.function_pattern orelse "null",
+                        pattern.return_type_pattern orelse "null" 
+                    }
                 );
                 try self.addIssue(Issue{
                     .file_path = try self.allocator.dupe(u8, "configuration"),
@@ -926,11 +1103,7 @@ pub const MemoryAnalyzer = struct {
                     .severity = .warning,
                     .issue_type = .incorrect_allocator,
                     .message = warning_msg,
-                    .suggestion = try std.fmt.allocPrint(
-                        self.allocator,
-                        "Consider using a different name to avoid confusion",
-                        .{}
-                    ),
+                    .suggestion = try self.allocator.dupe(u8, "Remove duplicate ownership patterns"),
                 });
             }
         }
@@ -1171,7 +1344,14 @@ pub const MemoryAnalyzer = struct {
         // Check if return type indicates ownership transfer
         if (self.isOwnershipTransferReturnType(function_info.return_type)) {
             // Check if allocation is immediately returned
-            return self.isAllocationImmediatelyReturned(contents, allocation.line);
+            if (self.isAllocationImmediatelyReturned(contents, allocation.line)) {
+                return true;
+            }
+            
+            // Check if allocation is stored in a variable and returned later
+            if (try self.isAllocationReturnedLater(file_path, allocation, temp_allocator)) {
+                return true;
+            }
         }
         
         return false;
@@ -1302,30 +1482,50 @@ pub const MemoryAnalyzer = struct {
         errdefer temp_allocator.free(return_type);
         
         // Extract function name
-        if (std.mem.indexOf(u8, line, "fn ")) |fn_pos| {
-            const name_start = fn_pos + 3;
+        const fn_start = std.mem.indexOf(u8, line, "fn ") orelse std.mem.indexOf(u8, line, "pub fn ");
+        if (fn_start) |pos| {
+            const name_start = if (std.mem.startsWith(u8, line[pos..], "pub fn ")) 
+                pos + 7 
+            else 
+                pos + 3;
+            
             if (std.mem.indexOf(u8, line[name_start..], "(")) |paren_pos| {
-                // Free the old name before allocating new one
                 temp_allocator.free(name);
-                name = try temp_allocator.dupe(u8, line[name_start..name_start + paren_pos]);
+                name = try temp_allocator.dupe(u8, std.mem.trim(u8, line[name_start..name_start + paren_pos], " "));
             }
         }
         
-        // Extract return type (look for !) indicating error union
-        if (std.mem.indexOf(u8, line, "!")) |excl_pos| {
-            const type_start = excl_pos + 1;
-            if (std.mem.indexOf(u8, line[type_start..], " ")) |space_pos| {
-                // Free the old return_type before allocating new one
-                temp_allocator.free(return_type);
-                return_type = try temp_allocator.dupe(u8, line[type_start..type_start + space_pos]);
-            } else {
-                // No space found, take rest of line up to {
-                if (std.mem.indexOf(u8, line[type_start..], "{")) |brace_pos| {
+        // Extract return type - more comprehensive parsing
+        // Find the closing parenthesis of function parameters
+        if (std.mem.lastIndexOf(u8, line, ")")) |close_paren| {
+            var pos = close_paren + 1;
+            
+            // Skip whitespace
+            while (pos < line.len and (line[pos] == ' ' or line[pos] == '\t')) {
+                pos += 1;
+            }
+            
+            // Now we should be at the return type
+            if (pos < line.len) {
+                var end_pos = pos;
+                
+                // Find the end of return type (either '{' or end of line)
+                while (end_pos < line.len and line[end_pos] != '{') {
+                    end_pos += 1;
+                }
+                
+                if (pos < end_pos) {
                     temp_allocator.free(return_type);
-                    return_type = try temp_allocator.dupe(u8, line[type_start..type_start + brace_pos]);
-                } else {
-                    temp_allocator.free(return_type);
-                    return_type = try temp_allocator.dupe(u8, line[type_start..]);
+                    const raw_type = std.mem.trim(u8, line[pos..end_pos], " \t");
+                    
+                    // Handle different return type patterns
+                    if (raw_type.len > 0) {
+                        // For error unions like "!Type" or "anyerror!Type", include the full type
+                        return_type = try temp_allocator.dupe(u8, raw_type);
+                    } else if (std.mem.indexOf(u8, line[pos..], "void")) |_| {
+                        // Explicit void return
+                        return_type = try temp_allocator.dupe(u8, "void");
+                    }
                 }
             }
         }
@@ -1339,17 +1539,23 @@ pub const MemoryAnalyzer = struct {
     }
     
     fn isOwnershipTransferFunctionName(self: *MemoryAnalyzer, function_name: []const u8) bool {
-        _ = self;
+        // First check custom patterns if configured
+        for (self.config.ownership_patterns) |pattern| {
+            if (pattern.function_pattern) |func_pattern| {
+                if (std.mem.indexOf(u8, function_name, func_pattern)) |_| {
+                    return true;
+                }
+            }
+        }
         
-        const ownership_patterns = [_][]const u8{
-            "create", "generate", "build", "make", "new", "clone",
-            "getPrimary", "getSecondary", "toString", "toJson", "format",
-            "Responsibilities", "Buffer", "duplicate",
-        };
-        
-        for (ownership_patterns) |pattern| {
-            if (std.mem.indexOf(u8, function_name, pattern)) |_| {
-                return true;
+        // Then check default patterns if enabled
+        if (self.config.use_default_ownership_patterns) {
+            for (default_ownership_patterns) |pattern| {
+                if (pattern.function_pattern) |func_pattern| {
+                    if (std.mem.indexOf(u8, function_name, func_pattern)) |_| {
+                        return true;
+                    }
+                }
             }
         }
         
@@ -1357,16 +1563,57 @@ pub const MemoryAnalyzer = struct {
     }
     
     fn isOwnershipTransferReturnType(self: *MemoryAnalyzer, return_type: []const u8) bool {
-        _ = self;
-        
-        const transfer_types = [_][]const u8{
-            "[]u8", "[]const u8", "[]T", "[]const T", "*T",
-        };
-        
-        for (transfer_types) |pattern| {
-            if (std.mem.indexOf(u8, return_type, pattern)) |_| {
-                return true;
+        // First check custom patterns if configured
+        for (self.config.ownership_patterns) |pattern| {
+            if (pattern.return_type_pattern) |type_pattern| {
+                if (std.mem.indexOf(u8, return_type, type_pattern)) |_| {
+                    return true;
+                }
             }
+        }
+        
+        // Then check default patterns if enabled
+        if (self.config.use_default_ownership_patterns) {
+            for (default_ownership_patterns) |pattern| {
+                if (pattern.return_type_pattern) |type_pattern| {
+                    if (std.mem.indexOf(u8, return_type, type_pattern)) |_| {
+                        return true;
+                    }
+                }
+            }
+        }
+        
+        // Additional built-in checks for complex patterns
+        // Check for error unions (! prefix)
+        if (return_type.len > 0 and return_type[0] == '!') {
+            const inner_type = std.mem.trim(u8, return_type[1..], " ");
+            return self.isOwnershipTransferReturnType(inner_type);
+        }
+        
+        // Check for optionals (? prefix)
+        if (return_type.len > 0 and return_type[0] == '?') {
+            const inner_type = std.mem.trim(u8, return_type[1..], " ");
+            return self.isOwnershipTransferReturnType(inner_type);
+        }
+        
+        // Check for anyerror!Type patterns
+        if (std.mem.startsWith(u8, return_type, "anyerror!")) {
+            const inner_type = std.mem.trim(u8, return_type[9..], " ");
+            return self.isOwnershipTransferReturnType(inner_type);
+        }
+        
+        // Check for slice patterns []Type or []const Type
+        if (std.mem.startsWith(u8, return_type, "[]")) {
+            return true; // Most slices indicate ownership transfer
+        }
+        
+        // Check for pointer patterns *Type or *const Type  
+        if (return_type.len > 0 and return_type[0] == '*') {
+            // But exclude function pointers
+            if (std.mem.indexOf(u8, return_type, "fn")) |_| {
+                return false;
+            }
+            return true; // Most pointers indicate ownership transfer
         }
         
         return false;
@@ -1384,6 +1631,79 @@ pub const MemoryAnalyzer = struct {
             if (line_number == allocation_line) {
                 // Check if line contains "return try"
                 return std.mem.indexOf(u8, line, "return try") != null;
+            }
+        }
+        
+        return false;
+    }
+    
+    // New function to track if an allocated variable is eventually returned
+    fn isAllocationReturnedLater(self: *MemoryAnalyzer, file_path: []const u8, allocation: AllocationPattern, temp_allocator: std.mem.Allocator) !bool {
+        
+        // Read the file to analyze return patterns
+        const file = std.fs.cwd().openFile(file_path, .{}) catch return false;
+        defer file.close();
+        
+        const file_size = try file.getEndPos();
+        const contents = try temp_allocator.alloc(u8, file_size);
+        defer temp_allocator.free(contents);
+        _ = try file.readAll(contents);
+        
+        // Find the function containing this allocation
+        const function_info = try self.findFunctionContext(contents, allocation.line, temp_allocator);
+        defer temp_allocator.free(function_info.name);
+        defer temp_allocator.free(function_info.return_type);
+        
+        // If the function doesn't return a type that could transfer ownership, no need to check
+        if (!self.isOwnershipTransferReturnType(function_info.return_type)) {
+            return false;
+        }
+        
+        var lines = std.mem.splitScalar(u8, contents, '\n');
+        var line_number: u32 = 1;
+        var inside_function = false;
+        var brace_depth: i32 = 0;
+        
+        while (lines.next()) |line| {
+            defer line_number += 1;
+            
+            // Track if we're inside the function
+            if (line_number >= function_info.start_line) {
+                inside_function = true;
+            }
+            
+            if (inside_function) {
+                // Track brace depth to know when function ends
+                for (line) |ch| {
+                    if (ch == '{') brace_depth += 1;
+                    if (ch == '}') {
+                        brace_depth -= 1;
+                        if (brace_depth == 0 and line_number > allocation.line) {
+                            // Function ended, didn't find return
+                            return false;
+                        }
+                    }
+                }
+                
+                // Look for return statements after the allocation
+                if (line_number > allocation.line) {
+                    if (std.mem.indexOf(u8, line, "return")) |return_pos| {
+                        // Check if the allocated variable is being returned
+                        const after_return = line[return_pos + 6..];
+                        
+                        // Simple check: is the variable name in the return statement?
+                        if (std.mem.indexOf(u8, after_return, allocation.variable_name)) |_| {
+                            return true;
+                        }
+                        
+                        // Check for struct initialization patterns like .{ .field = variable }
+                        if (std.mem.indexOf(u8, after_return, ".{")) |_| {
+                            if (std.mem.indexOf(u8, after_return, allocation.variable_name)) |_| {
+                                return true;
+                            }
+                        }
+                    }
+                }
             }
         }
         

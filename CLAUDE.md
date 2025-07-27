@@ -212,6 +212,142 @@ const config = zig_tooling.Config{
 // const arena_alloc = my_arena.allocator(); // Detected as "MyArenaAllocator"
 ```
 
+### Pattern Conflict Resolution
+
+The library provides several mechanisms to handle pattern conflicts:
+
+```zig
+// Disable all default patterns and use only custom patterns
+const config = zig_tooling.Config{
+    .memory = .{
+        .use_default_patterns = false,  // Disable all built-in patterns
+        .allocator_patterns = &.{
+            .{ .name = "MyTestAllocator", .pattern = "std.testing.allocator" },
+        },
+    },
+};
+
+// Selectively disable specific default patterns
+const config = zig_tooling.Config{
+    .memory = .{
+        // Disable specific built-in patterns that conflict with your project
+        .disabled_default_patterns = &.{ "std.testing.allocator", "ArenaAllocator" },
+        .allowed_allocators = &.{ "MyTestAllocator", "MyArena" },
+        .allocator_patterns = &.{
+            // These custom patterns will be used instead
+            .{ .name = "MyTestAllocator", .pattern = "testing.allocator" },
+            .{ .name = "MyArena", .pattern = "arena" },
+        },
+    },
+};
+```
+
+#### Pattern Precedence Rules
+1. **Custom patterns are checked first** - If a custom pattern matches, it takes precedence over built-in patterns
+2. **Disabled patterns are skipped** - Patterns listed in `disabled_default_patterns` are not checked
+3. **Built-in patterns are checked last** - Only if enabled and not disabled
+
+#### Handling std.testing.allocator
+The library includes built-in patterns for both `std.testing.allocator` and `testing.allocator`:
+- Use `allowed_allocators = &.{ "std.testing.allocator", "testing.allocator" }` to allow both
+- Use `disabled_default_patterns = &.{ "std.testing.allocator" }` to disable the built-in pattern
+- Define custom patterns if you need different behavior for test allocators
+
+### Memory Ownership Transfer Detection
+
+The library automatically detects when functions transfer memory ownership to their callers, reducing false positive "missing defer" warnings. This is especially useful for factory functions, builders, and other patterns that allocate and return memory.
+
+#### Default Ownership Transfer Patterns
+
+The library recognizes common patterns that indicate ownership transfer:
+
+**Function Name Patterns:**
+- `create`, `init`, `make`, `new` - Factory/constructor functions
+- `clone`, `duplicate`, `copy` - Functions that return owned copies
+- `toString`, `toSlice`, `format` - String conversion functions
+- `alloc` - Explicit allocation functions
+
+**Return Type Patterns:**
+- `[]u8`, `[]const u8` - Byte slices (often strings)
+- `![]u8`, `![]const u8` - Error unions returning slices
+- `?[]u8`, `?[]const u8` - Optional slices
+- `*T`, `!*T`, `?*T` - Pointers (excluding function pointers)
+- Complex types like `anyerror![]u8` are also supported
+
+#### Configuring Custom Ownership Patterns
+
+```zig
+const config = zig_tooling.Config{
+    .memory = .{
+        // Add custom ownership transfer patterns
+        .ownership_patterns = &.{
+            // Match function names containing "get"
+            .{ .function_pattern = "get", .description = "Getter functions" },
+            
+            // Match specific return types
+            .{ .return_type_pattern = "!MyStruct", .description = "Factory returning MyStruct" },
+            
+            // Combine both patterns for more specific matching
+            .{ 
+                .function_pattern = "fetch",
+                .return_type_pattern = "![]const u8",
+                .description = "Fetch functions returning strings" 
+            },
+        },
+        
+        // Optionally disable default patterns
+        .use_default_ownership_patterns = false,
+    },
+};
+```
+
+#### How It Works
+
+The analyzer detects ownership transfer in several ways:
+
+1. **Immediate Return**: `return try allocator.alloc(u8, 100);`
+2. **Stored and Returned**: Variable allocated, processed, then returned
+3. **Struct Initialization**: Allocated memory included in returned struct
+4. **Error Handling**: Proper `errdefer` cleanup for error paths
+
+#### Example: Ownership Transfer Patterns
+
+```zig
+// Detected as ownership transfer - no missing defer warning
+pub fn createBuffer(allocator: std.mem.Allocator) ![]u8 {
+    return try allocator.alloc(u8, 100);
+}
+
+// Also detected - allocation stored then returned
+pub fn createAndInit(allocator: std.mem.Allocator) ![]u8 {
+    const buffer = try allocator.alloc(u8, 100);
+    errdefer allocator.free(buffer);  // Proper error handling
+    
+    // Initialize buffer...
+    @memset(buffer, 0);
+    
+    return buffer;  // Ownership transferred to caller
+}
+
+// Struct pattern - allocated field in returned struct
+pub fn createStruct(allocator: std.mem.Allocator) !MyStruct {
+    const data = try allocator.alloc(u8, 100);
+    errdefer allocator.free(data);
+    
+    return MyStruct{
+        .data = data,  // Ownership transferred via struct
+        .len = 100,
+    };
+}
+
+// NOT ownership transfer - will warn about missing defer
+pub fn processData(allocator: std.mem.Allocator) !void {
+    const buffer = try allocator.alloc(u8, 100);
+    // Missing defer - function doesn't return the allocation
+    doSomething(buffer);
+}
+```
+
 ### Logging Integration
 ```zig
 // Enable logging with a custom callback
