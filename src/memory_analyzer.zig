@@ -1,21 +1,39 @@
-//! Memory Management Analyzer - NFL Simulation Project
+//! Memory Management Analyzer
 //! 
 //! This module provides comprehensive memory management analysis for Zig code,
-//! implementing the memory management strategy defined in docs/archive/MEMORY-MANAGEMENT-STRATEGY.md.
+//! detecting common memory safety issues and validating proper resource management.
 //! 
-//! Key Features (Enhanced Phase 2-3):
+//! ## Key Features
+//! - Allocation and deallocation tracking with defer validation
 //! - Ownership transfer pattern detection (functions returning allocated memory)
 //! - Single-allocation return pattern recognition (skip errdefer for immediate returns)
 //! - Advanced arena allocator pattern support with lifecycle validation
 //! - Test allocator pattern recognition (std.testing.allocator handling)
-//! - Enhanced component type detection (6 component types with detailed patterns)
-//! - False positive reduction: 47% total reduction, 54% error reduction
+//! - Configurable allocator type validation
+//! - False positive reduction through scope-aware analysis
 //! 
-//! Usage:
-//!   const analyzer = MemoryAnalyzer.init(allocator);
-//!   defer analyzer.deinit();
-//!   try analyzer.analyzeFile("src/example.zig");
-//!   analyzer.printReport();
+//! ## Usage Example
+//! ```zig
+//! const analyzer = MemoryAnalyzer.init(allocator);
+//! defer analyzer.deinit();
+//! try analyzer.analyzeSourceCode("example.zig", source_code);
+//! const issues = analyzer.getIssues();
+//! ```
+//!
+//! ## Configuration
+//! The analyzer behavior can be customized through MemoryConfig:
+//! ```zig
+//! const config = Config{
+//!     .memory = .{
+//!         .check_defer = true,
+//!         .allowed_allocators = &.{"std.heap.GeneralPurposeAllocator"},
+//!         .allocator_patterns = &.{
+//!             .{ .name = "MyAllocator", .pattern = "my_alloc" },
+//!         },
+//!     },
+//! };
+//! const analyzer = MemoryAnalyzer.initWithFullConfig(allocator, config);
+//! ```
 
 const std = @import("std");
 const ArrayList = std.ArrayList;
@@ -86,6 +104,14 @@ pub const ArenaPattern = struct {
     }
 };
 
+/// Memory analyzer that detects memory safety issues in Zig source code
+///
+/// The analyzer tracks allocations, deallocations, and ownership transfers
+/// to identify potential memory leaks, missing defer statements, and other
+/// memory-related issues.
+///
+/// ## Thread Safety
+/// The analyzer is not thread-safe. Each thread should use its own instance.
 pub const MemoryAnalyzer = struct {
     allocator: std.mem.Allocator,
     issues: ArrayList(Issue),
@@ -97,6 +123,13 @@ pub const MemoryAnalyzer = struct {
     options: types.AnalysisOptions,
     logger: ?app_logger.Logger,
     
+    /// Creates a new memory analyzer with default configuration
+    ///
+    /// ## Parameters
+    /// - `allocator`: Allocator used for internal data structures
+    ///
+    /// ## Returns
+    /// A new MemoryAnalyzer instance with default settings
     pub fn init(allocator: std.mem.Allocator) MemoryAnalyzer {
         return MemoryAnalyzer{
             .allocator = allocator,
@@ -111,6 +144,14 @@ pub const MemoryAnalyzer = struct {
         };
     }
     
+    /// Creates a new memory analyzer with custom memory configuration
+    ///
+    /// ## Parameters
+    /// - `allocator`: Allocator used for internal data structures
+    /// - `config`: Memory-specific configuration options
+    ///
+    /// ## Returns
+    /// A new MemoryAnalyzer instance with the specified configuration
     pub fn initWithConfig(allocator: std.mem.Allocator, config: types.MemoryConfig) MemoryAnalyzer {
         return MemoryAnalyzer{
             .allocator = allocator,
@@ -125,6 +166,23 @@ pub const MemoryAnalyzer = struct {
         };
     }
     
+    /// Creates a new memory analyzer with full configuration including logging
+    ///
+    /// ## Parameters
+    /// - `allocator`: Allocator used for internal data structures
+    /// - `config`: Complete configuration including memory settings and logging
+    ///
+    /// ## Returns
+    /// A new MemoryAnalyzer instance with full configuration
+    ///
+    /// ## Example
+    /// ```zig
+    /// const config = Config{
+    ///     .memory = .{ .check_defer = true },
+    ///     .logging = .{ .enabled = true, .callback = myLogHandler },
+    /// };
+    /// var analyzer = MemoryAnalyzer.initWithFullConfig(allocator, config);
+    /// ```
     pub fn initWithFullConfig(allocator: std.mem.Allocator, config: types.Config) MemoryAnalyzer {
         var analyzer = MemoryAnalyzer{
             .allocator = allocator,
@@ -146,6 +204,10 @@ pub const MemoryAnalyzer = struct {
         return analyzer;
     }
     
+    /// Cleans up all resources used by the analyzer
+    ///
+    /// This method frees all internal data structures and issue reports.
+    /// Must be called when the analyzer is no longer needed.
     pub fn deinit(self: *MemoryAnalyzer) void {
         // Free all issue descriptions, suggestions, and file paths
         for (self.issues.items) |issue| {
@@ -192,6 +254,25 @@ pub const MemoryAnalyzer = struct {
         try self.analyzeSourceCode(file_path, contents);
     }
     
+    /// Analyzes source code for memory safety issues
+    ///
+    /// This is the main entry point for analyzing Zig source code. The analyzer
+    /// will parse the code, track allocations and deallocations, and identify
+    /// potential memory safety issues.
+    ///
+    /// ## Parameters
+    /// - `file_path`: Path of the file being analyzed (used in error messages)
+    /// - `source`: The source code to analyze
+    ///
+    /// ## Errors
+    /// - `OutOfMemory`: If allocation fails during analysis
+    ///
+    /// ## Example
+    /// ```zig
+    /// const source = try std.fs.cwd().readFileAlloc(allocator, "main.zig", 1MB);
+    /// defer allocator.free(source);
+    /// try analyzer.analyzeSourceCode("main.zig", source);
+    /// ```
     pub fn analyzeSourceCode(self: *MemoryAnalyzer, file_path: []const u8, source: []const u8) !void {
         // Log analysis start
         if (self.logger) |logger| {
@@ -1359,6 +1440,15 @@ pub const MemoryAnalyzer = struct {
         return false;
     }
     
+    /// Returns all issues found during analysis
+    ///
+    /// ## Returns
+    /// A slice containing all detected issues. The slice is valid until
+    /// the analyzer is deinitialized or another analysis is performed.
+    ///
+    /// ## Note
+    /// The returned issues are owned by the analyzer and will be freed
+    /// when deinit() is called.
     pub fn getIssues(self: *MemoryAnalyzer) []const Issue {
         return self.issues.items;
     }

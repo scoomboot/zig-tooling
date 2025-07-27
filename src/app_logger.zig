@@ -23,6 +23,15 @@
 const std = @import("std");
 
 /// Log severity levels
+///
+/// Used to categorize log messages by importance and control
+/// which messages are emitted based on the minimum level setting.
+///
+/// ## Levels (from least to most severe)
+/// - `debug`: Detailed debugging information
+/// - `info`: General informational messages
+/// - `warn`: Warning messages for potential issues
+/// - `err`: Error messages for problems that need attention
 pub const LogLevel = enum {
     debug,
     info,
@@ -40,6 +49,18 @@ pub const LogLevel = enum {
 };
 
 /// Optional context information for log events
+///
+/// Provides additional metadata about the context in which a log event
+/// occurred. All fields are optional to allow flexible usage.
+///
+/// ## Example
+/// ```zig
+/// const context = LogContext{
+///     .file_path = "src/main.zig",
+///     .line = 42,
+///     .operation = "memory_analysis",
+/// };
+/// ```
 pub const LogContext = struct {
     /// File path being analyzed
     file_path: ?[]const u8 = null,
@@ -53,7 +74,7 @@ pub const LogContext = struct {
     /// Analysis phase or operation
     operation: ?[]const u8 = null,
     
-    /// Additional key-value pairs
+    /// Additional key-value pairs for custom data
     extra: ?std.json.Value = null,
 };
 
@@ -65,6 +86,13 @@ pub const SourceLocation = struct {
 };
 
 /// Structured log event
+///
+/// Contains all information about a single log event. This structure
+/// is passed to the log callback function.
+///
+/// ## Memory Management
+/// The strings in LogEvent are owned by the logger and are only valid
+/// during the callback execution. If you need to store them, make copies.
 pub const LogEvent = struct {
     /// Timestamp in milliseconds since epoch
     timestamp: i64,
@@ -72,7 +100,7 @@ pub const LogEvent = struct {
     /// Log severity level
     level: LogLevel,
     
-    /// User-defined category string
+    /// User-defined category string (e.g., "memory_analyzer", "testing_analyzer")
     category: []const u8,
     
     /// Log message
@@ -81,26 +109,60 @@ pub const LogEvent = struct {
     /// Optional context information
     context: ?LogContext = null,
     
-    /// Optional source location
+    /// Optional source location (where the log was generated)
     source_location: ?SourceLocation = null,
 };
 
 /// Log event callback function type
+///
+/// User-provided function that handles log events. The callback
+/// should be efficient as it may be called frequently during analysis.
+///
+/// ## Example
+/// ```zig
+/// fn myLogHandler(event: LogEvent) void {
+///     const stderr = std.io.getStdErr().writer();
+///     stderr.print("[{s}] {s}\n", .{ event.level.toString(), event.message }) catch {};
+/// }
+/// ```
+///
+/// ## Note
+/// The callback must not call back into the analyzer to avoid recursion.
 pub const LogCallback = *const fn (event: LogEvent) void;
 
 /// Logging configuration
+///
+/// Controls whether and how logging is performed during analysis.
+/// When enabled is false, no logging overhead is incurred.
+///
+/// ## Example
+/// ```zig
+/// const config = LoggingConfig{
+///     .enabled = true,
+///     .callback = stderrLogCallback,
+///     .min_level = .warn,  // Only warnings and errors
+/// };
+/// ```
 pub const LoggingConfig = struct {
     /// Enable or disable logging
     enabled: bool = false,
     
-    /// Callback function to handle log events
+    /// Callback function to handle log events (required if enabled)
     callback: ?LogCallback = null,
     
-    /// Minimum log level to emit
+    /// Minimum log level to emit (events below this level are filtered)
     min_level: LogLevel = .info,
 };
 
 /// Simple logger that uses callbacks
+///
+/// The Logger provides a lightweight logging interface that delegates
+/// actual log handling to user-provided callbacks. This design allows
+/// library users to integrate with their own logging systems.
+///
+/// ## Thread Safety
+/// The logger itself is thread-safe for read operations. However,
+/// the provided callback must handle its own thread safety if needed.
 pub const Logger = struct {
     config: LoggingConfig,
     allocator: std.mem.Allocator,
@@ -209,6 +271,23 @@ pub const Logger = struct {
 };
 
 /// Example log callback that prints to stderr
+///
+/// A ready-to-use callback implementation that formats log events
+/// and writes them to stderr. Useful for development and debugging.
+///
+/// ## Format
+/// ```
+/// [LEVEL] category: message
+/// ```
+///
+/// ## Usage
+/// ```zig
+/// const config = LoggingConfig{
+///     .enabled = true,
+///     .callback = stderrLogCallback,
+///     .min_level = .info,
+/// };
+/// ```
 pub fn stderrLogCallback(event: LogEvent) void {
     const stderr = std.io.getStdErr().writer();
     

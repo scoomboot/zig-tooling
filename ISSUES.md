@@ -12,39 +12,6 @@
 
 *Minimum viable complete library - focus on these first*
 
-- [x] #LC015: Result formatting utilities
-  - **Component**: src/formatters.zig (new)
-  - **Priority**: Medium
-  - **Created**: 2025-07-25
-  - **Started**: 2025-07-27
-  - **Completed**: 2025-07-27
-  - **Dependencies**: #LC008 ✅ (Completed 2025-07-26)
-  - **Details**: Format analysis results for different outputs
-  - **Resolution**:
-    - Created comprehensive formatters.zig module with text, JSON, and GitHub Actions formatters
-    - Implemented FormatOptions for configurable output (verbose, color, max_issues, etc.)
-    - Added custom formatter interface support with customFormatter() helper
-    - Implemented AnalysisOptions fields (max_issues, verbose, continue_on_error) in analyzers
-    - Fixed recursive bugs in addIssue() methods in both analyzers
-    - Updated build_integration.zig to use new formatters, removing TODO placeholders
-    - Exported formatters module from main zig_tooling.zig
-    - Added comprehensive test suite with 12+ test cases covering all formatters
-    - Updated CLAUDE.md with detailed formatting examples and API documentation
-    - All tests pass successfully
-
-- [ ] #LC016: API documentation
-  - **Component**: All public modules
-  - **Priority**: High
-  - **Created**: 2025-07-25
-  - **Dependencies**: #LC005-#LC015 (LC015 pending)
-  - **Details**: Add comprehensive documentation to all public APIs
-  - **Requirements**:
-    - Doc comments on all public items
-    - API reference guide
-    - Generated documentation
-    - Usage examples in docs
-  - **Why Tier 1**: Essential for library adoption and usability
-
 - [ ] #LC017: Integration examples
   - **Component**: examples/
   - **Priority**: High
@@ -395,7 +362,8 @@
     - Would improve test maintainability and readability
     - Discovered during LC014 implementation
 
-### Development Process & Quality (3 issues)
+
+### Development Process & Quality (4 issues)
 
 - [ ] #LC046: Add systematic Zig version compatibility testing
   - **Component**: build.zig, tests/, CI configuration
@@ -483,6 +451,26 @@
 ## ✅ Completed
 
 *Finished issues for reference*
+
+- [x] #LC016: API documentation
+  - **Component**: All public modules
+  - **Priority**: High
+  - **Created**: 2025-07-25
+  - **Started**: 2025-07-27
+  - **Completed**: 2025-07-27
+  - **Dependencies**: #LC005-#LC015 (All completed)
+  - **Details**: Add comprehensive documentation to all public APIs
+  - **Resolution**:
+    - Added comprehensive doc comments to all public types in types.zig
+    - Updated memory_analyzer.zig documentation and removed NFL references
+    - Added comprehensive documentation to testing_analyzer.zig
+    - Documented scope_tracker.zig builder pattern (already well documented)
+    - Enhanced documentation in app_logger.zig for types and callbacks
+    - Documented source_context.zig public API
+    - Added module doc to utils.zig (no public APIs yet)
+    - Created comprehensive docs/api-reference.md with full API guide
+    - All public APIs now have proper documentation with examples
+    - Discovered and logged LC050 for remaining project-specific references
 
 - [x] #LC015: Result formatting utilities
   - **Component**: src/formatters.zig (new)
@@ -870,6 +858,21 @@
     - Added TestComplianceReport struct for detailed analysis results
     - All tests pass, library builds successfully
 
+- [x] #LC050: Remove project-specific references from library documentation
+  - **Component**: src/memory_analyzer.zig, src/testing_analyzer.zig, README.md
+  - **Priority**: Low
+  - **Created**: 2025-07-27
+  - **Started**: 2025-07-27
+  - **Completed**: 2025-07-27
+  - **Dependencies**: None
+  - **Details**: The library contained project-specific references that needed to be removed for a generic library
+  - **Resolution**:
+    - Searched all source files, documentation, and tests for project-specific terms
+    - Found and replaced game_clock references in testing_analyzer.zig with generic cache_manager example
+    - Updated README.md to replace "Simulation" test category with "E2E, Performance"
+    - NFL references were already removed during LC016
+    - All tests pass successfully after changes
+
 ## Issue Guidelines
 
 1. **Issue Format**: `#LCXXX: Clear, action-oriented title` (LC = Library Conversion)
@@ -881,5 +884,5 @@
 
 ---
 
-*Last Updated: 2025-07-27 (Completed LC015: Result formatting utilities - comprehensive formatters module with text, JSON, GitHub Actions support and AnalysisOptions implementation)*
+*Last Updated: 2025-07-27 (Completed LC050: Removed project-specific references - replaced game_clock example with cache_manager, updated README.md)*
 *Focus: Library Conversion Project*

@@ -1,21 +1,37 @@
-//! Scope Tracking Infrastructure - Phase 5 Pattern Enhancement
+//! Scope Tracking Infrastructure
 //! 
 //! This module provides hierarchical scope tracking for enhanced pattern detection
-//! in memory management and testing compliance analysis. It addresses the critical
-//! scope tracking limitations identified in Phase 4 validation.
+//! in memory management and testing compliance analysis. It enables context-aware
+//! analysis by understanding the structure and relationships between code scopes.
 //!
-//! Key Features:
+//! ## Key Features
 //! - Hierarchical scope management with proper nesting
 //! - Variable lifecycle tracking within scopes
 //! - Context-aware pattern detection
-//! - Test body scope tracking (fixes critical defer detection bug)
+//! - Test body scope tracking for accurate defer detection
 //! - Support for complex control flow and nested structures
+//! - Performance optimizations for large files
 //!
-//! Usage:
-//!   var tracker = try ScopeTracker.init(allocator);
-//!   defer tracker.deinit();
-//!   try tracker.analyzeSourceCode(source_code);
-//!   const scopes = tracker.getScopes();
+//! ## Usage Example
+//! ```zig
+//! // Using the builder pattern
+//! var tracker = ScopeTrackerBuilder.init(allocator)
+//!     .withArenaTracking()
+//!     .withDeferTracking()
+//!     .withMaxDepth(20)
+//!     .build();
+//! defer tracker.deinit();
+//! 
+//! try tracker.analyzeSourceCode(source_code);
+//! const scopes = tracker.getScopes();
+//! ```
+//!
+//! ## Direct Usage
+//! ```zig
+//! var tracker = ScopeTracker.init(allocator);
+//! defer tracker.deinit();
+//! try tracker.analyzeSourceCode(source_code);
+//! ```
 
 const std = @import("std");
 const ArrayList = std.ArrayList;
@@ -112,14 +128,24 @@ pub const VariableInfo = struct {
 };
 
 /// Information about a scope (function, block, etc.)
+///
+/// Represents a single scope in the code hierarchy, tracking its boundaries,
+/// variables, and relationships to other scopes.
 pub const ScopeInfo = struct {
+    /// Type of this scope (function, block, loop, etc.)
     scope_type: ScopeType,
+    /// Line where the scope starts
     start_line: u32,
+    /// Line where the scope ends (null if not yet determined)
     end_line: ?u32,
+    /// Nesting depth (0 for top-level)
     depth: u32,
-    name: []const u8, // Function name, test name, or block identifier
+    /// Function name, test name, or block identifier
+    name: []const u8,
+    /// Variables declared in this scope (maps name to info)
     variables: std.StringHashMap(VariableInfo),
-    parent_scope: ?u32, // Index of parent scope in the scopes array
+    /// Index of parent scope in the scopes array (null for top-level)
+    parent_scope: ?u32,
     
     pub fn init(allocator: std.mem.Allocator, scope_type: ScopeType, name: []const u8, line: u32, depth: u32, parent: ?u32) ScopeInfo {
         return ScopeInfo{

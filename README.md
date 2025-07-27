@@ -12,7 +12,7 @@ A comprehensive library for code quality and analysis in Zig projects, providing
 
 ### Testing Analyzer
 - Enforces test naming conventions and memory safety in tests
-- Categorizes tests by type (Unit, Integration, Simulation, etc.)
+- Categorizes tests by type (Unit, Integration, E2E, Performance, etc.)
 - Validates test organization and colocation
 
 ### Logging System

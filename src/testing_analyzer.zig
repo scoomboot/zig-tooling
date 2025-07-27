@@ -1,3 +1,37 @@
+//! Testing Compliance Analyzer
+//!
+//! This module analyzes test organization, naming conventions, and structure
+//! to ensure consistent testing practices across a Zig codebase.
+//!
+//! ## Key Features
+//! - Test naming convention validation
+//! - Test category enforcement (unit, integration, e2e, etc.)
+//! - Test file organization checks
+//! - Source-to-test mapping validation
+//! - Duplicate test detection
+//! - Test memory safety validation
+//!
+//! ## Usage Example
+//! ```zig
+//! var analyzer = TestingAnalyzer.init(allocator);
+//! defer analyzer.deinit();
+//! try analyzer.analyzeSourceCode("tests/example_test.zig", source);
+//! const issues = analyzer.getIssues();
+//! ```
+//!
+//! ## Configuration
+//! Test analysis can be customized through TestingConfig:
+//! ```zig
+//! const config = Config{
+//!     .testing = .{
+//!         .enforce_categories = true,
+//!         .allowed_categories = &.{ "unit", "integration", "api" },
+//!         .test_file_suffix = "_test",
+//!     },
+//! };
+//! var analyzer = TestingAnalyzer.initWithFullConfig(allocator, config);
+//! ```
+
 const std = @import("std");
 const ArrayList = std.ArrayList;
 const HashMap = std.HashMap;
@@ -103,6 +137,10 @@ pub const TestingAnalyzer = struct {
         return analyzer;
     }
     
+    /// Cleans up all resources used by the analyzer
+    ///
+    /// This method frees all internal data structures and issue reports.
+    /// Must be called when the analyzer is no longer needed.
     pub fn deinit(self: *TestingAnalyzer) void {
         // Free all issue descriptions, suggestions, and file paths
         for (self.issues.items) |issue| {
@@ -844,6 +882,18 @@ pub const TestingAnalyzer = struct {
         return count;
     }
     
+    /// Generates a comprehensive test compliance report
+    ///
+    /// ## Returns
+    /// A structured report containing test statistics, compliance metrics,
+    /// and categorization data. Useful for generating summaries and dashboards.
+    ///
+    /// ## Example
+    /// ```zig
+    /// const report = analyzer.getComplianceReport();
+    /// std.debug.print("Total tests: {}\n", .{report.total_tests});
+    /// std.debug.print("Tests with categories: {}\n", .{report.tests_with_categories});
+    /// ```
     pub fn getComplianceReport(self: *TestingAnalyzer) TestComplianceReport {
         return TestComplianceReport{
             .total_tests = @intCast(self.tests.items.len),
@@ -882,15 +932,26 @@ pub const TestingAnalyzer = struct {
     }
 };
 
-// Structure to return compliance report data
+/// Structure containing comprehensive test compliance metrics
+///
+/// Provides a summary of test analysis results including counts,
+/// compliance percentages, and categorization statistics.
 pub const TestComplianceReport = struct {
+    /// Total number of tests found
     total_tests: u32,
+    /// Number of tests following naming conventions
     tests_with_proper_naming: u32,
+    /// Number of tests that have category prefixes
     tests_with_categories: u32,
+    /// Number of tests that appear to handle memory safely
     tests_with_memory_safety: u32,
+    /// Total number of issues found across all tests
     total_issues: u32,
+    /// Number of error-level issues
     error_count: u32,
+    /// Number of warning-level issues
     warning_count: u32,
+    /// Number of info-level issues
     info_count: u32,
 };
 
@@ -900,12 +961,12 @@ test "unit: testing analyzer basic functionality" {
     defer analyzer.deinit();
     
     const test_source =
-        \\test "unit: game_clock: basic functionality" {
+        \\test "unit: cache_manager: basic functionality" {
         \\    const allocator = std.testing.allocator;
-        \\    const clock = try GameClock.init(allocator);
-        \\    defer clock.deinit();
+        \\    const cache = try CacheManager.init(allocator);
+        \\    defer cache.deinit();
         \\    
-        \\    try std.testing.expect(clock.isValid());
+        \\    try std.testing.expect(cache.isEmpty());
         \\}
     ;
     

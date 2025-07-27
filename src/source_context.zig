@@ -1,22 +1,28 @@
-//! Source Context Analysis - Phase 5 Pattern Enhancement
+//! Source Context Analysis
 //! 
 //! This module provides context-aware source code analysis to distinguish between
 //! actual code patterns and patterns that appear in comments, strings, or other
 //! non-executable contexts. This is critical for reducing false positives in
 //! pattern detection.
 //!
-//! Key Features:
+//! ## Key Features
 //! - String literal detection (single and multi-line)
 //! - Comment detection (single-line and multi-line)
 //! - Accurate position tracking within source code
 //! - Context classification for pattern validation
 //! - Support for Zig-specific syntax patterns
 //!
-//! Usage:
-//!   var context = SourceContext.init(allocator);
-//!   defer context.deinit();
-//!   context.analyzeSource(source_code);
-//!   const is_code = context.isPositionInCode(line, column);
+//! ## Usage Example
+//! ```zig
+//! var context = SourceContext.init(allocator);
+//! defer context.deinit();
+//! try context.analyzeSource(source_code);
+//! 
+//! // Check if a position contains actual code
+//! if (context.isPositionInCode(line, column)) {
+//!     // Safe to analyze this as actual code
+//! }
+//! ```
 
 const std = @import("std");
 const ArrayList = std.ArrayList;
@@ -94,12 +100,25 @@ const PerformanceConfig = struct {
 };
 
 /// Main source context analyzer
+///
+/// Analyzes source code to identify regions of different contexts (code, comments,
+/// strings) and provides methods to query the context at specific positions.
+///
+/// ## Thread Safety
+/// The analyzer is not thread-safe. Each thread should use its own instance.
 pub const SourceContext = struct {
     allocator: std.mem.Allocator,
     regions: ArrayList(ContextRegion),
     perf_config: PerformanceConfig,
     analysis_cache: ?std.StringHashMap(bool), // Cache for repeated pattern analysis
     
+    /// Creates a new source context analyzer with default configuration
+    ///
+    /// ## Parameters
+    /// - `allocator`: Allocator for internal data structures
+    ///
+    /// ## Returns
+    /// A new SourceContext instance
     pub fn init(allocator: std.mem.Allocator) SourceContext {
         return SourceContext{
             .allocator = allocator,
@@ -118,6 +137,9 @@ pub const SourceContext = struct {
         };
     }
     
+    /// Cleans up all resources used by the analyzer
+    ///
+    /// Must be called when the analyzer is no longer needed.
     pub fn deinit(self: *SourceContext) void {
         self.regions.deinit();
         if (self.analysis_cache) |*cache| {
@@ -126,6 +148,21 @@ pub const SourceContext = struct {
     }
     
     /// Analyze source code and identify context regions
+    ///
+    /// Parses the source code to identify all regions of different contexts
+    /// (code, comments, strings). This must be called before querying positions.
+    ///
+    /// ## Parameters
+    /// - `source`: The source code to analyze
+    ///
+    /// ## Errors
+    /// - `OutOfMemory`: If allocation fails
+    ///
+    /// ## Example
+    /// ```zig
+    /// try context.analyzeSource(source_code);
+    /// // Now safe to query positions
+    /// ```
     pub fn analyzeSource(self: *SourceContext, source: []const u8) !void {
         self.regions.clearRetainingCapacity();
         
@@ -335,6 +372,17 @@ pub const SourceContext = struct {
     }
     
     /// Check if a position is in executable code (not comment or string)
+    ///
+    /// ## Parameters
+    /// - `line`: Line number (1-based)
+    /// - `column`: Column number (1-based)
+    ///
+    /// ## Returns
+    /// `true` if the position contains executable code, `false` if it's in
+    /// a comment, string, or other non-code context.
+    ///
+    /// ## Note
+    /// Must call `analyzeSource()` before using this method.
     pub fn isPositionInCode(self: *SourceContext, line: u32, column: u32) bool {
         for (self.regions.items) |region| {
             if (region.containsPosition(line, column)) {
@@ -365,6 +413,16 @@ pub const SourceContext = struct {
     }
     
     /// Get the context type at a specific position
+    ///
+    /// ## Parameters
+    /// - `line`: Line number (1-based)
+    /// - `column`: Column number (1-based)
+    ///
+    /// ## Returns
+    /// The type of context at the given position (code, comment, string, etc.)
+    ///
+    /// ## Note
+    /// Returns `.code` if no specific context region contains the position.
     pub fn getContextAtPosition(self: *SourceContext, line: u32, column: u32) ContextType {
         for (self.regions.items) |region| {
             if (region.containsPosition(line, column)) {
