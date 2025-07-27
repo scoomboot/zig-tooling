@@ -562,3 +562,73 @@ test "unit: API: arena allocator variable tracking" {
     
     try testing.expectEqual(@as(u32, 0), defer_issues);
 }
+
+test "unit: API: analyzeTests category strings survive config deallocation (LC025)" {
+    const allocator = testing.allocator;
+    
+    const source =
+        \\const std = @import("std");
+        \\const testing = std.testing;
+        \\
+        \\test "unit: module: test description" {
+        \\    try testing.expect(true);
+        \\}
+        \\
+        \\test "integration: database: connection test" {
+        \\    try testing.expect(true);
+        \\}
+        \\
+        \\test "e2e: api: full workflow" {
+        \\    try testing.expect(true);
+        \\}
+    ;
+    
+    // Create a config with custom categories in a scope that will end
+    const result = blk: {
+        const config = zig_tooling.Config{
+            .testing = .{
+                .enforce_categories = true,
+                .allowed_categories = &[_][]const u8{ "unit", "integration", "e2e" },
+            },
+        };
+        
+        // Analyze with the config
+        const analysis_result = try zig_tooling.analyzeTests(allocator, source, "test_categories.zig", config);
+        
+        // Config goes out of scope here, but category strings should survive
+        break :blk analysis_result;
+    };
+    
+    defer allocator.free(result.issues);
+    defer for (result.issues) |issue| {
+        allocator.free(issue.file_path);
+        allocator.free(issue.message);
+        if (issue.suggestion) |s| allocator.free(s);
+    };
+    
+    // Access the analyzer to check test patterns (this would crash if categories weren't copied)
+    var analyzer = zig_tooling.TestingAnalyzer.init(allocator);
+    defer analyzer.deinit();
+    
+    try analyzer.analyzeSourceCode("test_categories.zig", source);
+    
+    // Verify we have 3 tests with proper categories
+    try testing.expectEqual(@as(usize, 3), analyzer.tests.items.len);
+    
+    // Verify categories are properly set and accessible (would crash if not copied)
+    const test1 = analyzer.tests.items[0];
+    const test2 = analyzer.tests.items[1];
+    const test3 = analyzer.tests.items[2];
+    
+    try testing.expect(test1.category != null);
+    try testing.expect(test2.category != null);
+    try testing.expect(test3.category != null);
+    
+    // Verify the actual category values
+    try testing.expectEqualStrings("unit", test1.category.?);
+    try testing.expectEqualStrings("integration", test2.category.?);
+    try testing.expectEqualStrings("e2e", test3.category.?);
+    
+    // No issues expected since all tests have proper categories
+    try testing.expectEqual(@as(u32, 0), result.issues_found);
+}

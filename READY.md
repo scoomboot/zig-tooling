@@ -3,19 +3,12 @@
 **Current Focus**: Library conversion from CLI tools to pure Zig library package.
 
 ## 📊 Progress Summary
-- **Completed**: 13/30 issues (LC001 ✅, LC002 ✅, LC003 ✅, LC004 ✅, LC005 ✅, LC006 ✅, LC007 ✅, LC008 ✅, LC009 ✅, LC010 ✅, LC022 ✅, LC023 ✅, LC024 ✅)
-- **Ready to Start**: LC011, LC012, LC013, LC014, LC015, LC025, LC026, LC027, LC028, LC029, LC030 (11 issues)
+- **Completed**: 14/30 issues (LC001 ✅, LC002 ✅, LC003 ✅, LC004 ✅, LC005 ✅, LC006 ✅, LC007 ✅, LC008 ✅, LC009 ✅, LC010 ✅, LC022 ✅, LC023 ✅, LC024 ✅, LC025 ✅)
+- **Ready to Start**: LC011, LC012, LC013, LC014, LC015, LC026, LC027, LC028, LC029, LC030 (10 issues)
 - **In Progress**: None
 - **Blocked**: 6 issues awaiting dependencies
 
 ## 🟢 No Dependencies - Start Immediately
-
-- **#LC025**: Fix memory lifetime issues in TestPattern
-  - **Component**: src/testing_analyzer.zig
-  - **Status**: Ready
-  - **Dependencies**: None
-  - **Details**: TestPattern stores reference to category string from config, not a copy
-  - **Notes**: Could cause use-after-free if config is deallocated while results are in use
 
 - **#LC026**: Document getCategoryBreakdown memory ownership
   - **Component**: src/testing_analyzer.zig
@@ -116,11 +109,11 @@ This path unlocks the most work and enables parallel development.
 
 ## 🎯 Quick Reference
 
-- **Start Now**: #LC011, #LC012, #LC013, #LC014, #LC015, #LC025, #LC026, #LC027, #LC028, #LC029, #LC030 (11 issues ready)
+- **Start Now**: #LC011, #LC012, #LC013, #LC014, #LC015, #LC026, #LC027, #LC028, #LC029, #LC030 (10 issues ready)
 - **Total Issues**: 30
 - **Critical Issues**: 6
 - **Estimated Time**: 12-17 hours total
 
 ---
 
-*This file tracks library conversion issues from ISSUES.md. Updated: 2025-07-27 (LC024 completed; added LC028-LC030 for allocator pattern enhancements)*
+*This file tracks library conversion issues from ISSUES.md. Updated: 2025-07-27 (LC025 completed; fixed memory lifetime issues in TestPattern)*

@@ -12,23 +12,6 @@
 
 *Issues found during implementation that need to be addressed*
 
-- [ ] #LC025: Fix memory lifetime issues in TestPattern
-  - **Component**: src/testing_analyzer.zig
-  - **Priority**: Medium
-  - **Created**: 2025-07-27
-  - **Dependencies**: None
-  - **Details**: TestPattern stores reference to category string from config, not a copy
-  - **Requirements**:
-    - TestPattern.category should be a copy, not a reference
-    - Ensure proper memory management when config is freed
-    - Add test to verify category strings survive config deallocation
-  - **Notes**:
-    - See TestPattern struct definition at src/testing_analyzer.zig:40-50
-    - Problem occurs in identifyTests() at src/testing_analyzer.zig:284 where determineTestCategory returns reference
-    - TestPattern creation at src/testing_analyzer.zig:290-302
-    - Could cause use-after-free if config is deallocated while results are in use
-    - Discovered during LC010 implementation
-
 - [ ] #LC026: Document getCategoryBreakdown memory ownership
   - **Component**: src/testing_analyzer.zig
   - **Priority**: Low
@@ -277,6 +260,20 @@
 
 *Finished issues for reference*
 
+- [x] #LC025: Fix memory lifetime issues in TestPattern
+  - **Component**: src/testing_analyzer.zig
+  - **Priority**: Medium
+  - **Created**: 2025-07-27
+  - **Completed**: 2025-07-27
+  - **Dependencies**: None
+  - **Details**: TestPattern stores reference to category string from config, not a copy
+  - **Resolution**:
+    - Modified TestPattern creation to duplicate category strings using allocator.dupe()
+    - Updated deinit() to free category strings along with test names
+    - Updated reset() to free category strings when clearing tests
+    - Added comprehensive test to verify category strings survive config deallocation
+    - All tests pass successfully
+
 - [x] #LC024: Improve allocator type detection
   - **Component**: src/memory_analyzer.zig
   - **Priority**: Low
@@ -502,5 +499,5 @@
 
 ---
 
-*Last Updated: 2025-07-27 (LC024 completed; added LC028-LC030 for allocator pattern enhancements)*
+*Last Updated: 2025-07-27 (LC025 completed; fixed memory lifetime issues in TestPattern)*
 *Focus: Library Conversion Project*

@@ -83,9 +83,10 @@ pub const TestingAnalyzer = struct {
             if (issue.suggestion) |suggestion| if (suggestion.len > 0) self.allocator.free(suggestion);
         }
         
-        // Free all test names (allocated with self.allocator in identifyTests)
+        // Free all test names and categories (allocated with self.allocator in identifyTests)
         for (self.tests.items) |test_pattern| {
             if (test_pattern.test_name.len > 0) self.allocator.free(test_pattern.test_name);
+            if (test_pattern.category) |c| self.allocator.free(c);
         }
         
         // Free all file paths
@@ -126,9 +127,10 @@ pub const TestingAnalyzer = struct {
         defer temp_arena.deinit();
         const temp_allocator = temp_arena.allocator();
         
-        // Clear previous analysis results - free allocated test names first
+        // Clear previous analysis results - free allocated test names and categories first
         for (self.tests.items) |test_pattern| {
             if (test_pattern.test_name.len > 0) self.allocator.free(test_pattern.test_name);
+            if (test_pattern.category) |c| self.allocator.free(c);
         }
         self.tests.clearRetainingCapacity();
         
@@ -291,7 +293,7 @@ pub const TestingAnalyzer = struct {
                 .line = line_number,
                 .column = @intCast(test_pos + 1),
                 .test_name = try self.allocator.dupe(u8, test_name),
-                .category = category,
+                .category = if (category) |c| try self.allocator.dupe(u8, c) else null,
                 .has_proper_naming = has_proper_naming,
                 .has_memory_safety = false, // Will be determined later
                 .uses_testing_allocator = false, // Will be determined later
