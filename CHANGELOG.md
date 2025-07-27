@@ -5,6 +5,50 @@ All notable changes to the Zig Tooling Suite will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.3] - 2025-07-27
+
+### Added
+- **Major Feature**: Comprehensive ownership transfer detection (LC068)
+  - Configurable ownership patterns for custom allocator detection
+  - Enhanced return type parsing for error unions, optionals, and complex types
+  - Data flow analysis to track allocations returned later in functions
+  - 8 comprehensive test cases covering various ownership scenarios
+  - Default ownership patterns for common factory/builder functions
+- **Infrastructure**: Comprehensive integration testing framework (LC020)
+  - 6 integration test modules covering end-to-end workflows
+  - 4 sample projects with different complexity levels
+  - Build system integration testing
+  - Memory performance validation and benchmarks
+  - Thread safety and concurrent analysis validation
+  - Error boundary and edge case testing
+
+### Fixed
+- Resolved false positive "missing defer" warnings for valid ownership transfers (addresses GitHub issue #2)
+- Improved memory analyzer accuracy with scope-aware detection
+
+### Changed
+- Updated issue tracker organization and prioritization for v1.0 roadmap
+- Enhanced documentation with ownership transfer configuration examples
+
+## [0.1.2] - 2025-07-27
+
+### Fixed
+- **CRITICAL**: Fixed segfault in memory_analyzer.findFunctionContext when freeing return_type (LC057)
+  - Root cause: String literals were being freed as heap allocations
+  - Impact: Caused crashes during memory analysis in zig-db integration
+  - Resolution: Ensured consistent heap allocation for all strings in parseFunctionSignature
+
+### Added
+- Regression test "LC057: Function context parsing memory safety"
+- Improved memory management documentation
+- Enhanced error handling with proper errdefer cleanup
+
+## [0.1.1] - 2025-07-27
+
+### Fixed
+- **CRITICAL**: Fixed segfault in memory analyzer suggestion handling
+- Improved memory safety in analyzer core functions
+
 ## [0.1.0] - 2025-01-24
 
 ### Added
@@ -50,4 +94,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Single-threaded file processing
 - Pattern-based analysis using regex matching
 
-[0.1.0]: https://github.com/your-org/zig-tooling/releases/tag/v0.1.0
+[0.1.3]: https://github.com/scoomboot/zig-tooling/releases/tag/v0.1.3
+[0.1.2]: https://github.com/scoomboot/zig-tooling/releases/tag/v0.1.2
+[0.1.1]: https://github.com/scoomboot/zig-tooling/releases/tag/v0.1.1
+[0.1.0]: https://github.com/scoomboot/zig-tooling/releases/tag/v0.1.0
