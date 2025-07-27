@@ -12,18 +12,6 @@
 
 *Issues with no dependencies or all dependencies completed*
 
-- [ ] #LC014: Common patterns library
-  - **Component**: src/patterns.zig (new)
-  - **Priority**: Medium
-  - **Created**: 2025-07-25
-  - **Dependencies**: #LC009 ✅, #LC010 ✅
-  - **Details**: High-level convenience functions for common use cases
-  - **Requirements**:
-    - checkProject function
-    - checkFile function
-    - checkSource function
-    - Pattern documentation
-
 - [ ] #LC015: Result formatting utilities
   - **Component**: src/formatters.zig (new)
   - **Priority**: Medium
@@ -306,6 +294,39 @@
     - Need to consider memory usage with parallel processing
     - Discovered during LC013 implementation
 
+- [ ] #LC044: Extract shared glob pattern matching utility
+  - **Component**: src/utils.zig, src/patterns.zig, src/build_integration.zig
+  - **Priority**: Low
+  - **Created**: 2025-07-27
+  - **Dependencies**: #LC014 ✅
+  - **Details**: Duplicate matchesPattern() functions in patterns.zig and build_integration.zig
+  - **Requirements**:
+    - Create shared pattern matching utility in src/utils.zig
+    - Update both patterns.zig and build_integration.zig to use shared function
+    - Consolidate pattern matching logic to avoid code duplication
+    - Add tests for shared utility
+  - **Notes**:
+    - matchesPattern() at [src/patterns.zig:350-370](src/patterns.zig#L350-L370) duplicates [src/build_integration.zig:647-665](src/build_integration.zig#L647-L665)
+    - Both functions implement the same basic glob pattern matching
+    - Discovered during LC014 implementation
+
+- [ ] #LC045: Add test utilities for temporary directory setup
+  - **Component**: tests/test_utils.zig (new), tests/
+  - **Priority**: Low  
+  - **Created**: 2025-07-27
+  - **Dependencies**: #LC014 ✅
+  - **Details**: Test setup for temporary directories is verbose and duplicated
+  - **Requirements**:
+    - Create test utilities for easier temporary directory and file setup
+    - Add helpers for creating test project structures
+    - Simplify test code in test_patterns.zig and other test files
+    - Add cleanup utilities for consistent test isolation
+  - **Notes**:
+    - Test setup in [tests/test_patterns.zig:82-109](tests/test_patterns.zig#L82-L109) is verbose and repeated
+    - Similar patterns in other test files could benefit from shared utilities
+    - Would improve test maintainability and readability
+    - Discovered during LC014 implementation
+
 *All newly discovered issues have been triaged and moved to appropriate sections*
 
 ## 📋 Backlog
@@ -393,6 +414,26 @@
 ## ✅ Completed
 
 *Finished issues for reference*
+
+- [x] #LC014: Common patterns library
+  - **Component**: src/patterns.zig (new)
+  - **Priority**: Medium
+  - **Created**: 2025-07-25
+  - **Started**: 2025-07-27
+  - **Completed**: 2025-07-27
+  - **Dependencies**: #LC009 ✅, #LC010 ✅
+  - **Details**: High-level convenience functions for common use cases
+  - **Resolution**:
+    - Created comprehensive patterns.zig with checkProject(), checkFile(), and checkSource() functions
+    - Implemented ProjectAnalysisResult type with enhanced project-level statistics
+    - Added automatic file discovery with configurable include/exclude patterns
+    - Implemented progress reporting callback support for large projects
+    - Created optimized default configurations for different use cases
+    - Added memory management helpers (freeResult(), freeProjectResult())
+    - Exported patterns module through main zig_tooling.zig
+    - Created comprehensive test suite in tests/test_patterns.zig
+    - Updated CLAUDE.md with patterns usage examples and documentation
+    - All core requirements completed successfully
 
 - [x] #LC013: Build system integration helpers
   - **Component**: src/build_integration.zig (new)
@@ -732,5 +773,5 @@
 
 ---
 
-*Last Updated: 2025-07-27 (Added 6 new issues LC038-LC043 discovered during LC013 implementation - build integration improvements needed)*
+*Last Updated: 2025-07-27 (Added 2 new issues LC044-LC045 discovered during LC014 implementation - code duplication and test utility improvements)*
 *Focus: Library Conversion Project*

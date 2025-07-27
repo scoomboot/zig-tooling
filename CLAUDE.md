@@ -95,6 +95,96 @@ const LoggingConfig = zig_tooling.LoggingConfig;
 
 ## Common Usage Patterns
 
+### High-Level Convenience Functions
+
+The library provides a patterns module for the most common analysis scenarios:
+
+```zig
+const zig_tooling = @import("zig_tooling");
+const patterns = zig_tooling.patterns;
+
+// Quick project analysis with progress reporting
+pub fn checkMyProject() !void {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer _ = gpa.deinit();
+    const allocator = gpa.allocator();
+    
+    // Analyze entire project directory
+    const result = try patterns.checkProject(allocator, ".", null, progressCallback);
+    defer patterns.freeProjectResult(allocator, result);
+    
+    std.debug.print("Analyzed {} files in {}ms\n", .{ 
+        result.files_analyzed, result.analysis_time_ms 
+    });
+    
+    if (result.hasErrors()) {
+        std.debug.print("Found {} errors and {} warnings\n", .{
+            result.getErrorCount(), result.getWarningCount()
+        });
+        
+        for (result.issues) |issue| {
+            std.debug.print("{s}:{}:{}: {s}: {s}\n", .{
+                issue.file_path, issue.line, issue.column,
+                issue.severity.toString(), issue.message
+            });
+        }
+        std.process.exit(1);
+    }
+}
+
+fn progressCallback(files_processed: u32, total_files: u32, current_file: []const u8) void {
+    std.debug.print("Analyzing {}/{}: {s}\n", .{ files_processed + 1, total_files, current_file });
+}
+
+// Quick file check with enhanced error handling
+pub fn checkSingleFile(file_path: []const u8) !bool {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer _ = gpa.deinit();
+    const allocator = gpa.allocator();
+    
+    const result = try patterns.checkFile(allocator, file_path, null);
+    defer patterns.freeResult(allocator, result);
+    
+    return !result.hasErrors();
+}
+
+// Analyze source code directly from memory
+pub fn validateCodeSnippet(source: []const u8) !bool {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer _ = gpa.deinit();
+    const allocator = gpa.allocator();
+    
+    const result = try patterns.checkSource(allocator, source, null);
+    defer patterns.freeResult(allocator, result);
+    
+    return !result.hasErrors();
+}
+```
+
+#### Pattern Functions Overview
+
+- **`checkProject(allocator, path, config, progress_callback)`**: Analyzes entire project directories
+  - Automatic file discovery with configurable patterns
+  - Progress reporting for large projects
+  - Aggregated results across all files
+  - Built-in handling of cache directories and build artifacts
+
+- **`checkFile(allocator, file_path, config)`**: Analyzes single files
+  - Enhanced error handling with descriptive messages
+  - Uses optimized defaults for common scenarios
+  - Wrapper around core `analyzeFile()` with better UX
+
+- **`checkSource(allocator, source, config)`**: Analyzes source code from memory
+  - No file I/O overhead
+  - Ideal for editor integrations and live analysis
+  - More lenient defaults suitable for code snippets
+
+Each pattern function provides:
+- Sensible default configurations optimized for common use cases
+- Enhanced error handling with user-friendly messages
+- Automatic memory management helpers (`freeResult()`, `freeProjectResult()`)
+- Progress reporting for long-running operations
+
 ### Custom Allocator Detection
 ```zig
 // Define custom allocator patterns for your project

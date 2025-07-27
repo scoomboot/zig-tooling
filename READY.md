@@ -3,8 +3,8 @@
 **Current Focus**: Library conversion from CLI tools to pure Zig library package.
 
 ## 📊 Progress Summary
-- **Completed**: 20/44 issues (LC001 ✅, LC002 ✅, LC003 ✅, LC004 ✅, LC005 ✅, LC006 ✅, LC007 ✅, LC008 ✅, LC009 ✅, LC010 ✅, LC011 ✅, LC012 ✅, LC013 ✅, LC022 ✅, LC023 ✅, LC024 ✅, LC025 ✅, LC026 ✅, LC027 ✅, LC028 ✅)
-- **Ready to Start**: LC014, LC015, LC019, LC029, LC030, LC031, LC032, LC033, LC034, LC035, LC036, LC037, LC038, LC041, LC042 (15 issues)
+- **Completed**: 21/46 issues (LC001 ✅, LC002 ✅, LC003 ✅, LC004 ✅, LC005 ✅, LC006 ✅, LC007 ✅, LC008 ✅, LC009 ✅, LC010 ✅, LC011 ✅, LC012 ✅, LC013 ✅, LC014 ✅, LC022 ✅, LC023 ✅, LC024 ✅, LC025 ✅, LC026 ✅, LC027 ✅, LC028 ✅)
+- **Ready to Start**: LC015, LC019, LC029, LC030, LC031, LC032, LC033, LC034, LC035, LC036, LC037, LC038, LC041, LC042, LC044, LC045 (16 issues)
 - **In Progress**: None
 - **Blocked**: 8 issues awaiting dependencies
 
@@ -13,13 +13,6 @@
 *All no-dependency issues have been completed*
 
 ## 🟢 All Dependencies Completed - Ready to Start
-
-- **#LC014**: Common patterns library
-  - **Component**: src/patterns.zig (new)
-  - **Status**: Ready
-  - **Dependencies**: #LC009 ✅ (Completed 2025-07-26), #LC010 ✅ (Completed 2025-07-27)
-  - **Details**: High-level convenience functions for common use cases
-  - **Notes**: checkProject, checkFile, checkSource functions needed
 
 - **#LC015**: Result formatting utilities
   - **Component**: src/formatters.zig (new)
@@ -119,6 +112,20 @@
   - **Details**: Only bash pre-commit hooks are fully implemented
   - **Notes**: Fish and PowerShell hooks are placeholder implementations
 
+- **#LC044**: Extract shared glob pattern matching utility
+  - **Component**: src/utils.zig, src/patterns.zig, src/build_integration.zig
+  - **Status**: Ready
+  - **Dependencies**: #LC014 ✅ (Completed 2025-07-27)
+  - **Details**: Duplicate matchesPattern() functions need consolidation
+  - **Notes**: Code duplication between patterns.zig and build_integration.zig
+
+- **#LC045**: Add test utilities for temporary directory setup
+  - **Component**: tests/test_utils.zig (new), tests/
+  - **Status**: Ready
+  - **Dependencies**: #LC014 ✅ (Completed 2025-07-27)
+  - **Details**: Test setup for temporary directories is verbose and duplicated
+  - **Notes**: Would improve test maintainability and readability
+
 ## 🔄 Next Wave (1 Dependency Away)
 
 *Issues that become available after completing current work*
@@ -162,11 +169,11 @@ This path unlocks the most work and enables parallel development.
 
 ## 🎯 Quick Reference
 
-- **Start Now**: #LC014, #LC015, #LC019, #LC029, #LC030, #LC031, #LC032, #LC033, #LC034, #LC035, #LC036, #LC037, #LC038, #LC041, #LC042 (15 issues ready)
-- **Total Issues**: 44
+- **Start Now**: #LC015, #LC019, #LC029, #LC030, #LC031, #LC032, #LC033, #LC034, #LC035, #LC036, #LC037, #LC038, #LC041, #LC042, #LC044, #LC045 (16 issues ready)
+- **Total Issues**: 46
 - **Critical Issues**: 5 (1 moved to ready)
 - **Estimated Time**: 18-25 hours total
 
 ---
 
-*This file tracks library conversion issues from ISSUES.md. Updated: 2025-07-27 (Added 6 new issues discovered during LC013 implementation - 15 issues now ready to start)*
+*This file tracks library conversion issues from ISSUES.md. Updated: 2025-07-27 (Added 2 new issues LC044-LC045 discovered during LC014 implementation - 16 issues now ready to start)*

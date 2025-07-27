@@ -67,6 +67,9 @@ pub const app_logger = logger_module;
 // Re-export build integration helpers
 pub const build_integration = @import("build_integration.zig");
 
+// Re-export common patterns library
+pub const patterns = @import("patterns.zig");
+
 /// Analyzes memory safety in the provided source code
 /// 
 /// This function performs comprehensive memory safety analysis including:
