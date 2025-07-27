@@ -1,47 +1,54 @@
-# Sample Project - Zig Tooling Examples
+# Sample Project - Zig Tooling Test Data
 
-This directory contains example files demonstrating common issues that the Zig tooling can detect.
+This directory contains example files with intentional issues that demonstrate what the zig-tooling library can detect.
 
 ## Files
 
 - **memory_issues.zig** - Examples of memory management issues:
   - Missing `defer` statements
-  - Missing `errdefer` for error handling
-  - Proper memory management patterns
+  - Missing `errdefer` for error handling  
+  - Proper memory management patterns (for comparison)
 
 - **test_examples.zig** - Examples of testing compliance issues:
   - Improperly named tests
   - Tests without proper categorization
-  - Good examples of categorized tests
+  - Good examples of properly categorized tests
 
-- **.zigtools** - Example configuration file (future feature)
+## Using These Files
 
-## Running the Tools
+These files are used as test data in the integration examples. You can analyze them using the zig-tooling library:
 
-From this directory:
+```zig
+const std = @import("std");
+const zig_tooling = @import("zig_tooling");
 
-```bash
-# Check for memory issues
-memory_checker_cli file memory_issues.zig
+// Analyze memory issues
+const result = try zig_tooling.analyzeFile(allocator, "memory_issues.zig", null);
+defer allocator.free(result.issues);
 
-# Check testing compliance
-testing_compliance_cli file test_examples.zig
-
-# Scan the entire sample project
-memory_checker_cli scan
-testing_compliance_cli scan
+// Check the results
+if (result.hasErrors()) {
+    std.debug.print("Found {} issues\n", .{result.issues_found});
+}
 ```
 
-## Expected Results
+See the [integration examples](../) for more comprehensive usage patterns:
+- [basic_usage.zig](../basic_usage.zig) - Getting started
+- [build_integration.zig](../build_integration.zig) - Build system integration
+- [custom_analyzer.zig](../custom_analyzer.zig) - Creating custom analyzers
+- [ide_integration.zig](../ide_integration.zig) - IDE/editor integration
+- [ci_integration.zig](../ci_integration.zig) - CI/CD pipeline integration
 
-### Memory Checker
-Should detect:
-- Missing `defer` in `leakyFunction`
-- Missing `errdefer` in `riskyOperation`
-- Recognize proper ownership transfer in `goodExample`
+## Expected Analysis Results
 
-### Testing Compliance
-Should detect:
-- `testSomething` function not following test naming convention
-- Test "something without category" lacking proper categorization
-- Recognize properly categorized tests
+### Memory Issues (memory_issues.zig)
+The analyzer should detect:
+- Missing `defer` statement after allocation in `leakyFunction` (line 5)
+- Missing `errdefer` statement in `riskyOperation` (line 16)
+- Proper ownership transfer in `goodExample` should not trigger warnings
+
+### Testing Compliance (test_examples.zig)
+The analyzer should detect:
+- Test functions not following naming conventions
+- Tests missing category prefixes (e.g., "unit:", "integration:")
+- Invalid test categories not in the allowed list

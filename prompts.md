@@ -1,3 +1,11 @@
-come up with a plan to resolve issue LC050 in our issue tracker and ready files @ISSUES.md @READY.md make sure to update these files when done. Review, read, and understand the plan here @docs/implementation/library-conversion-plan.md. clean up any temp files or test files that we dont need when done. ultrathink
+# Development Prompts
 
-During this session were any new issues found our potential improvements that we should add to our issue tracker and ready files @ISSUES.md @READY.md. If you did find issues make sure to add helpfull links when updating the issue tracker. ultrathink
+## Prompt 1: Issue Resolution & Cleanup
+```
+Come up with a plan to resolve issue LC017 in our issue tracker and ready files @ISSUES.md @READY.md. Make sure to update these files when done. Review, read, and understand the plan here @docs/implementation/library-conversion-plan.md. Clean up any temp files or test files that we don't need when done. ultrathink
+```
+
+## Prompt 2: Session Review & Issue Tracking
+```
+During this session, were any new issues found or potential improvements that we should add to our issue tracker and ready files @ISSUES.md @READY.md? If you did find issues, make sure to add helpful links when updating the issue tracker. ultrathink
+```
