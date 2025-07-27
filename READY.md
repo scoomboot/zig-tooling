@@ -3,19 +3,14 @@
 **Current Focus**: Library conversion from CLI tools to pure Zig library package.
 
 ## 📊 Progress Summary
-- **Completed**: 16/30 issues (LC001 ✅, LC002 ✅, LC003 ✅, LC004 ✅, LC005 ✅, LC006 ✅, LC007 ✅, LC008 ✅, LC009 ✅, LC010 ✅, LC022 ✅, LC023 ✅, LC024 ✅, LC025 ✅, LC026 ✅, LC027 ✅)
-- **Ready to Start**: LC011, LC012, LC013, LC014, LC015, LC028, LC029, LC030 (8 issues)
+- **Completed**: 17/34 issues (LC001 ✅, LC002 ✅, LC003 ✅, LC004 ✅, LC005 ✅, LC006 ✅, LC007 ✅, LC008 ✅, LC009 ✅, LC010 ✅, LC022 ✅, LC023 ✅, LC024 ✅, LC025 ✅, LC026 ✅, LC027 ✅, LC028 ✅)
+- **Ready to Start**: LC011, LC012, LC013, LC014, LC015, LC029, LC030, LC031, LC032, LC033 (10 issues)
 - **In Progress**: None
 - **Blocked**: 6 issues awaiting dependencies
 
 ## 🟢 No Dependencies - Start Immediately
 
-- **#LC028**: Add allocator pattern validation
-  - **Component**: src/memory_analyzer.zig
-  - **Status**: Ready
-  - **Dependencies**: None
-  - **Details**: No validation of allocator patterns in configuration
-  - **Notes**: Empty or duplicate patterns could cause issues
+*All no-dependency issues have been completed*
 
 ## 🟢 All Dependencies Completed - Ready to Start
 
@@ -52,6 +47,27 @@
   - **Dependencies**: #LC024 ✅ (Completed 2025-07-27)
   - **Details**: No way to use only custom patterns without defaults
   - **Notes**: Users might want complete control over pattern matching
+
+- **#LC031**: Add pattern conflict detection
+  - **Component**: src/memory_analyzer.zig
+  - **Status**: Ready
+  - **Dependencies**: #LC028 ✅ (Completed 2025-07-27)
+  - **Details**: Patterns that overlap can cause unexpected matches
+  - **Notes**: Example: "alloc" would match before "allocator" in "my_allocator_var"
+
+- **#LC032**: Add case-insensitive pattern matching option
+  - **Component**: src/memory_analyzer.zig, src/types.zig
+  - **Status**: Ready
+  - **Dependencies**: #LC024 ✅ (Completed 2025-07-27)
+  - **Details**: Pattern matching is currently case-sensitive only
+  - **Notes**: Some projects may have inconsistent allocator naming
+
+- **#LC033**: Add pattern testing utilities
+  - **Component**: src/memory_analyzer.zig
+  - **Status**: Ready
+  - **Dependencies**: #LC024 ✅ (Completed 2025-07-27)
+  - **Details**: No way to test patterns before using them
+  - **Notes**: Would help users debug pattern configuration
 
 ## 🔄 Next Wave (1 Dependency Away)
 
@@ -95,11 +111,11 @@ This path unlocks the most work and enables parallel development.
 
 ## 🎯 Quick Reference
 
-- **Start Now**: #LC011, #LC012, #LC013, #LC014, #LC015, #LC027, #LC028, #LC029, #LC030 (9 issues ready)
-- **Total Issues**: 30
+- **Start Now**: #LC011, #LC012, #LC013, #LC014, #LC015, #LC029, #LC030, #LC031, #LC032, #LC033 (10 issues ready)
+- **Total Issues**: 34
 - **Critical Issues**: 6
-- **Estimated Time**: 12-17 hours total
+- **Estimated Time**: 14-20 hours total
 
 ---
 
-*This file tracks library conversion issues from ISSUES.md. Updated: 2025-07-27 (LC027 completed; fixed buffer overflow in testing analyzer)*
+*This file tracks library conversion issues from ISSUES.md. Updated: 2025-07-27 (LC028 completed; discovered 3 new pattern-related improvements)*

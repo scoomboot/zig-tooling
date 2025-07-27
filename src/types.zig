@@ -220,4 +220,20 @@ pub const AnalysisError = error{
     /// Analysis stopped due to too many issues
     /// Exceeded the configured maximum issue limit (AnalysisOptions.max_issues)
     TooManyIssues,
+    
+    /// Allocator pattern name is empty
+    /// Pattern definitions must have a non-empty name for identification
+    EmptyPatternName,
+    
+    /// Allocator pattern string is empty
+    /// Pattern definitions must have a non-empty pattern for matching
+    EmptyPattern,
+    
+    /// Duplicate allocator pattern name found
+    /// Each pattern name must be unique across all configured patterns
+    DuplicatePatternName,
+    
+    /// Allocator pattern is too generic (e.g., single character)
+    /// Overly generic patterns may cause false positive matches
+    PatternTooGeneric,
 };

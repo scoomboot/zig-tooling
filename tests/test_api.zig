@@ -676,3 +676,155 @@ test "LC027: testing analyzer handles long category names without buffer overflo
     try testing.expect(std.mem.indexOf(u8, issue.suggestion.?, "unit") != null);
     try testing.expect(std.mem.indexOf(u8, issue.suggestion.?, "integration") != null);
 }
+
+test "LC028: memory analyzer validates allocator patterns" {
+    const source =
+        \\const std = @import("std");
+        \\pub fn main() !void {
+        \\    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+        \\    const allocator = gpa.allocator();
+        \\}
+    ;
+    
+    // Test 1: Empty pattern name
+    {
+        const config = zig_tooling.Config{
+            .memory = .{
+                .allocator_patterns = &[_]@import("../src/types.zig").AllocatorPattern{
+                    .{ .name = "", .pattern = "test" },
+                },
+            },
+        };
+        
+        const result = zig_tooling.analyzeMemory(testing.allocator, source, "test.zig", config);
+        try testing.expectError(zig_tooling.AnalysisError.EmptyPatternName, result);
+    }
+    
+    // Test 2: Empty pattern string
+    {
+        const config = zig_tooling.Config{
+            .memory = .{
+                .allocator_patterns = &[_]@import("../src/types.zig").AllocatorPattern{
+                    .{ .name = "TestAllocator", .pattern = "" },
+                },
+            },
+        };
+        
+        const result = zig_tooling.analyzeMemory(testing.allocator, source, "test.zig", config);
+        try testing.expectError(zig_tooling.AnalysisError.EmptyPattern, result);
+    }
+    
+    // Test 3: Duplicate pattern names
+    {
+        const config = zig_tooling.Config{
+            .memory = .{
+                .allocator_patterns = &[_]@import("../src/types.zig").AllocatorPattern{
+                    .{ .name = "MyAllocator", .pattern = "my_alloc" },
+                    .{ .name = "MyAllocator", .pattern = "different_pattern" },
+                },
+            },
+        };
+        
+        const result = zig_tooling.analyzeMemory(testing.allocator, source, "test.zig", config);
+        try testing.expectError(zig_tooling.AnalysisError.DuplicatePatternName, result);
+    }
+    
+    // Test 4: Single character pattern (should warn but not error)
+    {
+        const config = zig_tooling.Config{
+            .memory = .{
+                .allocator_patterns = &[_]@import("../src/types.zig").AllocatorPattern{
+                    .{ .name = "SingleChar", .pattern = "a" },
+                },
+            },
+        };
+        
+        const result = try zig_tooling.analyzeMemory(testing.allocator, source, "test.zig", config);
+        defer testing.allocator.free(result.issues);
+        defer for (result.issues) |issue| {
+            testing.allocator.free(issue.file_path);
+            testing.allocator.free(issue.message);
+            if (issue.suggestion) |s| testing.allocator.free(s);
+        };
+        
+        // Should have at least one warning about the single character pattern
+        var found_warning = false;
+        for (result.issues) |issue| {
+            if (issue.severity == .warning and 
+                std.mem.indexOf(u8, issue.message, "single character pattern") != null) {
+                found_warning = true;
+                break;
+            }
+        }
+        try testing.expect(found_warning);
+    }
+    
+    // Test 5: Pattern name conflicts with default patterns (should warn)
+    {
+        const config = zig_tooling.Config{
+            .memory = .{
+                .allocator_patterns = &[_]@import("../src/types.zig").AllocatorPattern{
+                    .{ .name = "GeneralPurposeAllocator", .pattern = "my_gpa" },
+                },
+            },
+        };
+        
+        const result = try zig_tooling.analyzeMemory(testing.allocator, source, "test.zig", config);
+        defer testing.allocator.free(result.issues);
+        defer for (result.issues) |issue| {
+            testing.allocator.free(issue.file_path);
+            testing.allocator.free(issue.message);
+            if (issue.suggestion) |s| testing.allocator.free(s);
+        };
+        
+        // Should have a warning about conflicting with built-in pattern
+        var found_warning = false;
+        for (result.issues) |issue| {
+            if (issue.severity == .warning and 
+                std.mem.indexOf(u8, issue.message, "conflicts with built-in pattern") != null) {
+                found_warning = true;
+                break;
+            }
+        }
+        try testing.expect(found_warning);
+    }
+    
+    // Test 6: Valid custom patterns should work correctly
+    {
+        const config = zig_tooling.Config{
+            .memory = .{
+                .allocator_patterns = &[_]@import("../src/types.zig").AllocatorPattern{
+                    .{ .name = "MyCustomAllocator", .pattern = "custom_alloc" },
+                    .{ .name = "MyPoolAllocator", .pattern = "pool_alloc" },
+                },
+            },
+        };
+        
+        const test_source =
+            \\const std = @import("std");
+            \\pub fn main() !void {
+            \\    var custom_alloc = MyCustomAllocator.init();
+            \\    const allocator = custom_alloc.allocator();
+            \\    const data = try allocator.alloc(u8, 100);
+            \\}
+        ;
+        
+        const result = try zig_tooling.analyzeMemory(testing.allocator, test_source, "test.zig", config);
+        defer testing.allocator.free(result.issues);
+        defer for (result.issues) |issue| {
+            testing.allocator.free(issue.file_path);
+            testing.allocator.free(issue.message);
+            if (issue.suggestion) |s| testing.allocator.free(s);
+        };
+        
+        // Should have an issue about missing defer, not about pattern validation
+        var has_defer_issue = false;
+        for (result.issues) |issue| {
+            if (std.mem.indexOf(u8, issue.message, "defer") != null) {
+                has_defer_issue = true;
+                break;
+            }
+        }
+        try testing.expect(has_defer_issue);
+    }
+}

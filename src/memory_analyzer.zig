@@ -165,6 +165,11 @@ pub const MemoryAnalyzer = struct {
     }
     
     pub fn analyzeSourceCode(self: *MemoryAnalyzer, file_path: []const u8, source: []const u8) !void {
+        // Validate allocator patterns before analysis
+        if (try self.validateAllocatorPatterns()) |validation_error| {
+            return validation_error;
+        }
+        
         // Create arena for temporary allocations during this analysis
         var temp_arena = std.heap.ArenaAllocator.init(self.allocator);
         defer temp_arena.deinit();
@@ -721,6 +726,76 @@ pub const MemoryAnalyzer = struct {
         }
         
         return try list.toOwnedSlice();
+    }
+    
+    /// Validates allocator patterns in the configuration to prevent matching errors.
+    /// Returns any validation errors found, or null if all patterns are valid.
+    fn validateAllocatorPatterns(self: *MemoryAnalyzer) !?AnalysisError {
+        // Track pattern names to detect duplicates
+        var seen_names = std.StringHashMap(void).init(self.allocator);
+        defer seen_names.deinit();
+        
+        // Check custom patterns
+        for (self.config.allocator_patterns) |pattern| {
+            // Check for empty pattern name
+            if (pattern.name.len == 0) {
+                return AnalysisError.EmptyPatternName;
+            }
+            
+            // Check for empty pattern string
+            if (pattern.pattern.len == 0) {
+                return AnalysisError.EmptyPattern;
+            }
+            
+            // Check for overly generic patterns (single character)
+            if (pattern.pattern.len == 1) {
+                // Store a warning but don't fail - single char patterns might be intentional
+                const warning_msg = try std.fmt.allocPrint(
+                    self.allocator,
+                    "Pattern '{s}' uses single character pattern '{s}' which may cause false matches",
+                    .{ pattern.name, pattern.pattern }
+                );
+                try self.issues.append(Issue{
+                    .file_path = try self.allocator.dupe(u8, "configuration"),
+                    .line = 0,
+                    .column = 0,
+                    .severity = .warning,
+                    .issue_type = .incorrect_allocator,
+                    .message = warning_msg,
+                    .suggestion = "Consider using a more specific pattern to avoid false matches",
+                });
+            }
+            
+            // Check for duplicate names
+            const result = try seen_names.getOrPut(pattern.name);
+            if (result.found_existing) {
+                return AnalysisError.DuplicatePatternName;
+            }
+        }
+        
+        // Also check that custom patterns don't conflict with default patterns
+        for (default_allocator_patterns) |default_pattern| {
+            const result = try seen_names.getOrPut(default_pattern.name);
+            if (result.found_existing) {
+                // Custom pattern has same name as default pattern
+                const warning_msg = try std.fmt.allocPrint(
+                    self.allocator,
+                    "Custom pattern name '{s}' conflicts with built-in pattern name",
+                    .{default_pattern.name}
+                );
+                try self.issues.append(Issue{
+                    .file_path = try self.allocator.dupe(u8, "configuration"),
+                    .line = 0,
+                    .column = 0,
+                    .severity = .warning,
+                    .issue_type = .incorrect_allocator,
+                    .message = warning_msg,
+                    .suggestion = "Consider using a different name to avoid confusion",
+                });
+            }
+        }
+        
+        return null;
     }
     
     

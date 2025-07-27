@@ -12,22 +12,6 @@
 
 *Issues found during implementation that need to be addressed*
 
-- [ ] #LC028: Add allocator pattern validation
-  - **Component**: src/memory_analyzer.zig
-  - **Priority**: Low
-  - **Created**: 2025-07-27
-  - **Dependencies**: None
-  - **Details**: No validation of allocator patterns in configuration
-  - **Requirements**:
-    - Validate pattern names are not empty
-    - Check for duplicate pattern names
-    - Warn about overly generic patterns (e.g., single characters)
-    - Consider pattern conflict detection
-  - **Notes**:
-    - extractAllocatorType() at src/memory_analyzer.zig:670-692 uses patterns without validation
-    - Empty patterns could cause all allocators to match
-    - Duplicate names could cause confusion about which pattern matched
-    - Discovered during LC024 implementation
 
 - [ ] #LC029: Implement regex support for allocator patterns
   - **Component**: src/memory_analyzer.zig, src/types.zig
@@ -62,6 +46,57 @@
     - extractAllocatorType() always checks defaults at src/memory_analyzer.zig:684-688
     - Users might want complete control over pattern matching
     - Discovered during LC024 implementation
+
+- [ ] #LC031: Add pattern conflict detection
+  - **Component**: src/memory_analyzer.zig
+  - **Priority**: Low
+  - **Created**: 2025-07-27
+  - **Dependencies**: #LC028
+  - **Details**: Patterns that overlap can cause unexpected matches
+  - **Requirements**:
+    - Detect when patterns could match the same string (e.g., "alloc" and "allocator")
+    - Warn about overlapping patterns during validation
+    - Consider pattern specificity ordering
+    - Add tests for conflict scenarios
+  - **Notes**:
+    - validateAllocatorPatterns() at src/memory_analyzer.zig:733-799
+    - Currently only checks for duplicate names, not pattern overlap
+    - Example: pattern "alloc" would match before "allocator" in "my_allocator_var"
+    - Discovered during LC028 implementation
+
+- [ ] #LC032: Add case-insensitive pattern matching option
+  - **Component**: src/memory_analyzer.zig, src/types.zig
+  - **Priority**: Low
+  - **Created**: 2025-07-27
+  - **Dependencies**: #LC024
+  - **Details**: Pattern matching is currently case-sensitive only
+  - **Requirements**:
+    - Add case_sensitive boolean to AllocatorPattern struct (default true)
+    - Use case-insensitive matching when flag is false
+    - Update extractAllocatorType() to handle case sensitivity
+    - Add tests for case-insensitive patterns
+  - **Notes**:
+    - extractAllocatorType() at src/memory_analyzer.zig:675-697 uses std.mem.indexOf
+    - Would need to use std.ascii.indexOfIgnoreCase or similar
+    - Some projects may have inconsistent allocator naming conventions
+    - Discovered during LC028 implementation
+
+- [ ] #LC033: Add pattern testing utilities
+  - **Component**: src/memory_analyzer.zig
+  - **Priority**: Low
+  - **Created**: 2025-07-27
+  - **Dependencies**: #LC024
+  - **Details**: No way to test patterns before using them
+  - **Requirements**:
+    - Add public testPattern() function to test a pattern against sample strings
+    - Add public testAllPatterns() to test all configured patterns
+    - Return which pattern matched and the extracted allocator type
+    - Useful for debugging pattern configuration
+  - **Notes**:
+    - Would help users debug why patterns aren't matching as expected
+    - Could be exposed as MemoryAnalyzer.testPattern(pattern, test_string)
+    - extractAllocatorType() logic at src/memory_analyzer.zig:675-697
+    - Discovered during LC028 implementation
 
 ## 📋 Backlog
 
@@ -240,6 +275,23 @@
     - Both changes prevent buffer overflow when handling long category names or many categories
     - Added comprehensive test in test_api.zig with 300+ character category names to verify the fix
     - All tests pass successfully with no buffer overflow issues
+
+- [x] #LC028: Add allocator pattern validation
+  - **Component**: src/memory_analyzer.zig
+  - **Priority**: Low
+  - **Created**: 2025-07-27
+  - **Completed**: 2025-07-27
+  - **Dependencies**: None
+  - **Details**: No validation of allocator patterns in configuration
+  - **Resolution**:
+    - Added validateAllocatorPatterns() function to check pattern configuration
+    - Added new error types to AnalysisError enum: EmptyPatternName, EmptyPattern, DuplicatePatternName, PatternTooGeneric
+    - Validation checks for empty pattern names and patterns (returns error)
+    - Detects duplicate pattern names across custom and default patterns (returns error)
+    - Warns about single-character patterns that may cause false matches (adds warning issue)
+    - Warns when custom pattern names conflict with built-in pattern names
+    - Added comprehensive tests covering all validation scenarios
+    - All tests pass successfully
 
 - [x] #LC026: Document getCategoryBreakdown memory ownership
   - **Component**: src/testing_analyzer.zig
@@ -495,5 +547,5 @@
 
 ---
 
-*Last Updated: 2025-07-27 (LC027 completed; fixed buffer overflow in testing analyzer)*
+*Last Updated: 2025-07-27 (LC028 completed; added 3 new pattern-related issues LC031-LC033)*
 *Focus: Library Conversion Project*
