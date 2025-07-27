@@ -51,6 +51,7 @@ pub const TestingAnalyzer = struct {
     scope_tracker: ScopeTracker,
     enhanced_source_context: EnhancedSourceContext,
     config: types.TestingConfig,
+    options: types.AnalysisOptions,
     logger: ?app_logger.Logger,
     
     pub fn init(allocator: std.mem.Allocator) TestingAnalyzer {
@@ -62,6 +63,7 @@ pub const TestingAnalyzer = struct {
             .scope_tracker = ScopeTracker.init(allocator),
             .enhanced_source_context = EnhancedSourceContext.init(allocator),
             .config = .{}, // Use default config
+            .options = .{}, // Use default options
             .logger = null,
         };
     }
@@ -75,6 +77,7 @@ pub const TestingAnalyzer = struct {
             .scope_tracker = ScopeTracker.init(allocator),
             .enhanced_source_context = EnhancedSourceContext.init(allocator),
             .config = config,
+            .options = .{}, // Use default options
             .logger = null,
         };
     }
@@ -88,6 +91,7 @@ pub const TestingAnalyzer = struct {
             .scope_tracker = ScopeTracker.init(allocator),
             .enhanced_source_context = EnhancedSourceContext.init(allocator),
             .config = config.testing,
+            .options = config.options,
             .logger = null,
         };
         
@@ -733,6 +737,18 @@ pub const TestingAnalyzer = struct {
     }
     
     fn addIssue(self: *TestingAnalyzer, issue: Issue) !void {
+        // Check max_issues limit if configured
+        if (self.options.max_issues) |max| {
+            if (self.issues.items.len >= max) {
+                // If continue_on_error is false, stop analysis
+                if (!self.options.continue_on_error) {
+                    return types.AnalysisError.TooManyIssues;
+                }
+                // Otherwise just skip adding this issue
+                return;
+            }
+        }
+        
         // Log the issue if logging is enabled
         if (self.logger) |logger| {
             logger.logFmt(
@@ -753,7 +769,15 @@ pub const TestingAnalyzer = struct {
             );
         }
         
-        try self.addIssue(issue);
+        // Add verbose information if requested
+        const enhanced_issue = issue;
+        if (self.options.verbose) {
+            // Code snippet and suggestion are already included in the issue struct
+            // The formatter will use them based on the verbose option
+        }
+        
+        // Actually append the issue to the list
+        try self.issues.append(enhanced_issue);
     }
     
     // Structured compliance data methods

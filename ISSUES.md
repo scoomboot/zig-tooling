@@ -12,21 +12,25 @@
 
 *Minimum viable complete library - focus on these first*
 
-- [ ] #LC015: Result formatting utilities
+- [x] #LC015: Result formatting utilities
   - **Component**: src/formatters.zig (new)
   - **Priority**: Medium
   - **Created**: 2025-07-25
+  - **Started**: 2025-07-27
+  - **Completed**: 2025-07-27
   - **Dependencies**: #LC008 ✅ (Completed 2025-07-26)
   - **Details**: Format analysis results for different outputs
-  - **Requirements**:
-    - Text formatter
-    - JSON formatter
-    - GitHub Actions formatter
-    - Custom formatter support
-  - **Notes**:
-    - AnalysisOptions (src/types.zig:147-154) fields not used yet
-    - max_issues, verbose, parallel, continue_on_error need implementation
-  - **Why Tier 1**: Blocks all documentation and user-facing output work
+  - **Resolution**:
+    - Created comprehensive formatters.zig module with text, JSON, and GitHub Actions formatters
+    - Implemented FormatOptions for configurable output (verbose, color, max_issues, etc.)
+    - Added custom formatter interface support with customFormatter() helper
+    - Implemented AnalysisOptions fields (max_issues, verbose, continue_on_error) in analyzers
+    - Fixed recursive bugs in addIssue() methods in both analyzers
+    - Updated build_integration.zig to use new formatters, removing TODO placeholders
+    - Exported formatters module from main zig_tooling.zig
+    - Added comprehensive test suite with 12+ test cases covering all formatters
+    - Updated CLAUDE.md with detailed formatting examples and API documentation
+    - All tests pass successfully
 
 - [ ] #LC016: API documentation
   - **Component**: All public modules
@@ -444,6 +448,26 @@
     - Would catch error handling gaps before production
     - Discovered during LC019 implementation
 
+- [ ] #LC049: Add static analysis for recursive function call detection
+  - **Component**: Static analysis tooling, CI/CD configuration
+  - **Priority**: Medium
+  - **Created**: 2025-07-27
+  - **Dependencies**: None
+  - **Details**: Critical recursive function call bugs not caught by static analysis or testing
+  - **Requirements**:
+    - Implement static analysis rules to detect recursive function calls within the same method
+    - Add CI/CD step to run recursive call pattern detection
+    - Create custom linter rules or use existing tools (rg, ast-grep, etc.)
+    - Add tests to verify recursive call detection works correctly
+  - **Notes**:
+    - **Critical Bug Found**: During LC015 implementation, discovered recursive bugs in both analyzers' `addIssue()` methods
+    - **Location**: [src/memory_analyzer.zig:1407](src/memory_analyzer.zig#L1407) and [src/testing_analyzer.zig:780](src/testing_analyzer.zig#L780)
+    - **Bug Pattern**: Methods calling `try self.addIssue(issue);` instead of `try self.issues.append(enhanced_issue);`
+    - **Impact**: Would cause stack overflow crashes in production with infinite recursion
+    - **Prevention**: Static analysis could catch patterns like `self.methodName()` within the same method definition
+    - **Tools**: Could use `rg "fn (\w+).*self\.\1\("` or similar patterns to detect
+    - Discovered during LC015 implementation - represents critical gap in our quality assurance
+
 ## 📋 Archive: Original Phase Organization
 
 *The library conversion was originally organized by phases, but has been replaced by the tier system above for better prioritization and clearer v1.0 focus.*
@@ -459,6 +483,26 @@
 ## ✅ Completed
 
 *Finished issues for reference*
+
+- [x] #LC015: Result formatting utilities
+  - **Component**: src/formatters.zig (new)
+  - **Priority**: Medium
+  - **Created**: 2025-07-25
+  - **Started**: 2025-07-27
+  - **Completed**: 2025-07-27
+  - **Dependencies**: #LC008 ✅ (Completed 2025-07-26)
+  - **Details**: Format analysis results for different outputs
+  - **Resolution**:
+    - Created comprehensive formatters.zig module with text, JSON, and GitHub Actions formatters
+    - Implemented FormatOptions for configurable output (verbose, color, max_issues, etc.)
+    - Added custom formatter interface support with customFormatter() helper
+    - Implemented AnalysisOptions fields (max_issues, verbose, continue_on_error) in analyzers
+    - Fixed recursive bugs in addIssue() methods in both analyzers
+    - Updated build_integration.zig to use new formatters, removing TODO placeholders
+    - Exported formatters module from main zig_tooling.zig
+    - Added comprehensive test suite with 12+ test cases covering all formatters
+    - Updated CLAUDE.md with detailed formatting examples and API documentation
+    - All tests pass successfully
 
 - [x] #LC019: Update test suite
   - **Component**: tests/
@@ -837,5 +881,5 @@
 
 ---
 
-*Last Updated: 2025-07-27 (Completed LC019 and added 3 new TIER 3 issues LC046-LC048 for development process improvements discovered during implementation)*
+*Last Updated: 2025-07-27 (Completed LC015: Result formatting utilities - comprehensive formatters module with text, JSON, GitHub Actions support and AnalysisOptions implementation)*
 *Focus: Library Conversion Project*

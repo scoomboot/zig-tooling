@@ -70,6 +70,9 @@ pub const build_integration = @import("build_integration.zig");
 // Re-export common patterns library
 pub const patterns = @import("patterns.zig");
 
+// Re-export formatters library  
+pub const formatters = @import("formatters.zig");
+
 /// Analyzes memory safety in the provided source code
 /// 
 /// This function performs comprehensive memory safety analysis including:

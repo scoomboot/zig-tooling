@@ -38,6 +38,7 @@
 
 const std = @import("std");
 const zig_tooling = @import("zig_tooling.zig");
+const formatters = @import("formatters.zig");
 
 /// Options for memory safety analysis build step
 pub const MemoryCheckOptions = struct {
@@ -697,15 +698,41 @@ fn printTextResults(result: zig_tooling.AnalysisResult) void {
 }
 
 fn printJsonResults(result: zig_tooling.AnalysisResult) void {
-    // TODO: Implement JSON output formatting
-    _ = result;
-    std.log.info("JSON output format not yet implemented");
+    // Use a temporary allocator for formatting
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer _ = gpa.deinit();
+    const allocator = gpa.allocator();
+    
+    const json_output = formatters.formatAsJson(allocator, result, .{}) catch |err| {
+        std.log.err("Failed to format JSON output: {}", .{err});
+        return;
+    };
+    defer allocator.free(json_output);
+    
+    // Write to stdout
+    const stdout = std.io.getStdOut().writer();
+    stdout.writeAll(json_output) catch |err| {
+        std.log.err("Failed to write JSON output: {}", .{err});
+    };
 }
 
 fn printGitHubActionsResults(result: zig_tooling.AnalysisResult) void {
-    // TODO: Implement GitHub Actions output formatting
-    _ = result;
-    std.log.info("GitHub Actions output format not yet implemented");
+    // Use a temporary allocator for formatting
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer _ = gpa.deinit();
+    const allocator = gpa.allocator();
+    
+    const gh_output = formatters.formatAsGitHubActions(allocator, result, .{}) catch |err| {
+        std.log.err("Failed to format GitHub Actions output: {}", .{err});
+        return;
+    };
+    defer allocator.free(gh_output);
+    
+    // Write to stdout
+    const stdout = std.io.getStdOut().writer();
+    stdout.writeAll(gh_output) catch |err| {
+        std.log.err("Failed to write GitHub Actions output: {}", .{err});
+    };
 }
 
 fn createBashPreCommitHook(allocator: std.mem.Allocator, options: PreCommitHookOptions) ![]const u8 {

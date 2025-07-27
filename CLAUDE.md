@@ -472,6 +472,130 @@ pub fn main() !void {
 }
 ```
 
+### Result Formatting
+
+The library provides comprehensive formatting capabilities for analysis results through the `formatters` module:
+
+```zig
+const zig_tooling = @import("zig_tooling");
+
+// Basic usage - format as human-readable text
+const result = try zig_tooling.analyzeMemory(allocator, source, "file.zig", null);
+defer allocator.free(result.issues);
+defer for (result.issues) |issue| {
+    allocator.free(issue.file_path);
+    allocator.free(issue.message);
+    if (issue.suggestion) |s| allocator.free(s);
+};
+
+// Format as text for console output
+const text_output = try zig_tooling.formatters.formatAsText(allocator, result, .{
+    .color = true,
+    .verbose = true,
+});
+defer allocator.free(text_output);
+
+// Format as JSON for programmatic consumption
+const json_output = try zig_tooling.formatters.formatAsJson(allocator, result, .{
+    .json_indent = 2,
+    .include_stats = true,
+});
+defer allocator.free(json_output);
+
+// Format for GitHub Actions CI/CD
+const gh_output = try zig_tooling.formatters.formatAsGitHubActions(allocator, result, .{
+    .verbose = true,
+});
+defer allocator.free(gh_output);
+```
+
+#### Built-in Formatters
+
+**Text Formatter** - Human-readable console output:
+- Color support for errors, warnings, and info
+- Verbose mode with code snippets and suggestions
+- Issue count summaries and statistics
+- Customizable output sections
+
+**JSON Formatter** - Structured data output:
+- Complete issue metadata
+- Configurable indentation
+- Proper JSON escaping for special characters
+- Analysis statistics and timing information
+
+**GitHub Actions Formatter** - CI/CD integration:
+- Annotation format for inline PR comments
+- Error/warning/notice workflow commands
+- Summary statistics for build logs
+- Truncation warnings for large result sets
+
+#### Formatting Options
+
+```zig
+const options = zig_tooling.formatters.FormatOptions{
+    .verbose = true,           // Include code snippets and suggestions
+    .color = true,             // ANSI color codes for text output
+    .max_issues = 100,         // Limit number of issues shown
+    .include_stats = true,     // Show analysis statistics
+    .json_indent = 4,          // JSON indentation size
+};
+```
+
+#### Custom Formatters
+
+Create your own formatters using the custom formatter interface:
+
+```zig
+fn myCustomFormatter(
+    allocator: std.mem.Allocator,
+    result: zig_tooling.AnalysisResult,
+    options: zig_tooling.formatters.FormatOptions,
+) ![]const u8 {
+    return try std.fmt.allocPrint(allocator, 
+        "CUSTOM: Found {} issues in {} files ({}ms)",
+        .{ result.issues_found, result.files_analyzed, result.analysis_time_ms });
+}
+
+// Use the custom formatter
+const formatter = zig_tooling.formatters.customFormatter(myCustomFormatter);
+const output = try formatter.format(allocator, result, .{});
+defer allocator.free(output);
+```
+
+#### Format Detection
+
+Automatically detect formats based on file extensions:
+
+```zig
+const format = zig_tooling.formatters.detectFormat("output.json"); // Returns .json
+const format = zig_tooling.formatters.detectFormat("report.txt");   // Returns .text
+const format = zig_tooling.formatters.detectFormat("github-ci");    // Returns .github_actions
+```
+
+#### Integration with Analysis Options
+
+The formatters work seamlessly with the new `AnalysisOptions` to control analysis behavior:
+
+```zig
+const config = zig_tooling.Config{
+    .options = .{
+        .max_issues = 50,           // Limit issues during analysis
+        .verbose = true,            // Include extra details
+        .continue_on_error = false, // Stop on first critical error
+    },
+};
+
+const result = try zig_tooling.analyzeMemory(allocator, source, "file.zig", config);
+// result.issues.len will be limited to 50 as configured
+
+// Format with matching verbose setting
+const output = try zig_tooling.formatters.formatAsText(allocator, result, .{
+    .verbose = config.options.verbose, // Match analysis verbosity
+    .max_issues = null,                 // Don't double-limit in formatter
+});
+defer allocator.free(output);
+```
+
 ## Architecture Overview
 
 ### Public API Structure

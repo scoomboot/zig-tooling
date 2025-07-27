@@ -1358,3 +1358,427 @@ test "API: Logging with callback" {
     // Should still work without logging
     try testing.expect(result2.issues.len >= 1);
 }
+
+// ============================================================================
+// Formatter Tests
+// ============================================================================
+
+test "unit: formatters: formatAsText basic functionality" {
+    const allocator = testing.allocator;
+    
+    // Create sample analysis result
+    const issues = [_]zig_tooling.Issue{
+        zig_tooling.Issue{
+            .file_path = "test.zig",
+            .line = 10,
+            .column = 5,
+            .issue_type = .missing_defer,
+            .severity = .err,
+            .message = "Missing defer statement for memory allocation",
+            .suggestion = "Add defer allocator.free(ptr);",
+            .code_snippet = "const ptr = try allocator.alloc(u8, 100);",
+        },
+        zig_tooling.Issue{
+            .file_path = "other.zig",
+            .line = 25,
+            .column = 10,
+            .issue_type = .incorrect_allocator,
+            .severity = .warning,
+            .message = "Using non-approved allocator",
+            .suggestion = null,
+            .code_snippet = null,
+        },
+    };
+    
+    const result = zig_tooling.AnalysisResult{
+        .issues = &issues,
+        .files_analyzed = 2,
+        .issues_found = 2,
+        .analysis_time_ms = 42,
+    };
+    
+    // Test basic text formatting
+    const output = try zig_tooling.formatters.formatAsText(allocator, result, .{ .color = false });
+    defer allocator.free(output);
+    
+    // Check that output contains expected content
+    try testing.expect(std.mem.indexOf(u8, output, "test.zig:10:5") != null);
+    try testing.expect(std.mem.indexOf(u8, output, "Missing defer statement") != null);
+    try testing.expect(std.mem.indexOf(u8, output, "error:") != null);
+    try testing.expect(std.mem.indexOf(u8, output, "warning:") != null);
+    try testing.expect(std.mem.indexOf(u8, output, "Files analyzed: 2") != null);
+    try testing.expect(std.mem.indexOf(u8, output, "Analysis time: 42ms") != null);
+}
+
+test "unit: formatters: formatAsText with verbose option" {
+    const allocator = testing.allocator;
+    
+    const issues = [_]zig_tooling.Issue{
+        zig_tooling.Issue{
+            .file_path = "test.zig",
+            .line = 10,
+            .column = 5,
+            .issue_type = .missing_defer,
+            .severity = .err,
+            .message = "Missing defer statement",
+            .suggestion = "Add defer allocator.free(ptr);",
+            .code_snippet = "const ptr = try allocator.alloc(u8, 100);",
+        },
+    };
+    
+    const result = zig_tooling.AnalysisResult{
+        .issues = &issues,
+        .files_analyzed = 1,
+        .issues_found = 1,
+        .analysis_time_ms = 10,
+    };
+    
+    // Test verbose formatting
+    const output = try zig_tooling.formatters.formatAsText(allocator, result, .{ .verbose = true, .color = false });
+    defer allocator.free(output);
+    
+    // Check for verbose content
+    try testing.expect(std.mem.indexOf(u8, output, "Issue type: missing_defer") != null);
+    try testing.expect(std.mem.indexOf(u8, output, "Code:") != null);
+    try testing.expect(std.mem.indexOf(u8, output, "const ptr = try allocator.alloc") != null);
+    try testing.expect(std.mem.indexOf(u8, output, "Suggestion: Add defer allocator.free") != null);
+}
+
+test "unit: formatters: formatAsText with max_issues limit" {
+    const allocator = testing.allocator;
+    
+    const issues = [_]zig_tooling.Issue{
+        zig_tooling.Issue{
+            .file_path = "test1.zig",
+            .line = 1,
+            .column = 1,
+            .issue_type = .missing_defer,
+            .severity = .err,
+            .message = "Error 1",
+        },
+        zig_tooling.Issue{
+            .file_path = "test2.zig",
+            .line = 2,
+            .column = 2,
+            .issue_type = .missing_defer,
+            .severity = .err,
+            .message = "Error 2",
+        },
+        zig_tooling.Issue{
+            .file_path = "test3.zig",
+            .line = 3,
+            .column = 3,
+            .issue_type = .missing_defer,
+            .severity = .err,
+            .message = "Error 3",
+        },
+    };
+    
+    const result = zig_tooling.AnalysisResult{
+        .issues = &issues,
+        .files_analyzed = 3,
+        .issues_found = 3,
+        .analysis_time_ms = 15,
+    };
+    
+    // Test with max_issues = 2
+    const output = try zig_tooling.formatters.formatAsText(allocator, result, .{ .max_issues = 2, .color = false });
+    defer allocator.free(output);
+    
+    // Should include first 2 errors but not the third
+    try testing.expect(std.mem.indexOf(u8, output, "Error 1") != null);
+    try testing.expect(std.mem.indexOf(u8, output, "Error 2") != null);
+    try testing.expect(std.mem.indexOf(u8, output, "Error 3") == null);
+    try testing.expect(std.mem.indexOf(u8, output, "and 1 more issues") != null);
+}
+
+test "unit: formatters: formatAsJson basic functionality" {
+    const allocator = testing.allocator;
+    
+    const issues = [_]zig_tooling.Issue{
+        zig_tooling.Issue{
+            .file_path = "test.zig",
+            .line = 10,
+            .column = 5,
+            .issue_type = .missing_defer,
+            .severity = .warning,
+            .message = "Test message",
+            .suggestion = "Test suggestion",
+        },
+    };
+    
+    const result = zig_tooling.AnalysisResult{
+        .issues = &issues,
+        .files_analyzed = 1,
+        .issues_found = 1,
+        .analysis_time_ms = 42,
+    };
+    
+    const output = try zig_tooling.formatters.formatAsJson(allocator, result, .{});
+    defer allocator.free(output);
+    
+    // Check JSON structure
+    try testing.expect(std.mem.indexOf(u8, output, "\"file_path\": \"test.zig\"") != null);
+    try testing.expect(std.mem.indexOf(u8, output, "\"line\": 10") != null);
+    try testing.expect(std.mem.indexOf(u8, output, "\"column\": 5") != null);
+    try testing.expect(std.mem.indexOf(u8, output, "\"issue_type\": \"missing_defer\"") != null);
+    try testing.expect(std.mem.indexOf(u8, output, "\"severity\": \"warning\"") != null);
+    try testing.expect(std.mem.indexOf(u8, output, "\"message\": \"Test message\"") != null);
+    try testing.expect(std.mem.indexOf(u8, output, "\"suggestion\": \"Test suggestion\"") != null);
+    try testing.expect(std.mem.indexOf(u8, output, "\"metadata\"") != null);
+    try testing.expect(std.mem.indexOf(u8, output, "\"files_analyzed\": 1") != null);
+    try testing.expect(std.mem.indexOf(u8, output, "\"analysis_time_ms\": 42") != null);
+}
+
+test "unit: formatters: formatAsJson with special characters" {
+    const allocator = testing.allocator;
+    
+    const issues = [_]zig_tooling.Issue{
+        zig_tooling.Issue{
+            .file_path = "test\"with\\quotes.zig",
+            .line = 1,
+            .column = 1,
+            .issue_type = .missing_defer,
+            .severity = .err,
+            .message = "Message with \"quotes\" and \\backslashes\nand newlines\tand tabs",
+        },
+    };
+    
+    const result = zig_tooling.AnalysisResult{
+        .issues = &issues,
+        .files_analyzed = 1,
+        .issues_found = 1,
+        .analysis_time_ms = 5,
+    };
+    
+    const output = try zig_tooling.formatters.formatAsJson(allocator, result, .{});
+    defer allocator.free(output);
+    
+    // Check that special characters are properly escaped
+    try testing.expect(std.mem.indexOf(u8, output, "\\\"") != null); // Escaped quotes
+    try testing.expect(std.mem.indexOf(u8, output, "\\\\") != null); // Escaped backslashes
+    try testing.expect(std.mem.indexOf(u8, output, "\\n") != null);  // Escaped newlines
+    try testing.expect(std.mem.indexOf(u8, output, "\\t") != null);  // Escaped tabs
+}
+
+test "unit: formatters: formatAsGitHubActions basic functionality" {
+    const allocator = testing.allocator;
+    
+    const issues = [_]zig_tooling.Issue{
+        zig_tooling.Issue{
+            .file_path = "src/main.zig",
+            .line = 15,
+            .column = 8,
+            .issue_type = .missing_defer,
+            .severity = .err,
+            .message = "Memory leak detected",
+            .suggestion = "Add defer statement",
+        },
+        zig_tooling.Issue{
+            .file_path = "src/utils.zig",
+            .line = 22,
+            .column = 12,
+            .issue_type = .incorrect_allocator,
+            .severity = .warning,
+            .message = "Non-standard allocator usage",
+        },
+    };
+    
+    const result = zig_tooling.AnalysisResult{
+        .issues = &issues,
+        .files_analyzed = 2,
+        .issues_found = 2,
+        .analysis_time_ms = 30,
+    };
+    
+    const output = try zig_tooling.formatters.formatAsGitHubActions(allocator, result, .{});
+    defer allocator.free(output);
+    
+    // Check GitHub Actions annotation format
+    try testing.expect(std.mem.indexOf(u8, output, "::error file=src/main.zig,line=15,col=8::Memory leak detected") != null);
+    try testing.expect(std.mem.indexOf(u8, output, "::warning file=src/utils.zig,line=22,col=12::Non-standard allocator usage") != null);
+    try testing.expect(std.mem.indexOf(u8, output, "::notice::Analysis completed") != null);
+    try testing.expect(std.mem.indexOf(u8, output, "1 errors, 1 warnings") != null);
+}
+
+test "unit: formatters: formatAsGitHubActions with verbose option" {
+    const allocator = testing.allocator;
+    
+    const issues = [_]zig_tooling.Issue{
+        zig_tooling.Issue{
+            .file_path = "test.zig",
+            .line = 10,
+            .column = 5,
+            .issue_type = .missing_defer,
+            .severity = .err,
+            .message = "Missing defer",
+            .suggestion = "Add defer statement",
+        },
+    };
+    
+    const result = zig_tooling.AnalysisResult{
+        .issues = &issues,
+        .files_analyzed = 1,
+        .issues_found = 1,
+        .analysis_time_ms = 10,
+    };
+    
+    const output = try zig_tooling.formatters.formatAsGitHubActions(allocator, result, .{ .verbose = true });
+    defer allocator.free(output);
+    
+    // Check for verbose content in annotations
+    try testing.expect(std.mem.indexOf(u8, output, "[type: missing_defer]") != null);
+    try testing.expect(std.mem.indexOf(u8, output, "Suggestion: Add defer statement") != null);
+}
+
+test "unit: formatters: customFormatter functionality" {
+    const allocator = testing.allocator;
+    
+    const TestFormatter = struct {
+        fn format(
+            alloc: std.mem.Allocator,
+            result: zig_tooling.AnalysisResult,
+            options: zig_tooling.formatters.FormatOptions,
+        ) ![]const u8 {
+            _ = options;
+            return try std.fmt.allocPrint(alloc, "Custom: {} issues in {} files", .{ result.issues_found, result.files_analyzed });
+        }
+    };
+    
+    const result = zig_tooling.AnalysisResult{
+        .issues = &[_]zig_tooling.Issue{},
+        .files_analyzed = 3,
+        .issues_found = 7,
+        .analysis_time_ms = 20,
+    };
+    
+    const formatter = zig_tooling.formatters.customFormatter(TestFormatter.format);
+    const output = try formatter.format(allocator, result, .{});
+    defer allocator.free(output);
+    
+    try testing.expectEqualStrings("Custom: 7 issues in 3 files", output);
+}
+
+test "unit: formatters: detectFormat utility function" {
+    // Test JSON detection
+    try testing.expect(zig_tooling.formatters.detectFormat("output.json") == .json);
+    try testing.expect(zig_tooling.formatters.detectFormat("results.json") == .json);
+    
+    // Test text detection
+    try testing.expect(zig_tooling.formatters.detectFormat("output.txt") == .text);
+    try testing.expect(zig_tooling.formatters.detectFormat("analysis.log") == .text);
+    
+    // Test GitHub Actions detection
+    try testing.expect(zig_tooling.formatters.detectFormat("github-output") == .github_actions);
+    try testing.expect(zig_tooling.formatters.detectFormat("actions-log") == .github_actions);
+    
+    // Test no match
+    try testing.expect(zig_tooling.formatters.detectFormat("unknown.xyz") == null);
+    try testing.expect(zig_tooling.formatters.detectFormat("") == null);
+}
+
+test "unit: formatters: FormatOptions different configurations" {
+    const allocator = testing.allocator;
+    
+    const issues = [_]zig_tooling.Issue{
+        zig_tooling.Issue{
+            .file_path = "test.zig",
+            .line = 1,
+            .column = 1,
+            .issue_type = .missing_defer,
+            .severity = .err,
+            .message = "Test error",
+        },
+    };
+    
+    const result = zig_tooling.AnalysisResult{
+        .issues = &issues,
+        .files_analyzed = 1,
+        .issues_found = 1,
+        .analysis_time_ms = 5,
+    };
+    
+    // Test without stats
+    const output_no_stats = try zig_tooling.formatters.formatAsText(allocator, result, .{ 
+        .include_stats = false, 
+        .color = false 
+    });
+    defer allocator.free(output_no_stats);
+    
+    try testing.expect(std.mem.indexOf(u8, output_no_stats, "Analysis Results") == null);
+    try testing.expect(std.mem.indexOf(u8, output_no_stats, "Files analyzed") == null);
+    
+    // Test with custom JSON indent
+    const output_json = try zig_tooling.formatters.formatAsJson(allocator, result, .{ 
+        .json_indent = 4 
+    });
+    defer allocator.free(output_json);
+    
+    // Should have 4-space indentation
+    try testing.expect(std.mem.indexOf(u8, output_json, "    \"metadata\"") != null);
+}
+
+test "unit: formatters: empty result handling" {
+    const allocator = testing.allocator;
+    
+    const result = zig_tooling.AnalysisResult{
+        .issues = &[_]zig_tooling.Issue{},
+        .files_analyzed = 1,
+        .issues_found = 0,
+        .analysis_time_ms = 5,
+    };
+    
+    // Test text formatter with no issues
+    const text_output = try zig_tooling.formatters.formatAsText(allocator, result, .{ .color = false });
+    defer allocator.free(text_output);
+    try testing.expect(std.mem.indexOf(u8, text_output, "No issues found! ✓") != null);
+    
+    // Test JSON formatter with no issues
+    const json_output = try zig_tooling.formatters.formatAsJson(allocator, result, .{});
+    defer allocator.free(json_output);
+    try testing.expect(std.mem.indexOf(u8, json_output, "\"issues\": []") != null);
+    
+    // Test GitHub Actions formatter with no issues (should be minimal output)
+    const gh_output = try zig_tooling.formatters.formatAsGitHubActions(allocator, result, .{});
+    defer allocator.free(gh_output);
+    try testing.expect(std.mem.indexOf(u8, gh_output, "0 errors, 0 warnings") != null);
+}
+
+test "unit: formatters: AnalysisOptions integration with analysis" {
+    const allocator = testing.allocator;
+    
+    const source = 
+        \\pub fn main() !void {
+        \\    const allocator = std.heap.page_allocator;
+        \\    const data1 = try allocator.alloc(u8, 100); // Missing defer
+        \\    const data2 = try allocator.alloc(u8, 200); // Missing defer
+        \\    const data3 = try allocator.alloc(u8, 300); // Missing defer
+        \\}
+    ;
+    
+    // Test with max_issues limit
+    const config_limited = zig_tooling.Config{
+        .options = .{
+            .max_issues = 2,
+            .verbose = true,
+        },
+    };
+    
+    const result = try zig_tooling.analyzeMemory(allocator, source, "test.zig", config_limited);
+    defer allocator.free(result.issues);
+    defer for (result.issues) |issue| {
+        allocator.free(issue.file_path);
+        allocator.free(issue.message);
+        if (issue.suggestion) |s| allocator.free(s);
+    };
+    
+    // Should be limited to 2 issues despite having 3 missing defers
+    try testing.expect(result.issues.len <= 2);
+    
+    // Test formatting the limited result
+    const output = try zig_tooling.formatters.formatAsText(allocator, result, .{ .color = false });
+    defer allocator.free(output);
+    
+    // Should contain the limited issues
+    try testing.expect(std.mem.indexOf(u8, output, "test.zig") != null);
+}

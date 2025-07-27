@@ -94,6 +94,7 @@ pub const MemoryAnalyzer = struct {
     scope_tracker: ScopeTracker,
     source_context: SourceContext,
     config: types.MemoryConfig,
+    options: types.AnalysisOptions,
     logger: ?app_logger.Logger,
     
     pub fn init(allocator: std.mem.Allocator) MemoryAnalyzer {
@@ -105,6 +106,7 @@ pub const MemoryAnalyzer = struct {
             .scope_tracker = ScopeTracker.init(allocator),
             .source_context = SourceContext.init(allocator),
             .config = .{}, // Use default config
+            .options = .{}, // Use default options
             .logger = null,
         };
     }
@@ -118,6 +120,7 @@ pub const MemoryAnalyzer = struct {
             .scope_tracker = ScopeTracker.init(allocator),
             .source_context = SourceContext.init(allocator),
             .config = config,
+            .options = .{}, // Use default options
             .logger = null,
         };
     }
@@ -131,6 +134,7 @@ pub const MemoryAnalyzer = struct {
             .scope_tracker = ScopeTracker.init(allocator),
             .source_context = SourceContext.init(allocator),
             .config = config.memory,
+            .options = config.options,
             .logger = null,
         };
         
@@ -1360,6 +1364,18 @@ pub const MemoryAnalyzer = struct {
     }
     
     fn addIssue(self: *MemoryAnalyzer, issue: Issue) !void {
+        // Check max_issues limit if configured
+        if (self.options.max_issues) |max| {
+            if (self.issues.items.len >= max) {
+                // If continue_on_error is false, stop analysis
+                if (!self.options.continue_on_error) {
+                    return types.AnalysisError.TooManyIssues;
+                }
+                // Otherwise just skip adding this issue
+                return;
+            }
+        }
+        
         // Log the issue if logging is enabled
         if (self.logger) |logger| {
             logger.logFmt(
@@ -1380,7 +1396,15 @@ pub const MemoryAnalyzer = struct {
             );
         }
         
-        try self.addIssue(issue);
+        // Add verbose information if requested
+        const enhanced_issue = issue;
+        if (self.options.verbose) {
+            // Code snippet and suggestion are already included in the issue struct
+            // The formatter will use them based on the verbose option
+        }
+        
+        // Actually append the issue to the list
+        try self.issues.append(enhanced_issue);
     }
 };
 

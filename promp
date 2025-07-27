@@ -1,3 +1,5 @@
-come up with a plan to resolve issue LC014 in our issue tracker and ready files @ISSUES.md @READY.md make sure to update these files when done. Review, read, and understand the plan here @docs/implementation/library-conversion-plan.md. clean up any temp files or test files that we dont need when done. ultrathink
+come up with a plan to resolve issue LC015 in our issue tracker and ready files @ISSUES.md @READY.md make sure to update these files when done. Review, read, and understand the plan here @docs/implementation/library-conversion-plan.md. clean up any temp files or test files that we dont need when done. ultrathink
 
 During this session were any new issues found our potential improvements that we should add to our issue tracker and ready files @ISSUES.md @READY.md. If you did find issues make sure to add helpfull links when updating the issue tracker. ultrathink
+
+Issue 49 probably needs a deep analysis, and would get this done in tier 1. 

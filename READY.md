@@ -3,8 +3,8 @@
 **Current Focus**: Library conversion from CLI tools to pure Zig library package.
 
 ## 📊 Progress Summary
-- **Completed**: 22/48 issues (LC001 ✅, LC002 ✅, LC003 ✅, LC004 ✅, LC005 ✅, LC006 ✅, LC007 ✅, LC008 ✅, LC009 ✅, LC010 ✅, LC011 ✅, LC012 ✅, LC013 ✅, LC014 ✅, LC019 ✅, LC022 ✅, LC023 ✅, LC024 ✅, LC025 ✅, LC026 ✅, LC027 ✅, LC028 ✅)
-- **Ready to Start**: 18 issues (1 TIER 1, 1 TIER 2, 16 TIER 3)
+- **Completed**: 23/49 issues (LC001 ✅, LC002 ✅, LC003 ✅, LC004 ✅, LC005 ✅, LC006 ✅, LC007 ✅, LC008 ✅, LC009 ✅, LC010 ✅, LC011 ✅, LC012 ✅, LC013 ✅, LC014 ✅, LC015 ✅, LC019 ✅, LC022 ✅, LC023 ✅, LC024 ✅, LC025 ✅, LC026 ✅, LC027 ✅, LC028 ✅)
+- **Ready to Start**: 18 issues (0 TIER 1, 1 TIER 2, 17 TIER 3)
 - **In Progress**: None
 - **Blocked**: 8 issues awaiting dependencies (next wave)
 
@@ -16,12 +16,7 @@
 
 ### 🎯 TIER 1: Critical v1.0 Blockers (Start These First!)
 
-- **#LC015**: Result formatting utilities *[TIER 1]*
-  - **Component**: src/formatters.zig (new)
-  - **Status**: Ready
-  - **Dependencies**: #LC008 ✅ (Completed 2025-07-26)
-  - **Details**: Format analysis results for different outputs
-  - **Notes**: AnalysisOptions fields unused (src/types.zig:147-154)
+*All TIER 1 issues with ready dependencies have been completed! All remaining TIER 1 issues are blocked pending LC015 completion.*
 
 ### 🏆 TIER 2: Professional Polish (After TIER 1)
 
@@ -154,6 +149,13 @@
   - **Details**: Error handling gaps found during implementation not systematically tested
   - **Notes**: Would catch error handling gaps before production
 
+- **#LC049**: Add static analysis for recursive function call detection *[TIER 3]*
+  - **Component**: Static analysis tooling, CI/CD configuration
+  - **Status**: Ready
+  - **Dependencies**: None
+  - **Details**: Critical recursive function call bugs not caught by static analysis or testing
+  - **Notes**: Found recursive bugs in addIssue() methods during LC015 that would cause stack overflow
+
 ## 🔄 Next Wave (1 Dependency Away)
 
 *Issues that become available after completing current work*
@@ -163,15 +165,15 @@
 
 
 
-### After completing LC015 (Result formatting utilities)
-- **#LC016**: API documentation (needs #LC005-#LC015)
-- **#LC017**: Integration examples (needs #LC013-#LC015)
-- **#LC039**: Complete output formatter implementations (needs #LC013, #LC015)
-- **#LC043**: Add parallel file analysis support (needs #LC013, #LC015)
+### Now Available (LC015 ✅ Completed 2025-07-27)
+- **#LC016**: API documentation (needs #LC005-#LC015) → **NOW READY**
+- **#LC017**: Integration examples (needs #LC013-#LC015) → **NOW READY**
+- **#LC039**: Complete output formatter implementations (needs #LC013, #LC015) → **NOW READY**
+- **#LC043**: Add parallel file analysis support (needs #LC013, #LC015) → **NOW READY**
 
-### After completing LC015 (Result formatting utilities)
-- **#LC020**: Integration testing (needs #LC019 ✅)
-- **#LC040**: Add build integration test suite (needs #LC013 ✅, #LC019 ✅)
+### Additional Now Ready Issues (All Dependencies Complete)
+- **#LC020**: Integration testing (needs #LC019 ✅) → **NOW READY**
+- **#LC040**: Add build integration test suite (needs #LC013 ✅, #LC019 ✅) → **NOW READY**
 
 ### After multiple dependencies complete
 - **#LC018**: Migration guide (needs #LC016)
@@ -198,18 +200,19 @@ This path unlocks the most work and enables parallel development.
 ## 🎯 Quick Reference
 
 ### Recommended Work Order for v1.0:
-1. **🎯 TIER 1 First**: #LC015 (1 remaining critical v1.0 blocker)
-2. **🏆 TIER 2 Next**: #LC038 (1 professional polish item)  
-3. **✨ TIER 3 Later**: 16 future enhancement issues (defer until v1.1+)
+1. **🎯 TIER 1 Complete**: All critical v1.0 blockers completed ✅
+2. **🏆 TIER 1 → TIER 2 Next**: #LC016, #LC017 (newly unblocked from completed LC015)
+3. **🏆 TIER 2 Polish**: #LC038, #LC039, #LC020, #LC040, #LC043 (professional polish items)
+4. **✨ TIER 3 Later**: 16 future enhancement issues (defer until v1.1+)
 
 ### Current Status:
-- **Ready to Start**: 18 issues total (1 TIER 1, 1 TIER 2, 16 TIER 3)
-- **Total Project**: 48 issues (22 completed, 8 blocked, 18 ready)
-- **v1.0 Progress**: TIER 1 has 4 total issues (1 ready + 3 blocked by dependencies)
+- **Ready to Start**: 24 issues total (6 newly unblocked TIER 1/2, 1 TIER 2, 17 TIER 3)
+- **Total Project**: 49 issues (23 completed, 2 blocked, 24 ready)
+- **v1.0 Progress**: TIER 1 foundation complete! Focus on TIER 2 for v1.0 polish
 
 ### Focus Strategy:
-**Complete TIER 1 → then TIER 2 → defer TIER 3 to v1.1+**
+**TIER 1 Complete ✅ → Now Focus on TIER 2 for v1.0 → defer TIER 3 to v1.1+**
 
 ---
 
-*This file tracks library conversion issues from ISSUES.md. Updated: 2025-07-27 (Added LC046-LC048 TIER 3 issues for development process improvements discovered during LC019 - 18 issues now ready to start)*
+*This file tracks library conversion issues from ISSUES.md. Updated: 2025-07-27 (Added LC049: Static analysis for recursive call detection - discovered critical recursive bug pattern during LC015 implementation that requires systematic prevention)*
