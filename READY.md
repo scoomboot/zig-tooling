@@ -3,10 +3,10 @@
 **Current Focus**: Library conversion from CLI tools to pure Zig library package.
 
 ## 📊 Progress Summary
-- **Completed**: 30/60 issues (LC001 ✅, LC002 ✅, LC003 ✅, LC004 ✅, LC005 ✅, LC006 ✅, LC007 ✅, LC008 ✅, LC009 ✅, LC010 ✅, LC011 ✅, LC012 ✅, LC013 ✅, LC014 ✅, LC015 ✅, LC016 ✅, LC017 ✅, LC019 ✅, LC020 ✅, LC022 ✅, LC023 ✅, LC024 ✅, LC025 ✅, LC026 ✅, LC027 ✅, LC028 ✅, LC040 ✅, LC050 ✅, LC056 ✅, LC057 ✅)
-- **Ready to Start**: 29 issues (0 CRITICAL, 0 TIER 1, 7 TIER 2, 22 TIER 3)
+- **Completed**: 32/68 issues (LC001 ✅, LC002 ✅, LC003 ✅, LC004 ✅, LC005 ✅, LC006 ✅, LC007 ✅, LC008 ✅, LC009 ✅, LC010 ✅, LC011 ✅, LC012 ✅, LC013 ✅, LC014 ✅, LC015 ✅, LC016 ✅, LC017 ✅, LC019 ✅, LC020 ✅, LC021 ✅, LC022 ✅, LC023 ✅, LC024 ✅, LC025 ✅, LC026 ✅, LC027 ✅, LC028 ✅, LC040 ✅, LC050 ✅, LC056 ✅, LC057 ✅, LC062 ✅)
+- **Ready to Start**: 36 issues (0 CRITICAL, 1 HIGH, 12 TIER 2, 24 TIER 3)
 - **In Progress**: None
-- **Blocked**: 1 issue awaiting dependencies (LC021)
+- **Blocked**: None
 
 ## 🟢 No Dependencies - Start Immediately
 
@@ -20,6 +20,20 @@
 
 ### 🏆 TIER 2: Professional Polish (After TIER 1)
 
+- **#LC068**: Improve memory ownership transfer detection (GitHub Issue #2) *[TIER 2 - HIGH PRIORITY]*
+  - **Component**: src/memory_analyzer.zig
+  - **Status**: Ready
+  - **Dependencies**: None
+  - **Details**: False positive "missing defer" warnings for valid Zig memory ownership patterns
+  - **Notes**: Reported in GitHub issue #2, affects v0.1.2, causes unnecessary code modifications
+
+- **#LC069**: Fix built-in pattern conflicts with std.testing.allocator (GitHub Issue #3) *[TIER 2 - HIGH PRIORITY]*
+  - **Component**: src/memory_analyzer.zig, src/types.zig
+  - **Status**: Ready
+  - **Dependencies**: None
+  - **Details**: Persistent pattern name conflicts with std.testing.allocator across multiple files
+  - **Notes**: Reported in GitHub issue #3, affects v0.1.2, makes tool analysis unreliable
+
 - **#LC038**: Implement proper glob pattern library for build integration *[TIER 2]*
   - **Component**: src/build_integration.zig
   - **Status**: Ready
@@ -27,19 +41,33 @@
   - **Details**: Current glob pattern matching is basic and limited
   - **Notes**: Would improve pattern matching for complex file selection
 
-- **#LC059**: Fix example file references to non-existent sample projects *[TIER 2]*
-  - **Component**: examples/basic_usage.zig, examples/
-  - **Status**: Ready
-  - **Dependencies**: #LC020 ✅ (Completed 2025-07-27)
-  - **Details**: Example files reference deleted sample project files that no longer exist
-  - **Notes**: Critical for user onboarding experience - fix references to memory_issues.zig and test_examples.zig
-
 - **#LC060**: Add CI configuration for integration test execution *[TIER 2]*
   - **Component**: build.zig, CI configuration, tests/integration/
   - **Status**: Ready
   - **Dependencies**: #LC020 ✅ (Completed 2025-07-27)
   - **Details**: Integration tests need proper CI configuration with timeouts and resource limits
   - **Notes**: Comprehensive tests may be slow and require CI-specific configuration
+
+- **#LC063**: Improve API documentation coverage *[TIER 2]*
+  - **Component**: All public modules, especially src/zig_tooling.zig
+  - **Status**: Ready
+  - **Dependencies**: #LC021 ✅ (Completed 2025-07-27)
+  - **Details**: API documentation coverage is only 49% (82/166 public items)
+  - **Notes**: Critical for user adoption and library usability
+
+- **#LC064**: Add formatter support for ProjectAnalysisResult type *[TIER 2]*
+  - **Component**: src/formatters.zig, src/patterns.zig
+  - **Status**: Ready
+  - **Dependencies**: #LC015 ✅ (Completed 2025-07-27)
+  - **Details**: Formatters only accept AnalysisResult but patterns.checkProject returns ProjectAnalysisResult
+  - **Notes**: Common user pain point when using patterns library with formatters
+
+- **#LC066**: Add CI validation for integration test compilation *[HIGH PRIORITY]*
+  - **Component**: CI configuration, build.zig
+  - **Status**: Ready
+  - **Dependencies**: #LC060 (when completed)
+  - **Details**: Integration tests had compilation failures that went unnoticed
+  - **Notes**: Critical for maintaining test suite health
 
 ### ✨ TIER 3: Future Enhancements (Defer Until Later)
 
@@ -235,6 +263,20 @@
   - **Details**: Integration test runner imports sub-modules but doesn't use them
   - **Notes**: Minor technical debt from LC020 implementation
 
+- **#LC065**: Document thread array mutability patterns for concurrent tests *[TIER 3]*
+  - **Component**: Documentation, tests/integration/
+  - **Status**: Ready
+  - **Dependencies**: None
+  - **Details**: Zig's array mutability rules for concurrent code are confusing and caused multiple errors
+  - **Notes**: Common source of confusion for developers writing concurrent tests
+
+- **#LC067**: Create API migration detection tooling *[TIER 3]*
+  - **Component**: Development tooling, tests/
+  - **Status**: Ready
+  - **Dependencies**: None
+  - **Details**: API changes in library aren't automatically detected in test code
+  - **Notes**: Would have prevented writeFile and enum field mismatch issues
+
 
 ## 🔄 Next Wave (1 Dependency Away)
 
@@ -249,8 +291,6 @@
 
 All previously blocked Tier 1 and Tier 2 issues have been moved to their respective sections above.
 
-### After multiple dependencies complete
-- **#LC021**: Documentation testing (needs #LC016)
 
 ## 📊 Phase Execution Order
 
@@ -274,12 +314,12 @@ This path unlocks the most work and enables parallel development.
 
 ### Recommended Work Order for v1.0:
 1. **🎯 TIER 1 Complete**: All critical v1.0 blockers are done! ✅
-2. **🏆 TIER 2 Polish**: #LC038, #LC039, #LC043, #LC051, #LC052, #LC059, #LC060 (professional polish items)
-3. **✨ TIER 3 Later**: 22 future enhancement issues (defer until v1.1+)
+2. **🏆 TIER 2 Polish**: #LC068, #LC069 (HIGH PRIORITY), #LC038, #LC039, #LC043, #LC051, #LC052, #LC060, #LC063, #LC064, #LC066 (professional polish items)
+3. **✨ TIER 3 Later**: 24 future enhancement issues (defer until v1.1+)
 
 ### Current Status:
-- **Ready to Start**: 29 issues total (0 CRITICAL, 0 TIER 1, 7 TIER 2, 22 TIER 3)
-- **Total Project**: 60 issues (30 completed, 1 blocked, 29 ready)
+- **Ready to Start**: 36 issues total (0 CRITICAL, 0 TIER 1, 12 TIER 2, 24 TIER 3)
+- **Total Project**: 68 issues (32 completed, 0 blocked, 36 ready)
 - **v1.0 Progress**: All critical issues resolved! Ready for TIER 2 polish work.
 
 ### Focus Strategy:
@@ -287,4 +327,4 @@ This path unlocks the most work and enables parallel development.
 
 ---
 
-*This file tracks library conversion issues from ISSUES.md. Updated: 2025-07-27 (LC020 integration testing COMPLETED, LC040 completed as part of LC020, added 3 new issues discovered during implementation: LC059, LC060, LC061)*
+*This file tracks library conversion issues from ISSUES.md. Updated: 2025-07-27 (Added LC068 and LC069 from GitHub issues #2 and #3)*

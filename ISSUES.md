@@ -64,17 +64,6 @@
     - Sample projects include: simple memory issues, complex multi-file, custom allocators, build integration
     - All integration tests validate library production readiness and real-world usage scenarios
 
-- [ ] #LC021: Documentation testing
-  - **Component**: All documentation
-  - **Priority**: Medium
-  - **Created**: 2025-07-25
-  - **Dependencies**: #LC016
-  - **Details**: Ensure all documentation code compiles and works
-  - **Requirements**:
-    - Example compilation
-    - Code snippet validation
-    - API completeness check
-    - Link validation
 
 - [ ] #LC038: Implement proper glob pattern library for build integration
   - **Component**: src/build_integration.zig
@@ -107,6 +96,48 @@
     - Functions at [src/build_integration.zig:694-700](src/build_integration.zig#L694-L700) are placeholders
     - Should coordinate with LC015 formatter work to avoid duplication
     - Discovered during LC013 implementation
+
+- [ ] #LC068: Improve memory ownership transfer detection (GitHub Issue #2)
+  - **Component**: src/memory_analyzer.zig
+  - **Priority**: High
+  - **Created**: 2025-07-27
+  - **Dependencies**: None
+  - **Details**: False positive "missing defer" warnings for valid Zig memory ownership patterns
+  - **Requirements**:
+    - Detect functions that return allocated memory to caller
+    - Check for proper errdefer cleanup in error paths
+    - Skip "missing defer" warnings for ownership transfers
+    - Recognize patterns where memory is allocated and returned from functions
+    - Support allocation patterns in returnable structs/arrays
+    - Document ownership transfer patterns in analyzer
+    - Add tests for common ownership transfer scenarios
+  - **Notes**:
+    - Reported in GitHub issue #2 by @emoessner
+    - Affects zig-tooling v0.1.2 with Zig 0.14.1
+    - Causes unnecessary code modifications and reduces tool credibility
+    - Example: Function allocating memory with errdefer cleanup correctly transfers ownership but still gets flagged
+    - Would improve accuracy of memory leak detection significantly
+
+- [ ] #LC069: Fix built-in pattern conflicts with std.testing.allocator (GitHub Issue #3)
+  - **Component**: src/memory_analyzer.zig, src/types.zig
+  - **Priority**: High
+  - **Created**: 2025-07-27
+  - **Dependencies**: None
+  - **Details**: Persistent pattern name conflicts with std.testing.allocator across multiple files
+  - **Requirements**:
+    - Add configuration option to disable specific built-in patterns
+    - Improve conflict resolution between built-in and custom patterns
+    - Fix std.testing.allocator conflict specifically
+    - Support pattern name disambiguation or overrides
+    - Provide better error handling for pattern conflicts
+    - Add tests for pattern conflict scenarios
+    - Document pattern precedence and conflict resolution
+  - **Notes**:
+    - Reported in GitHub issue #3 by @emoessner
+    - Affects zig-tooling v0.1.2 with Zig 0.14.1
+    - Makes tool analysis unreliable due to persistent configuration errors
+    - Related to LC031 (pattern conflict detection) but more specific to built-in vs custom conflicts
+    - LC030 (disable default patterns) could be part of the solution
 
 ## ✨ TIER 3: Future Enhancements (Defer to v1.1+)
 
@@ -320,7 +351,53 @@
     - Need to consider memory usage with parallel processing
     - Discovered during LC013 implementation
 
-### Code Quality & Maintenance (3 issues)
+### Code Quality & Maintenance (5 issues)
+
+- [x] #LC062: Fix integration test compilation failures
+  - **Component**: tests/integration/
+  - **Priority**: High
+  - **Created**: 2025-07-27
+  - **Started**: 2025-07-27
+  - **Completed**: 2025-07-27
+  - **Dependencies**: #LC020 ✅ (Completed 2025-07-27) 
+  - **Details**: Integration tests have compilation errors preventing test-all from running
+  - **Requirements**: ✅ All completed
+    - ✅ Fix undefined type references (AnalysisResults → AnalysisResult, ProjectAnalysisResult, ErrorTestResult)
+    - ✅ Fix API mismatches (writeFile function signature changes, missing error types)
+    - ✅ Fix pointer capture issues in array iteration
+    - ✅ Remove unused imports and variables
+    - ✅ Ensure integration tests compile and run successfully
+  - **Resolution**:
+    - Fixed struct definition ordering issues (moved before usage)
+    - Updated writeFile API calls to new signature with options struct
+    - Corrected AnalysisError enum field names (InvalidInput → InvalidConfiguration)
+    - Fixed pointer capture syntax in for loops (added & prefix)
+    - Replaced incorrect enum fields (.allocator_usage → .allocator_mismatch, .arena_usage → .arena_in_library, .test_naming → .invalid_test_naming)
+    - Fixed type mismatches between patterns.ProjectAnalysisResult and types.AnalysisResult in formatter calls
+    - Cleaned up unused variables and parameters
+    - All integration tests now compile and run successfully with `zig build test-integration`
+  - **Notes**:
+    - Discovered during LC021 when running `zig build test-all`
+    - Multiple files affected: [tests/integration/test_thread_safety.zig](tests/integration/test_thread_safety.zig), [tests/integration/test_error_boundaries.zig](tests/integration/test_error_boundaries.zig), [tests/integration/test_integration_runner.zig](tests/integration/test_integration_runner.zig), and others
+    - Critical for ensuring comprehensive testing and production readiness
+    - Critical for ensuring production readiness
+
+- [ ] #LC063: Improve API documentation coverage
+  - **Component**: All public modules, especially src/zig_tooling.zig
+  - **Priority**: Medium
+  - **Created**: 2025-07-27
+  - **Dependencies**: #LC021 ✅ (Completed 2025-07-27)
+  - **Details**: API documentation coverage is only 49% (82/166 public items)
+  - **Requirements**:
+    - Add documentation to missing public APIs in src/zig_tooling.zig (4/35 documented)
+    - Improve coverage in src/types.zig (12/16 documented) 
+    - Add missing documentation in other modules with gaps
+    - Target minimum 90% documentation coverage
+    - Focus on main entry point APIs first
+  - **Notes**:
+    - Discovered during LC021 API completeness audit
+    - Current coverage by file: zig_tooling.zig (11%), types.zig (75%), memory_analyzer.zig (54%), testing_analyzer.zig (21%), scope_tracker.zig (73%), patterns.zig (44%), formatters.zig (58%), build_integration.zig (80%)
+    - Critical for user adoption and library usability
 
 - [ ] #LC042: Complete pre-commit hook implementations
   - **Component**: src/build_integration.zig
@@ -620,6 +697,74 @@
     - Could use something like: `const OwnedString = union(enum) { owned: []const u8, borrowed: []const u8 };`
     - Would make memory ownership explicit in the type system
     - Discovered during LC057 resolution - pattern of mixing literals with heap strings is error-prone
+
+- [ ] #LC064: Add formatter support for ProjectAnalysisResult type
+  - **Component**: src/formatters.zig, src/patterns.zig
+  - **Priority**: Medium
+  - **Created**: 2025-07-27
+  - **Dependencies**: #LC015 ✅ (Completed 2025-07-27)
+  - **Details**: Formatters only accept AnalysisResult but patterns.checkProject returns ProjectAnalysisResult
+  - **Requirements**:
+    - Add overloaded formatter functions that accept ProjectAnalysisResult
+    - Or add conversion function from ProjectAnalysisResult to AnalysisResult
+    - Ensure all formatter types (text, JSON, GitHub Actions) support both result types
+    - Update examples to show proper usage with project-level results
+  - **Notes**:
+    - Discovered during LC062 when fixing [tests/integration/test_memory_performance.zig:469](tests/integration/test_memory_performance.zig#L469)
+    - Had to change from checkProject() to analyzeFile() to get compatible types
+    - Common user pain point when using patterns library with formatters
+    - Would improve API ergonomics significantly
+
+- [ ] #LC065: Document thread array mutability patterns for concurrent tests
+  - **Component**: Documentation, tests/integration/
+  - **Priority**: Low
+  - **Created**: 2025-07-27
+  - **Dependencies**: None
+  - **Details**: Zig's array mutability rules for concurrent code are confusing and caused multiple errors
+  - **Requirements**:
+    - Add documentation explaining when to use `var` vs `const` for thread arrays
+    - Document the pattern: `var threads: [N]std.Thread` even though array isn't reassigned
+    - Add examples showing proper concurrent test patterns
+    - Consider adding helper functions to simplify thread management
+  - **Notes**:
+    - Discovered during LC062 - had to fix this pattern in 6 different test files
+    - Zig requires `var` for arrays where elements will be mutated via `thread.* = spawn()`
+    - Common source of confusion for developers writing concurrent tests
+    - See fixes in [tests/integration/test_thread_safety.zig](tests/integration/test_thread_safety.zig)
+
+- [ ] #LC066: Add CI validation for integration test compilation
+  - **Component**: CI configuration, build.zig
+  - **Priority**: High
+  - **Created**: 2025-07-27
+  - **Dependencies**: #LC060 (when completed)
+  - **Details**: Integration tests had compilation failures that went unnoticed
+  - **Requirements**:
+    - Add CI job that runs `zig build test-integration` separately
+    - Ensure CI fails on integration test compilation errors
+    - Consider running integration tests on PR validation
+    - Add timeout configurations for long-running tests
+  - **Notes**:
+    - LC062 found extensive compilation errors that accumulated over time
+    - Integration tests weren't being validated in regular development
+    - Would have caught writeFile API changes, enum mismatches, type errors early
+    - Critical for maintaining test suite health
+
+- [ ] #LC067: Create API migration detection tooling
+  - **Component**: Development tooling, tests/
+  - **Priority**: Low
+  - **Created**: 2025-07-27
+  - **Dependencies**: None
+  - **Details**: API changes in library aren't automatically detected in test code
+  - **Requirements**:
+    - Create tool to detect API drift between src/ and tests/
+    - Check for deprecated function signatures (like writeFile changes)
+    - Verify enum field references match actual definitions
+    - Generate migration guide for API changes
+  - **Notes**:
+    - Would have prevented issues like writeFile(path, content) → writeFile(.{.sub_path=, .data=})
+    - Would catch enum field renames (.allocator_usage → .allocator_mismatch)
+    - Could be integrated into build process or CI
+    - Discovered during LC062 when fixing numerous API mismatches
 
 ## 📋 Archive: Original Phase Organization
 
@@ -1103,5 +1248,23 @@
 
 ---
 
-*Last Updated: 2025-07-27 (LC057 resolved - fixed v0.1.1 segfault in findFunctionContext)*
+- [x] #LC021: Documentation testing
+  - **Component**: All documentation
+  - **Priority**: Medium
+  - **Created**: 2025-07-25
+  - **Started**: 2025-07-27
+  - **Completed**: 2025-07-27
+  - **Dependencies**: #LC016 ✅ (Completed 2025-07-27)
+  - **Details**: Ensure all documentation code compiles and works
+  - **Resolution**:
+    - Fixed broken file references in examples/basic_usage.zig (resolves LC059)
+    - Created comprehensive documentation testing infrastructure with build step
+    - Added intelligent code block extraction and validation from CLAUDE.md and docs/api-reference.md
+    - Implemented API completeness audit showing 49% documentation coverage (82/166 public items)
+    - Formatted all example files to fix syntax issues
+    - Added test-docs build step integrated into test-all
+    - Cleaned up temporary files from resolved segfault analysis
+    - All documentation examples now compile and work correctly
+
+*Last Updated: 2025-07-27 (Added LC068 and LC069 from GitHub issues #2 and #3)*
 *Focus: Library Conversion Project*
