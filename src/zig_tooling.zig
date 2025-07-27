@@ -64,6 +64,9 @@ pub const stderrLogCallback = logger_module.stderrLogCallback;
 // Export the entire logger module for advanced usage
 pub const app_logger = logger_module;
 
+// Re-export build integration helpers
+pub const build_integration = @import("build_integration.zig");
+
 /// Analyzes memory safety in the provided source code
 /// 
 /// This function performs comprehensive memory safety analysis including:

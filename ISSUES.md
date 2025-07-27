@@ -8,16 +8,54 @@
 
 *Currently being worked on*
 
-## 🐛 Newly Discovered Issues
+## 🟢 Ready to Start
 
-*Issues found during implementation that need to be addressed*
+*Issues with no dependencies or all dependencies completed*
 
+- [ ] #LC014: Common patterns library
+  - **Component**: src/patterns.zig (new)
+  - **Priority**: Medium
+  - **Created**: 2025-07-25
+  - **Dependencies**: #LC009 ✅, #LC010 ✅
+  - **Details**: High-level convenience functions for common use cases
+  - **Requirements**:
+    - checkProject function
+    - checkFile function
+    - checkSource function
+    - Pattern documentation
+
+- [ ] #LC015: Result formatting utilities
+  - **Component**: src/formatters.zig (new)
+  - **Priority**: Medium
+  - **Created**: 2025-07-25
+  - **Dependencies**: #LC008 ✅
+  - **Details**: Format analysis results for different outputs
+  - **Requirements**:
+    - Text formatter
+    - JSON formatter
+    - GitHub Actions formatter
+    - Custom formatter support
+  - **Notes**:
+    - AnalysisOptions (src/types.zig:147-154) fields not used yet
+    - max_issues, verbose, parallel, continue_on_error need implementation
+
+- [ ] #LC019: Update test suite
+  - **Component**: tests/
+  - **Priority**: Critical
+  - **Created**: 2025-07-25
+  - **Dependencies**: #LC005 ✅-#LC012 ✅
+  - **Details**: Remove CLI tests, add API usage tests
+  - **Requirements**:
+    - Remove CLI-specific tests
+    - Add API tests
+    - Error condition tests
+    - Performance benchmarks
 
 - [ ] #LC029: Implement regex support for allocator patterns
   - **Component**: src/memory_analyzer.zig, src/types.zig
   - **Priority**: Low
   - **Created**: 2025-07-27
-  - **Dependencies**: #LC024
+  - **Dependencies**: #LC024 ✅
   - **Details**: AllocatorPattern.is_regex field exists but is not implemented
   - **Requirements**:
     - Implement regex matching when is_regex is true
@@ -34,7 +72,7 @@
   - **Component**: src/memory_analyzer.zig, src/types.zig
   - **Priority**: Low
   - **Created**: 2025-07-27
-  - **Dependencies**: #LC024
+  - **Dependencies**: #LC024 ✅
   - **Details**: No way to use only custom patterns without default patterns
   - **Requirements**:
     - Add use_default_patterns boolean to MemoryConfig
@@ -51,7 +89,7 @@
   - **Component**: src/memory_analyzer.zig
   - **Priority**: Low
   - **Created**: 2025-07-27
-  - **Dependencies**: #LC028
+  - **Dependencies**: #LC028 ✅
   - **Details**: Patterns that overlap can cause unexpected matches
   - **Requirements**:
     - Detect when patterns could match the same string (e.g., "alloc" and "allocator")
@@ -68,7 +106,7 @@
   - **Component**: src/memory_analyzer.zig, src/types.zig
   - **Priority**: Low
   - **Created**: 2025-07-27
-  - **Dependencies**: #LC024
+  - **Dependencies**: #LC024 ✅
   - **Details**: Pattern matching is currently case-sensitive only
   - **Requirements**:
     - Add case_sensitive boolean to AllocatorPattern struct (default true)
@@ -85,7 +123,7 @@
   - **Component**: src/memory_analyzer.zig
   - **Priority**: Low
   - **Created**: 2025-07-27
-  - **Dependencies**: #LC024
+  - **Dependencies**: #LC024 ✅
   - **Details**: No way to test patterns before using them
   - **Requirements**:
     - Add public testPattern() function to test a pattern against sample strings
@@ -102,7 +140,7 @@
   - **Component**: src/app_logger.zig, src/types.zig
   - **Priority**: Low
   - **Created**: 2025-07-27
-  - **Dependencies**: #LC012
+  - **Dependencies**: #LC012 ✅
   - **Details**: Current callback pattern doesn't work well with stateful log collectors
   - **Requirements**:
     - Consider alternative callback patterns that support closures or context pointers
@@ -119,7 +157,7 @@
   - **Component**: src/app_logger.zig, src/types.zig
   - **Priority**: Low
   - **Created**: 2025-07-27
-  - **Dependencies**: #LC012
+  - **Dependencies**: #LC012 ✅
   - **Details**: Can only filter by log level, not by category
   - **Requirements**:
     - Add category_filter field to LoggingConfig (optional string array)
@@ -136,7 +174,7 @@
   - **Component**: src/app_logger.zig
   - **Priority**: Low
   - **Created**: 2025-07-27
-  - **Dependencies**: #LC012
+  - **Dependencies**: #LC012 ✅
   - **Details**: No standardized format for structured log messages
   - **Requirements**:
     - Add format templates for common log patterns
@@ -153,7 +191,7 @@
   - **Component**: src/app_logger.zig, CLAUDE.md
   - **Priority**: Medium
   - **Created**: 2025-07-27
-  - **Dependencies**: #LC012
+  - **Dependencies**: #LC012 ✅
   - **Details**: Logger holds reference to LoggingConfig but no lifetime guarantees
   - **Requirements**:
     - Document that LoggingConfig must outlive Logger instances
@@ -165,6 +203,110 @@
     - No mechanism to ensure config outlives logger
     - Could lead to use-after-free if misused
     - Discovered during LC012 implementation
+
+## 🐛 Newly Discovered Issues
+
+*Issues found during implementation that need to be addressed*
+
+- [ ] #LC038: Implement proper glob pattern library for build integration
+  - **Component**: src/build_integration.zig
+  - **Priority**: Medium
+  - **Created**: 2025-07-27
+  - **Dependencies**: #LC013 ✅
+  - **Details**: Current glob pattern matching is basic and limited
+  - **Requirements**:
+    - Replace basic pattern matching with proper glob library
+    - Support complex patterns like "src/**/test_*.zig" 
+    - Add pattern validation and error handling
+    - Add tests for glob pattern edge cases
+  - **Notes**:
+    - Current matchesPattern() at [src/build_integration.zig:634-652](src/build_integration.zig#L634-L652) only handles simple cases
+    - Could use std.glob when available or implement more complete matching
+    - Discovered during LC013 implementation
+
+- [ ] #LC039: Complete output formatter implementations
+  - **Component**: src/build_integration.zig
+  - **Priority**: Medium
+  - **Created**: 2025-07-27
+  - **Dependencies**: #LC013 ✅, #LC015 (when completed)
+  - **Details**: JSON and GitHub Actions formatters are placeholder implementations
+  - **Requirements**:
+    - Implement printJsonResults() function for structured JSON output
+    - Implement printGitHubActionsResults() for GitHub annotations format
+    - Add tests for all output formats
+    - Document format specifications
+  - **Notes**:
+    - Functions at [src/build_integration.zig:694-700](src/build_integration.zig#L694-L700) are placeholders
+    - Should coordinate with LC015 formatter work to avoid duplication
+    - Discovered during LC013 implementation
+
+- [ ] #LC040: Add build integration test suite
+  - **Component**: tests/test_build_integration.zig (new)
+  - **Priority**: High
+  - **Created**: 2025-07-27
+  - **Dependencies**: #LC013 ✅, #LC019 (when completed)
+  - **Details**: Build integration module has no tests
+  - **Requirements**:
+    - Test file discovery and pattern matching
+    - Test build step creation and execution
+    - Test pre-commit hook generation
+    - Mock file system for consistent testing
+    - Test error conditions and edge cases
+  - **Notes**:
+    - Critical for ensuring build integration reliability
+    - Should test with realistic directory structures
+    - Discovered during LC013 implementation
+
+- [ ] #LC041: Implement incremental analysis for build integration
+  - **Component**: src/build_integration.zig
+  - **Priority**: Low
+  - **Created**: 2025-07-27
+  - **Dependencies**: #LC013 ✅
+  - **Details**: Build steps always analyze all files, no incremental support
+  - **Requirements**:
+    - Add option to analyze only modified files since last run
+    - Integrate with git to detect changed files
+    - Add timestamp-based file change detection
+    - Cache analysis results for unchanged files
+  - **Notes**:
+    - Would significantly improve build performance for large projects
+    - Could integrate with Zig's build cache system
+    - Discovered during LC013 implementation
+
+- [ ] #LC042: Complete pre-commit hook implementations
+  - **Component**: src/build_integration.zig
+  - **Priority**: Low
+  - **Created**: 2025-07-27
+  - **Dependencies**: #LC013 ✅
+  - **Details**: Only bash pre-commit hooks are fully implemented
+  - **Requirements**:
+    - Implement createFishPreCommitHook() with proper Fish shell syntax
+    - Implement createPowerShellPreCommitHook() for Windows environments
+    - Add tests for all hook types
+    - Document hook installation procedures
+  - **Notes**:
+    - Functions at [src/build_integration.zig:762-769](src/build_integration.zig#L762-L769) are placeholders
+    - Should follow shell-specific best practices
+    - Discovered during LC013 implementation
+
+- [ ] #LC043: Add parallel file analysis support
+  - **Component**: src/build_integration.zig, src/types.zig
+  - **Priority**: Medium
+  - **Created**: 2025-07-27
+  - **Dependencies**: #LC013 ✅, #LC015 (AnalysisOptions implementation)
+  - **Details**: AnalysisOptions.parallel field exists but not implemented
+  - **Requirements**:
+    - Implement concurrent file analysis in analyzePattern functions
+    - Add thread pool for file processing
+    - Ensure thread-safe result aggregation
+    - Add configuration for thread count
+  - **Notes**:
+    - AnalysisOptions.parallel at [src/types.zig:171](src/types.zig#L171) is defined but unused
+    - Would improve analysis performance for large codebases
+    - Need to consider memory usage with parallel processing
+    - Discovered during LC013 implementation
+
+*All newly discovered issues have been triaged and moved to appropriate sections*
 
 ## 📋 Backlog
 
@@ -179,47 +321,7 @@
 
 ### Phase 4: Integration Helpers
 
-- [ ] #LC013: Build system integration helpers
-  - **Component**: src/build_integration.zig (new)
-  - **Priority**: High
-  - **Created**: 2025-07-25
-  - **Dependencies**: #LC009, #LC010
-  - **Details**: Create helpers for Zig build system integration
-  - **Requirements**:
-    - addMemoryCheckStep function
-    - addTestComplianceStep function
-    - Pre-commit hook generator
-    - Build step examples
-  - **Notes**:
-    - PatternConfig (src/types.zig:140-145) not implemented in analyzers
-    - Need to wire include_patterns/exclude_patterns for file filtering
-
-- [ ] #LC014: Common patterns library
-  - **Component**: src/patterns.zig (new)
-  - **Priority**: Medium
-  - **Created**: 2025-07-25
-  - **Dependencies**: #LC009, #LC010
-  - **Details**: High-level convenience functions for common use cases
-  - **Requirements**:
-    - checkProject function
-    - checkFile function
-    - checkSource function
-    - Pattern documentation
-
-- [ ] #LC015: Result formatting utilities
-  - **Component**: src/formatters.zig (new)
-  - **Priority**: Medium
-  - **Created**: 2025-07-25
-  - **Dependencies**: #LC008
-  - **Details**: Format analysis results for different outputs
-  - **Requirements**:
-    - Text formatter
-    - JSON formatter
-    - GitHub Actions formatter
-    - Custom formatter support
-  - **Notes**:
-    - AnalysisOptions (src/types.zig:147-154) fields not used yet
-    - max_issues, verbose, parallel, continue_on_error need implementation
+*All Phase 4 issues have been moved to Ready to Start section*
 
 ### Phase 5: Documentation and Examples
 
@@ -262,17 +364,7 @@
 
 ### Phase 6: Testing and Validation
 
-- [ ] #LC019: Update test suite
-  - **Component**: tests/
-  - **Priority**: Critical
-  - **Created**: 2025-07-25
-  - **Dependencies**: #LC005-#LC012
-  - **Details**: Remove CLI tests, add API usage tests
-  - **Requirements**:
-    - Remove CLI-specific tests
-    - Add API tests
-    - Error condition tests
-    - Performance benchmarks
+*LC019 has been moved to Ready to Start section*
 
 - [ ] #LC020: Integration testing
   - **Component**: tests/integration/
@@ -301,6 +393,25 @@
 ## ✅ Completed
 
 *Finished issues for reference*
+
+- [x] #LC013: Build system integration helpers
+  - **Component**: src/build_integration.zig (new)
+  - **Priority**: High
+  - **Created**: 2025-07-25
+  - **Started**: 2025-07-27
+  - **Completed**: 2025-07-27
+  - **Dependencies**: #LC009 ✅, #LC010 ✅
+  - **Details**: Create helpers for Zig build system integration
+  - **Resolution**:
+    - Created comprehensive build_integration.zig with helper functions for build system integration
+    - Implemented addMemoryCheckStep() and addTestComplianceStep() for build steps
+    - Added createPreCommitHook() function for automated pre-commit analysis
+    - Implemented PatternConfig file filtering with basic glob pattern support
+    - Added file discovery using walkDirectoryForZigFiles() with include/exclude patterns
+    - Added support for multiple output formats (text, json, github_actions)
+    - Exported build_integration module through main zig_tooling.zig
+    - Updated CLAUDE.md with comprehensive build integration examples and usage patterns
+    - All core requirements completed successfully
 
 - [x] #LC012: Simplify logging system
   - **Component**: src/app_logger.zig
@@ -621,5 +732,5 @@
 
 ---
 
-*Last Updated: 2025-07-27 (LC012 completed - simplified logging system with callback interface, 4 new logging-related issues discovered)*
+*Last Updated: 2025-07-27 (Added 6 new issues LC038-LC043 discovered during LC013 implementation - build integration improvements needed)*
 *Focus: Library Conversion Project*

@@ -3,16 +3,23 @@
 **Current Focus**: Library conversion from CLI tools to pure Zig library package.
 
 ## 📊 Progress Summary
-- **Completed**: 19/38 issues (LC001 ✅, LC002 ✅, LC003 ✅, LC004 ✅, LC005 ✅, LC006 ✅, LC007 ✅, LC008 ✅, LC009 ✅, LC010 ✅, LC011 ✅, LC012 ✅, LC022 ✅, LC023 ✅, LC024 ✅, LC025 ✅, LC026 ✅, LC027 ✅, LC028 ✅)
-- **Ready to Start**: LC013, LC014, LC015, LC029, LC030, LC031, LC032, LC033, LC034, LC035, LC036, LC037 (12 issues)
+- **Completed**: 20/44 issues (LC001 ✅, LC002 ✅, LC003 ✅, LC004 ✅, LC005 ✅, LC006 ✅, LC007 ✅, LC008 ✅, LC009 ✅, LC010 ✅, LC011 ✅, LC012 ✅, LC013 ✅, LC022 ✅, LC023 ✅, LC024 ✅, LC025 ✅, LC026 ✅, LC027 ✅, LC028 ✅)
+- **Ready to Start**: LC014, LC015, LC019, LC029, LC030, LC031, LC032, LC033, LC034, LC035, LC036, LC037, LC038, LC041, LC042 (15 issues)
 - **In Progress**: None
-- **Blocked**: 6 issues awaiting dependencies
+- **Blocked**: 8 issues awaiting dependencies
 
 ## 🟢 No Dependencies - Start Immediately
 
 *All no-dependency issues have been completed*
 
 ## 🟢 All Dependencies Completed - Ready to Start
+
+- **#LC014**: Common patterns library
+  - **Component**: src/patterns.zig (new)
+  - **Status**: Ready
+  - **Dependencies**: #LC009 ✅ (Completed 2025-07-26), #LC010 ✅ (Completed 2025-07-27)
+  - **Details**: High-level convenience functions for common use cases
+  - **Notes**: checkProject, checkFile, checkSource functions needed
 
 - **#LC015**: Result formatting utilities
   - **Component**: src/formatters.zig (new)
@@ -84,6 +91,34 @@
   - **Details**: Logger holds reference to LoggingConfig but no lifetime guarantees
   - **Notes**: Could lead to use-after-free if misused
 
+- **#LC019**: Update test suite
+  - **Component**: tests/
+  - **Status**: Ready
+  - **Dependencies**: #LC005 ✅-#LC012 ✅ (All completed 2025-07-27)
+  - **Details**: Remove CLI tests, add API usage tests
+  - **Notes**: Critical priority - foundational for further testing work
+
+- **#LC038**: Implement proper glob pattern library for build integration
+  - **Component**: src/build_integration.zig
+  - **Status**: Ready
+  - **Dependencies**: #LC013 ✅ (Completed 2025-07-27)
+  - **Details**: Current glob pattern matching is basic and limited
+  - **Notes**: Would improve pattern matching for complex file selection
+
+- **#LC041**: Implement incremental analysis for build integration
+  - **Component**: src/build_integration.zig
+  - **Status**: Ready
+  - **Dependencies**: #LC013 ✅ (Completed 2025-07-27)
+  - **Details**: Build steps always analyze all files, no incremental support
+  - **Notes**: Would significantly improve build performance for large projects
+
+- **#LC042**: Complete pre-commit hook implementations
+  - **Component**: src/build_integration.zig
+  - **Status**: Ready
+  - **Dependencies**: #LC013 ✅ (Completed 2025-07-27)
+  - **Details**: Only bash pre-commit hooks are fully implemented
+  - **Notes**: Fish and PowerShell hooks are placeholder implementations
+
 ## 🔄 Next Wave (1 Dependency Away)
 
 *Issues that become available after completing current work*
@@ -93,17 +128,18 @@
 
 
 
-### Ready Now (LC010 completed ✅)
-- **#LC013**: Build system integration helpers (depends on LC009 ✅ + LC010 ✅)
-  - Note: PatternConfig not implemented (src/types.zig:140-145)
-- **#LC014**: Common patterns library (depends on LC009 ✅ + LC010 ✅)
-
-### After multiple dependencies complete
+### After completing LC015 (Result formatting utilities)
 - **#LC016**: API documentation (needs #LC005-#LC015)
 - **#LC017**: Integration examples (needs #LC013-#LC015)
-- **#LC018**: Migration guide (needs #LC016)
-- **#LC019**: Update test suite (needs #LC005-#LC012)
+- **#LC039**: Complete output formatter implementations (needs #LC013, #LC015)
+- **#LC043**: Add parallel file analysis support (needs #LC013, #LC015)
+
+### After completing LC019 (Update test suite)
 - **#LC020**: Integration testing (needs #LC019)
+- **#LC040**: Add build integration test suite (needs #LC013, #LC019)
+
+### After multiple dependencies complete
+- **#LC018**: Migration guide (needs #LC016)
 - **#LC021**: Documentation testing (needs #LC016-#LC018)
 
 ## 📊 Phase Execution Order
@@ -126,11 +162,11 @@ This path unlocks the most work and enables parallel development.
 
 ## 🎯 Quick Reference
 
-- **Start Now**: #LC013, #LC014, #LC015, #LC029, #LC030, #LC031, #LC032, #LC033, #LC034, #LC035, #LC036, #LC037 (12 issues ready)
-- **Total Issues**: 38
-- **Critical Issues**: 6
-- **Estimated Time**: 14-20 hours total
+- **Start Now**: #LC014, #LC015, #LC019, #LC029, #LC030, #LC031, #LC032, #LC033, #LC034, #LC035, #LC036, #LC037, #LC038, #LC041, #LC042 (15 issues ready)
+- **Total Issues**: 44
+- **Critical Issues**: 5 (1 moved to ready)
+- **Estimated Time**: 18-25 hours total
 
 ---
 
-*This file tracks library conversion issues from ISSUES.md. Updated: 2025-07-27 (LC012 completed, 4 new logging-related issues discovered)*
+*This file tracks library conversion issues from ISSUES.md. Updated: 2025-07-27 (Added 6 new issues discovered during LC013 implementation - 15 issues now ready to start)*

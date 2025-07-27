@@ -161,19 +161,196 @@ const config_with_stderr = zig_tooling.Config{
 ```
 
 ### Build System Integration
+
+The library provides helper functions to integrate code quality checks directly into your build system using the `build_integration` module:
+
 ```zig
-// In build.zig - add a code quality check step
-const check_step = b.step("check", "Run code quality checks");
+// In build.zig
+const std = @import("std");
 
-const check_exe = b.addExecutable(.{
-    .name = "check_code",
-    .root_source_file = b.path("tools/check.zig"),
-});
-check_exe.root_module.addImport("zig_tooling", zig_tooling.module("zig_tooling"));
-
-const run_check = b.addRunArtifact(check_exe);
-check_step.dependOn(&run_check.step);
+pub fn build(b: *std.Build) void {
+    const target = b.standardTargetOptions(.{});
+    const optimize = b.standardOptimizeOption(.{});
+    
+    // Add zig-tooling dependency (assumes you've added it to build.zig.zon)
+    const zig_tooling_dep = b.dependency("zig_tooling", .{
+        .target = target,
+        .optimize = optimize,
+    });
+    
+    // Your main executable
+    const exe = b.addExecutable(.{
+        .name = "my_app",
+        .root_source_file = b.path("src/main.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    exe.root_module.addImport("zig_tooling", zig_tooling_dep.module("zig_tooling"));
+    
+    // Create a build script to run zig-tooling analysis
+    const quality_check_exe = b.addExecutable(.{
+        .name = "quality_check",
+        .root_source_file = b.path("tools/quality_check.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    quality_check_exe.root_module.addImport("zig_tooling", zig_tooling_dep.module("zig_tooling"));
+    
+    // Create quality check step
+    const quality_step = b.step("quality", "Run all code quality checks");
+    const run_quality = b.addRunArtifact(quality_check_exe);
+    run_quality.addArgs(&.{"--memory", "--tests", "--fail-on-warnings"});
+    quality_step.dependOn(&run_quality.step);
+    
+    // Install your executable
+    b.installArtifact(exe);
+}
 ```
+
+And create `tools/quality_check.zig`:
+
+```zig
+// tools/quality_check.zig
+const std = @import("std");
+const zig_tooling = @import("zig_tooling");
+
+pub fn main() !void {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer _ = gpa.deinit();
+    const allocator = gpa.allocator();
+    
+    const args = try std.process.argsAlloc(allocator);
+    defer std.process.argsFree(allocator, args);
+    
+    var run_memory = false;
+    var run_tests = false;
+    var fail_on_warnings = false;
+    
+    for (args[1..]) |arg| {
+        if (std.mem.eql(u8, arg, "--memory")) run_memory = true;
+        if (std.mem.eql(u8, arg, "--tests")) run_tests = true;
+        if (std.mem.eql(u8, arg, "--fail-on-warnings")) fail_on_warnings = true;
+    }
+    
+    var total_issues: u32 = 0;
+    
+    if (run_memory) {
+        const memory_options = zig_tooling.build_integration.MemoryCheckOptions{
+            .source_paths = &.{ "src/**/*.zig" },
+            .fail_on_warnings = fail_on_warnings,
+            .memory_config = .{
+                .check_defer = true,
+                .check_arena_usage = true,
+                .allowed_allocators = &.{ "std.heap.GeneralPurposeAllocator" },
+            },
+        };
+        
+        // Note: This is a simplified example - in practice you'd need to implement
+        // the pattern matching and analysis logic here
+        std.debug.print("Running memory safety analysis...\n");
+        // total_issues += runMemoryAnalysis(allocator, memory_options);
+    }
+    
+    if (run_tests) {
+        std.debug.print("Running test compliance analysis...\n");
+        // total_issues += runTestAnalysis(allocator, test_options);
+    }
+    
+    if (total_issues > 0) {
+        std.debug.print("Found {d} issues.\n", .{total_issues});
+        std.process.exit(1);
+    } else {
+        std.debug.print("All quality checks passed!\n");
+    }
+}
+```
+
+#### Build Integration Options
+
+**Memory Check Options:**
+```zig
+const memory_check = zig_tooling.build_integration.addMemoryCheckStep(b, .{
+    // Source patterns to analyze (supports basic glob patterns)
+    .source_paths = &.{ "src/**/*.zig", "lib/**/*.zig" },
+    
+    // Exclude patterns
+    .exclude_patterns = &.{ "**/zig-cache/**", "**/test_*.zig" },
+    
+    // Memory analysis configuration
+    .memory_config = .{
+        .check_defer = true,
+        .check_arena_usage = true,
+        .check_allocator_usage = true,
+        .allowed_allocators = &.{ "std.heap.GeneralPurposeAllocator", "std.testing.allocator" },
+    },
+    
+    // Build behavior
+    .fail_on_warnings = true,
+    .max_issues = 100,
+    .continue_on_error = false,
+    .output_format = .text, // .text, .json, .github_actions
+    
+    // Step configuration
+    .step_name = "memory-check",
+    .step_description = "Run memory safety analysis",
+});
+```
+
+**Test Compliance Options:**
+```zig
+const test_check = zig_tooling.build_integration.addTestComplianceStep(b, .{
+    .source_paths = &.{ "tests/**/*.zig" },
+    .testing_config = .{
+        .enforce_categories = true,
+        .enforce_naming = true,
+        .allowed_categories = &.{ "unit", "integration", "e2e", "performance" },
+    },
+    .fail_on_warnings = false,
+    .output_format = .json,
+});
+```
+
+#### Pre-commit Hook Generation
+
+Generate pre-commit hooks to run analysis automatically:
+
+```zig
+// In a build step or utility script
+const hook_script = try zig_tooling.build_integration.createPreCommitHook(allocator, .{
+    .include_memory_checks = true,
+    .include_test_compliance = true,
+    .fail_on_warnings = true,
+    .check_paths = &.{ "src/", "tests/" },
+    .hook_type = .bash, // .bash, .fish, .powershell
+});
+defer allocator.free(hook_script);
+
+// Install the hook
+try std.fs.cwd().writeFile(".git/hooks/pre-commit", hook_script);
+
+// Make it executable (Unix systems)
+if (builtin.os.tag != .windows) {
+    const file = try std.fs.cwd().openFile(".git/hooks/pre-commit", .{});
+    defer file.close();
+    try file.chmod(0o755);
+}
+```
+
+#### CI/CD Integration
+
+For GitHub Actions, use the github_actions output format:
+
+```zig
+// In your build.zig for CI
+const ci_check = zig_tooling.build_integration.addMemoryCheckStep(b, .{
+    .source_paths = &.{ "src/**/*.zig" },
+    .fail_on_warnings = true,
+    .output_format = .github_actions, // Formats output for GitHub annotations
+    .step_name = "ci-quality-check",
+});
+```
+
+This will output issues in GitHub Actions format that automatically annotate your PRs with found issues.
 
 ### Custom Analysis Tool
 ```zig
