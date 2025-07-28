@@ -213,6 +213,11 @@ fn formatForGitLab(allocator: std.mem.Allocator, result: zig_tooling.patterns.Pr
     for (result.issues, 0..) |issue, i| {
         if (i > 0) try buffer.appendSlice(",\n");
 
+        const escaped_message = try escapeJson(allocator, issue.message);
+        defer allocator.free(escaped_message);
+        const escaped_path = try escapeJson(allocator, issue.file_path);
+        defer allocator.free(escaped_path);
+        
         try buffer.writer().print(
             \\  {{
             \\    "description": "{s}",
@@ -226,11 +231,11 @@ fn formatForGitLab(allocator: std.mem.Allocator, result: zig_tooling.patterns.Pr
             \\    "fingerprint": "{s}:{d}:{d}"
             \\  }}
         , .{
-            escapeJson(issue.message),
+            escaped_message,
             if (issue.severity == .err) "major" else "minor",
-            issue.file_path,
+            escaped_path,
             issue.line,
-            issue.file_path,
+            escaped_path,
             issue.line,
             issue.column,
         });
@@ -291,6 +296,11 @@ fn formatAsJUnit(allocator: std.mem.Allocator, result: zig_tooling.patterns.Proj
                 , .{ file_path, issue.line });
 
                 const tag = if (issue.severity == .err) "failure" else "error";
+                const escaped_msg = try escapeXml(allocator, issue.message);
+                defer allocator.free(escaped_msg);
+                const escaped_file = try escapeXml(allocator, file_path);
+                defer allocator.free(escaped_file);
+                
                 try buffer.writer().print(
                     \\    <{s} message="{s}" type="{s}">
                     \\      {s}:{}: {s}
@@ -299,11 +309,11 @@ fn formatAsJUnit(allocator: std.mem.Allocator, result: zig_tooling.patterns.Proj
                     \\
                 , .{
                     tag,
-                    escapeXml(issue.message),
+                    escaped_msg,
                     @tagName(issue.issue_type),
-                    file_path,
+                    escaped_file,
                     issue.line,
-                    escapeXml(issue.message),
+                    escaped_msg,
                     tag,
                 });
             }
@@ -363,16 +373,14 @@ fn ciProgressCallback(files_processed: u32, total_files: u32, current_file: []co
     }) catch {};
 }
 
-/// Escape JSON string
-fn escapeJson(str: []const u8) []const u8 {
-    // Simple escaping - in production would be more comprehensive
-    return str;
+/// Escape JSON string using the library's proper escape function
+fn escapeJson(allocator: std.mem.Allocator, str: []const u8) ![]const u8 {
+    return zig_tooling.utils.escapeJson(allocator, str);
 }
 
-/// Escape XML string
-fn escapeXml(str: []const u8) []const u8 {
-    // Simple escaping - in production would be more comprehensive
-    return str;
+/// Escape XML string using the library's proper escape function
+fn escapeXml(allocator: std.mem.Allocator, str: []const u8) ![]const u8 {
+    return zig_tooling.utils.escapeXml(allocator, str);
 }
 
 /// Example CI runner script

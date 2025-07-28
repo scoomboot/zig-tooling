@@ -1561,6 +1561,71 @@ test "unit: formatters: formatAsJson with special characters" {
     try testing.expect(std.mem.indexOf(u8, output, "\\t") != null);  // Escaped tabs
 }
 
+test "unit: formatters: formatAsJson with control characters" {
+    const allocator = testing.allocator;
+    
+    const issues = [_]zig_tooling.Issue{
+        zig_tooling.Issue{
+            .file_path = "test.zig",
+            .line = 1,
+            .column = 1,
+            .issue_type = .missing_defer,
+            .severity = .err,
+            .message = "Control chars: \x00\x01\x02\x08\x0C\x1F",
+        },
+    };
+    
+    const result = zig_tooling.AnalysisResult{
+        .issues = &issues,
+        .files_analyzed = 1,
+        .issues_found = 1,
+        .analysis_time_ms = 5,
+    };
+    
+    const output = try zig_tooling.formatters.formatAsJson(allocator, result, .{});
+    defer allocator.free(output);
+    
+    // Check that control characters are properly escaped
+    try testing.expect(std.mem.indexOf(u8, output, "\\u0000") != null); // NULL
+    try testing.expect(std.mem.indexOf(u8, output, "\\u0001") != null); // SOH
+    try testing.expect(std.mem.indexOf(u8, output, "\\u0002") != null); // STX
+    try testing.expect(std.mem.indexOf(u8, output, "\\b") != null);     // Backspace
+    try testing.expect(std.mem.indexOf(u8, output, "\\f") != null);     // Form feed
+    try testing.expect(std.mem.indexOf(u8, output, "\\u001F") != null); // Unit separator
+}
+
+test "unit: formatters: formatAsGitHubActions with special characters" {
+    const allocator = testing.allocator;
+    
+    const issues = [_]zig_tooling.Issue{
+        zig_tooling.Issue{
+            .file_path = "file:with,special%chars.zig",
+            .line = 10,
+            .column = 5,
+            .issue_type = .missing_defer,
+            .severity = .err,
+            .message = "Error: 50% failed\r\nNew line here",
+            .suggestion = "Add defer: statement",
+        },
+    };
+    
+    const result = zig_tooling.AnalysisResult{
+        .issues = &issues,
+        .files_analyzed = 1,
+        .issues_found = 1,
+        .analysis_time_ms = 5,
+    };
+    
+    const output = try zig_tooling.formatters.formatAsGitHubActions(allocator, result, .{ .verbose = true });
+    defer allocator.free(output);
+    
+    // Check that GitHub Actions special characters are properly escaped
+    try testing.expect(std.mem.indexOf(u8, output, "file%3Awith%2Cspecial%25chars.zig") != null); // File path escaping
+    try testing.expect(std.mem.indexOf(u8, output, "50%25 failed") != null); // % escaping in message
+    try testing.expect(std.mem.indexOf(u8, output, "%0D%0ANew line") != null); // \r\n escaping
+    try testing.expect(std.mem.indexOf(u8, output, "defer: statement") != null); // : not escaped in message
+}
+
 test "unit: formatters: formatAsGitHubActions basic functionality" {
     const allocator = testing.allocator;
     

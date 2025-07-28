@@ -16,6 +16,7 @@
 
 ### User-Reported Issues (Highest Priority)
 
+*No critical user-reported issues currently*
 
 
 ## 🏆 TIER 2: Professional Polish (Should Have for v1.0)
@@ -26,7 +27,7 @@
 
 ### Security/Correctness
 
-- [ ] #LC052: Add proper JSON/XML escape functions to formatters
+- [x] #LC052: Add proper JSON/XML escape functions to formatters
   - **Component**: src/formatters.zig, src/utils.zig
   - **Priority**: High
   - **Created**: 2025-07-27
@@ -209,17 +210,19 @@
     - Would catch library bugs during development rather than at runtime
     - Could use comptime asserts or build script validation
 
-- [ ] #LC049: Add static analysis for recursive function call detection
+- [ ] #LC049: Add static analysis for recursive function call and use-after-free detection
   - **Component**: Static analysis tooling, CI/CD configuration
   - **Priority**: Medium
   - **Created**: 2025-07-27
+  - **Updated**: 2025-07-28 (added use-after-free patterns from LC073)
   - **Dependencies**: None
-  - **Details**: Critical recursive function call bugs not caught by static analysis or testing
+  - **Details**: Critical bugs not caught by static analysis or testing including recursive calls and use-after-free
   - **Requirements**:
     - Implement static analysis rules to detect recursive function calls within the same method
-    - Add CI/CD step to run recursive call pattern detection
+    - Add use-after-free pattern detection for HashMap ownership issues
+    - Add CI/CD step to run pattern detection
     - Create custom linter rules or use existing tools (rg, ast-grep, etc.)
-    - Add tests to verify recursive call detection works correctly
+    - Add tests to verify pattern detection works correctly
   - **Notes**:
     - **Critical Bug Found**: During LC015 implementation, discovered recursive bugs in both analyzers' `addIssue()` methods
     - **Location**: [src/memory_analyzer.zig:1407](src/memory_analyzer.zig#L1407) and [src/testing_analyzer.zig:780](src/testing_analyzer.zig#L780)
@@ -233,6 +236,22 @@
       - Pattern to detect: fields that are sometimes assigned literals (`= "..."`) and sometimes allocPrint
       - Example regex: `\.(field_name)\s*=\s*"[^"]*"` vs `\.(field_name)\s*=\s*try.*allocPrint`
       - Would have caught the LC056 segfault issue before production
+    - **Use-After-Free Pattern from LC073**: Should detect HashMap ownership issues:
+      - **Bug Found**: During LC073, discovered use-after-free bug in validateAllocatorChoice()
+      - **Location**: [src/memory_analyzer.zig:794](src/memory_analyzer.zig#L794)
+      - **Bug Pattern**: String freed with `defer` while still referenced in HashMap - caused segfaults with GPA
+      - **Detection Patterns Needed**:
+        - Variables freed with `defer` inside loops but used after the defer
+        - HashMap put() calls where the key is freed in the same scope
+        - Pattern: `defer allocator.free(var); ... map.put(var, ...)`
+        - Specific regex: `defer\s+\w+\.free\((\w+)\).*\.put\(\1,`
+      - **Example Anti-Pattern**:
+        ```zig
+        const key = try allocator.dupe(u8, some_string);
+        defer allocator.free(key);  // BUG: key freed while still in HashMap
+        try hashmap.put(key, value);
+        ```
+      - Would have prevented segfaults reported in GitHub Issue #4
 
 - [ ] #LC048: Enhance error boundary testing framework
   - **Component**: tests/, src/patterns.zig
@@ -702,6 +721,27 @@
 
 *Finished issues for reference*
 
+- [x] #LC052: Add proper JSON/XML escape functions to formatters
+  - **Component**: src/formatters.zig, src/utils.zig
+  - **Priority**: High
+  - **Created**: 2025-07-27
+  - **Started**: 2025-07-28
+  - **Completed**: 2025-07-28
+  - **Dependencies**: #LC015 ✅ (Completed 2025-07-27)
+  - **Details**: Current escape functions in examples are placeholders
+  - **Resolution**:
+    - Created comprehensive escape functions in utils.zig for JSON, XML, and GitHub Actions
+    - Enhanced writeJsonString in formatters.zig to handle all control characters per RFC 7159
+    - Updated GitHub Actions formatter to properly escape file paths and messages
+    - Updated ci_integration.zig example to use proper escape functions from utils
+    - Added comprehensive test coverage for all escape functions
+    - All tests pass successfully
+  - **Implementation Details**:
+    - JSON escaping handles all control characters (U+0000-U+001F) with proper \uXXXX format
+    - XML escaping handles the 5 predefined entities: &, <, >, ", '
+    - GitHub Actions escaping uses URL encoding for %, \r, \n, and optionally : and ,
+    - Escape functions are now exported via zig_tooling.utils for public use
+
 - [x] #LC068: Improve memory ownership transfer detection (GitHub Issue #2)
   - **Component**: src/memory_analyzer.zig, src/types.zig
   - **Priority**: High
@@ -800,6 +840,28 @@
     - Added comprehensive test suite in tests/test_allocator_patterns.zig
     - Updated CLAUDE.md with pattern conflict resolution documentation
     - All tests pass successfully
+
+- [x] #LC073: Fix memory leaks in scope_tracker.zig (GitHub Issue #4)
+  - **Component**: src/scope_tracker.zig, src/memory_analyzer.zig
+  - **Priority**: Critical
+  - **Created**: 2025-07-28
+  - **Started**: 2025-07-28
+  - **Completed**: 2025-07-28
+  - **Dependencies**: None
+  - **Details**: Memory leaks when using GeneralPurposeAllocator - ~18 allocations leaked per analysis
+  - **Resolution**:
+    - Root cause was a use-after-free bug in validateAllocatorChoice() that was corrupting memory
+    - Fixed by properly managing allocator type string ownership in HashMap
+    - Changed to free all allocator type strings when HashMap is cleaned up
+    - Added comprehensive memory leak tests in test_scope_tracker_memory.zig
+    - No actual memory leaks found in ScopeTracker itself
+    - All tests pass with GeneralPurposeAllocator showing 0 memory leaks
+  - **Implementation Details**:
+    - The bug was in memory_analyzer.zig validateAllocatorChoice() at line 794
+    - Allocator type strings were being freed while still referenced by HashMap
+    - Fixed by deferring cleanup until HashMap destruction
+    - Added test case for the specific use-after-free scenario
+    - CI/CD can now use GPA for memory safety validation
 
 - [x] #LC030: Add option to disable default allocator patterns
   - **Component**: src/memory_analyzer.zig, src/types.zig
@@ -1339,5 +1401,5 @@
     - Multiple files affected: [tests/integration/test_thread_safety.zig](tests/integration/test_thread_safety.zig), [tests/integration/test_error_boundaries.zig](tests/integration/test_error_boundaries.zig), [tests/integration/test_integration_runner.zig](tests/integration/test_integration_runner.zig), and others
     - Critical for ensuring comprehensive testing and production readiness
 
-*Last Updated: 2025-07-27 (Completed LC072 - All TIER 1 critical issues resolved!)*
+*Last Updated: 2025-07-28 (Added LC073 - Critical memory leak from GitHub Issue #4)*
 *Focus: Library Conversion Project*

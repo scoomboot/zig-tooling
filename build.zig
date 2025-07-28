@@ -52,6 +52,14 @@ pub fn build(b: *std.Build) void {
     });
     test_allocator_patterns.root_module.addImport("zig_tooling", zig_tooling_module);
 
+    // ScopeTracker memory leak tests
+    const test_scope_tracker_memory = b.addTest(.{
+        .root_source_file = b.path("tests/test_scope_tracker_memory.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    test_scope_tracker_memory.root_module.addImport("zig_tooling", zig_tooling_module);
+
     // Unit tests for the library itself
     const lib_tests = b.addTest(.{
         .root_source_file = b.path("src/zig_tooling.zig"),
@@ -108,6 +116,7 @@ pub fn build(b: *std.Build) void {
     test_step.dependOn(&test_api.step);
     test_step.dependOn(&test_patterns.step);
     test_step.dependOn(&test_allocator_patterns.step);
+    test_step.dependOn(&test_scope_tracker_memory.step);
     test_step.dependOn(&lib_tests.step);
 
     // Integration test step (separate for longer-running tests)

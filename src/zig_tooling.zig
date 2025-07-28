@@ -73,6 +73,9 @@ pub const patterns = @import("patterns.zig");
 // Re-export formatters library  
 pub const formatters = @import("formatters.zig");
 
+// Re-export string utilities
+pub const utils = @import("utils.zig");
+
 /// Analyzes memory safety in the provided source code
 /// 
 /// This function performs comprehensive memory safety analysis including:

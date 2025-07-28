@@ -353,13 +353,10 @@ pub fn formatAsGitHubActions(
         
         // GitHub Actions annotation format:
         // ::error file=app.js,line=10,col=15::Something went wrong
-        try writer.print("::{s} file={s},line={},col={}::{s}", .{
-            annotation_type,
-            issue.file_path,
-            issue.line,
-            issue.column,
-            issue.message,
-        });
+        try writer.print("::{s} file=", .{annotation_type});
+        try escapeGitHubActionsValue(writer, issue.file_path, true);
+        try writer.print(",line={},col={}::", .{ issue.line, issue.column });
+        try escapeGitHubActionsValue(writer, issue.message, false);
         
         // Add issue type and suggestion as additional context
         if (options.verbose) {
@@ -367,7 +364,8 @@ pub fn formatAsGitHubActions(
         }
         
         if (issue.suggestion) |suggestion| {
-            try writer.print(" Suggestion: {s}", .{suggestion});
+            try writer.writeAll(" Suggestion: ");
+            try escapeGitHubActionsValue(writer, suggestion, false);
         }
         
         try writer.writeAll("\n");
@@ -428,7 +426,7 @@ pub fn customFormatter(
     return CustomFormatter{ .format_fn = format_fn };
 }
 
-// Helper functions for JSON formatting
+// Helper functions for formatting
 
 fn writeJsonIndent(writer: anytype, indent: u32) !void {
     var i: u32 = 0;
@@ -437,17 +435,37 @@ fn writeJsonIndent(writer: anytype, indent: u32) !void {
     }
 }
 
+// Helper to escape strings for GitHub Actions annotations
+fn escapeGitHubActionsValue(writer: anytype, value: []const u8, is_property: bool) !void {
+    for (value) |char| {
+        switch (char) {
+            '%' => try writer.writeAll("%25"),
+            '\r' => try writer.writeAll("%0D"),
+            '\n' => try writer.writeAll("%0A"),
+            ':' => if (is_property) try writer.writeAll("%3A") else try writer.writeByte(char),
+            ',' => if (is_property) try writer.writeAll("%2C") else try writer.writeByte(char),
+            else => try writer.writeByte(char),
+        }
+    }
+}
+
 fn writeJsonString(writer: anytype, key: []const u8, value: []const u8) !void {
     try writer.print("\"{s}\": \"", .{key});
     
-    // Escape special characters in JSON string
+    // Escape special characters in JSON string according to RFC 7159
     for (value) |char| {
         switch (char) {
             '"' => try writer.writeAll("\\\""),
             '\\' => try writer.writeAll("\\\\"),
-            '\n' => try writer.writeAll("\\n"),
-            '\r' => try writer.writeAll("\\r"),
-            '\t' => try writer.writeAll("\\t"),
+            '\x08' => try writer.writeAll("\\b"), // backspace
+            '\x0C' => try writer.writeAll("\\f"), // form feed
+            '\n' => try writer.writeAll("\\n"),   // line feed
+            '\r' => try writer.writeAll("\\r"),   // carriage return
+            '\t' => try writer.writeAll("\\t"),   // tab
+            0x00...0x07, 0x0B, 0x0E...0x1F => {
+                // Other control characters use \uXXXX format
+                try writer.print("\\u{X:0>4}", .{char});
+            },
             else => try writer.writeByte(char),
         }
     }

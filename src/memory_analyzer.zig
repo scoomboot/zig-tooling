@@ -781,7 +781,14 @@ pub const MemoryAnalyzer = struct {
         
         // Track unique allocator types found in this file
         var found_allocators = std.StringHashMap(struct { line: u32, column: u32 }).init(self.allocator);
-        defer found_allocators.deinit();
+        defer {
+            // Free all the allocator type strings we allocated
+            var iter = found_allocators.iterator();
+            while (iter.next()) |entry| {
+                self.allocator.free(entry.key_ptr.*);
+            }
+            found_allocators.deinit();
+        }
         
         // Analyze allocator usage from tracked allocations
         for (self.allocations.items) |allocation| {
@@ -791,7 +798,7 @@ pub const MemoryAnalyzer = struct {
             // - arena.allocator()
             // - gpa.allocator()
             const allocator_type = try self.extractAllocatorType(allocation.allocator_var);
-            defer self.allocator.free(allocator_type);
+            // Note: allocator_type is owned by us and will be freed in the defer block above
             
             // Track this allocator type if not already seen
             if (!found_allocators.contains(allocator_type)) {
@@ -799,6 +806,9 @@ pub const MemoryAnalyzer = struct {
                     .line = allocation.line,
                     .column = allocation.column,
                 });
+            } else {
+                // We already have this allocator type, so free the duplicate
+                self.allocator.free(allocator_type);
             }
         }
         
