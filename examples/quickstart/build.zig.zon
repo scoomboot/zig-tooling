@@ -1,0 +1,22 @@
+.{
+    .name = "quickstart-example",
+    .version = "0.1.0",
+    .minimum_zig_version = "0.14.1",
+
+    .dependencies = .{
+        .zig_tooling = .{
+            .url = "https://github.com/scoomboot/zig-tooling/archive/refs/tags/v0.1.5.tar.gz",
+            // To get the hash, run:
+            // zig fetch --save https://github.com/scoomboot/zig-tooling/archive/refs/tags/v0.1.5.tar.gz
+            .hash = "12205bc8b26638cacc9d073c371eef5e90bb45e9e88ba9178497bf5c24659c9f95f5",
+        },
+    },
+
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "src",
+        "tools",
+        "README.md",
+    },
+}

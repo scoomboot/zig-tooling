@@ -23,3 +23,8 @@ test-*.zig.tmp
 
 # Documentation (temporary)
 docs/archive
+
+# Local development artifacts
+.dogfood/
+dogfood-*.txt
+dogfood-*.json

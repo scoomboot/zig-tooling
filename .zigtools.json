@@ -1,0 +1,74 @@
+{
+  "memory": {
+    "check_defer": true,
+    "check_arena_usage": true,
+    "check_allocator_usage": true,
+    "allowed_allocators": [
+      "std.heap.GeneralPurposeAllocator",
+      "std.heap.ArenaAllocator",
+      "std.testing.allocator",
+      "testing.allocator"
+    ],
+    "allocator_patterns": [
+      { "name": "GeneralPurposeAllocator", "pattern": "gpa" },
+      { "name": "ArenaAllocator", "pattern": "arena" },
+      { "name": "testing.allocator", "pattern": "test_alloc" }
+    ],
+    "ownership_patterns": [
+      { "function_pattern": "create", "description": "Factory functions" },
+      { "function_pattern": "init", "description": "Initialization functions" },
+      { "function_pattern": "make", "description": "Maker functions" },
+      { "function_pattern": "new", "description": "Constructor functions" },
+      { "function_pattern": "clone", "description": "Cloning functions" },
+      { "function_pattern": "duplicate", "description": "Duplication functions" },
+      { "function_pattern": "dupe", "description": "Short duplication functions" },
+      { "function_pattern": "copy", "description": "Copy functions" },
+      { "function_pattern": "alloc", "description": "Direct allocation functions" },
+      { "function_pattern": "toString", "description": "String conversion functions" },
+      { "function_pattern": "toSlice", "description": "Slice conversion functions" },
+      { "function_pattern": "format", "description": "Formatting functions" },
+      { "return_type_pattern": "![]u8", "description": "Functions returning byte slices" },
+      { "return_type_pattern": "![]const u8", "description": "Functions returning const byte slices" }
+    ],
+    "use_default_ownership_patterns": true
+  },
+  "testing": {
+    "enforce_categories": true,
+    "enforce_naming": true,
+    "allowed_categories": ["unit", "integration", "e2e", "performance"],
+    "test_prefix": "test_",
+    "test_file_prefix": "test_",
+    "require_allocator_cleanup": true
+  },
+  "patterns": {
+    "include_patterns": ["**/*.zig"],
+    "exclude_patterns": [
+      "**/zig-cache/**",
+      "**/zig-out/**",
+      "**/.zig-cache/**",
+      "**/build.zig",
+      "examples/**",
+      "tests/integration/sample_projects/**"
+    ]
+  },
+  "scope": {
+    "track_defer": true,
+    "track_errdefer": true,
+    "track_variables": true,
+    "track_allocations": true,
+    "max_nesting_depth": 10
+  },
+  "options": {
+    "max_issues": 100,
+    "verbose": true,
+    "continue_on_error": true,
+    "fail_on_warnings": true,
+    "enable_statistics": true
+  },
+  "logging": {
+    "enabled": true,
+    "min_level": "warn",
+    "include_timestamp": true,
+    "include_context": true
+  }
+}

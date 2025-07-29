@@ -1,0 +1,222 @@
+# GitHub Actions Workflow for zig-tooling
+# 
+# This workflow demonstrates how to integrate zig-tooling quality checks
+# into your CI/CD pipeline with various configurations.
+#
+# Copy this file to .github/workflows/quality.yml in your repository
+
+name: Code Quality
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  # Allow manual runs
+  workflow_dispatch:
+
+env:
+  ZIG_VERSION: '0.14.1'
+
+jobs:
+  # Basic quality check job
+  quality-check:
+    name: Code Quality Analysis
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Zig
+      uses: mlugg/setup-zig@v1
+      with:
+        version: ${{ env.ZIG_VERSION }}
+    
+    - name: Cache Zig dependencies
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cache/zig
+          zig-cache
+          zig-out
+        key: ${{ runner.os }}-zig-${{ hashFiles('build.zig.zon') }}
+        restore-keys: |
+          ${{ runner.os }}-zig-
+    
+    - name: Fetch dependencies
+      run: zig build --fetch
+    
+    - name: Run quality checks
+      run: |
+        zig build ci --summary all
+    
+    - name: Upload results as artifact
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: quality-report
+        path: quality-report.json
+        retention-days: 30
+
+  # Separate memory and test checks for parallel execution
+  memory-safety:
+    name: Memory Safety Analysis
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    - uses: mlugg/setup-zig@v1
+      with:
+        version: ${{ env.ZIG_VERSION }}
+    
+    - name: Run memory checks
+      run: |
+        zig build check-memory --summary errors
+    
+    - name: Comment PR on failure
+      if: failure() && github.event_name == 'pull_request'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: '❌ Memory safety check failed! Please run `zig build check-memory` locally to see the issues.'
+          })
+
+  test-compliance:
+    name: Test Compliance Check
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    - uses: mlugg/setup-zig@v1
+      with:
+        version: ${{ env.ZIG_VERSION }}
+    
+    - name: Run test compliance checks
+      run: |
+        zig build check-tests --summary errors
+
+  # Matrix build for multiple Zig versions
+  compatibility:
+    name: Zig ${{ matrix.zig-version }} Compatibility
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        zig-version: ['0.14.1', 'master']
+      fail-fast: false
+    
+    steps:
+    - uses: actions/checkout@v4
+    - uses: mlugg/setup-zig@v1
+      with:
+        version: ${{ matrix.zig-version }}
+    
+    - name: Run quality checks
+      run: |
+        zig build quality --summary all || echo "::warning::Quality check failed on Zig ${{ matrix.zig-version }}"
+
+  # Performance regression check
+  performance:
+    name: Performance Analysis
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Need full history for comparison
+    
+    - uses: mlugg/setup-zig@v1
+      with:
+        version: ${{ env.ZIG_VERSION }}
+    
+    - name: Checkout base branch
+      run: |
+        git checkout ${{ github.base_ref }}
+    
+    - name: Analyze base branch
+      run: |
+        zig build -Doptimize=ReleaseFast
+        time zig build quality > base-analysis.txt 2>&1 || true
+        mv base-analysis.txt /tmp/
+    
+    - name: Checkout PR branch
+      run: |
+        git checkout ${{ github.head_ref }}
+    
+    - name: Analyze PR branch
+      run: |
+        zig build -Doptimize=ReleaseFast
+        time zig build quality > pr-analysis.txt 2>&1 || true
+    
+    - name: Compare results
+      run: |
+        echo "Base branch analysis:"
+        cat /tmp/base-analysis.txt | tail -20
+        echo ""
+        echo "PR branch analysis:"
+        cat pr-analysis.txt | tail -20
+
+  # Create release artifacts with quality report
+  release-prep:
+    name: Prepare Release
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    needs: [quality-check, memory-safety, test-compliance]
+    
+    steps:
+    - uses: actions/checkout@v4
+    - uses: mlugg/setup-zig@v1
+      with:
+        version: ${{ env.ZIG_VERSION }}
+    
+    - name: Generate quality report
+      run: |
+        zig build quality --summary all > quality-report.txt 2>&1 || true
+        zig build ci -- --format json > quality-report.json 2>&1 || true
+    
+    - name: Create quality badge
+      run: |
+        if grep -q "All checks passed" quality-report.txt; then
+          echo "BADGE_COLOR=green" >> $GITHUB_ENV
+          echo "BADGE_STATUS=passing" >> $GITHUB_ENV
+        else
+          echo "BADGE_COLOR=red" >> $GITHUB_ENV
+          echo "BADGE_STATUS=failing" >> $GITHUB_ENV
+        fi
+    
+    - name: Update README badge
+      run: |
+        echo "Quality: ${{ env.BADGE_STATUS }}"
+        # In real workflow, update README.md badge here
+
+# Reusable workflow for other repositories
+# Save as .github/workflows/zig-tooling-reusable.yml
+#
+# name: Reusable zig-tooling workflow
+# 
+# on:
+#   workflow_call:
+#     inputs:
+#       zig-version:
+#         required: false
+#         type: string
+#         default: '0.14.1'
+#       fail-on-warnings:
+#         required: false
+#         type: boolean
+#         default: false
+# 
+# jobs:
+#   quality:
+#     runs-on: ubuntu-latest
+#     steps:
+#     - uses: actions/checkout@v4
+#     - uses: mlugg/setup-zig@v1
+#       with:
+#         version: ${{ inputs.zig-version }}
+#     - run: zig build quality ${{ inputs.fail-on-warnings && '--fail-on-warnings' || '' }}

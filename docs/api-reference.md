@@ -2,15 +2,63 @@
 
 This document provides a comprehensive reference for all public APIs in the zig-tooling library.
 
+[← Back to Documentation Index](README.md) | [User Guide →](user-guide.md)
+
 ## Table of Contents
 
+### Getting Started
 1. [Quick Start](#quick-start)
-2. [Core APIs](#core-apis)
-3. [Analyzers](#analyzers)
-4. [Types and Configuration](#types-and-configuration)
-5. [Utility Modules](#utility-modules)
-6. [Advanced Usage](#advanced-usage)
-7. [Memory Management](#memory-management)
+2. [Common Recipes](#common-recipes)
+
+### Core APIs
+3. [Main Entry Points](#core-apis)
+   - [`analyzeFile`](#analyzefile)
+   - [`analyzeSource`](#analyzesource)
+   - [`analyzeMemory`](#analyzememory)
+   - [`analyzeTests`](#analyzetests)
+
+### Analyzers
+4. [Memory Analyzer](#memoryanalyzer)
+   - [Initialization](#memory-analyzer-initialization)
+   - [Analysis Methods](#memory-analyzer-methods)
+   - [Results](#memory-analyzer-results)
+5. [Testing Analyzer](#testinganalyzer)
+   - [Initialization](#testing-analyzer-initialization)
+   - [Analysis Methods](#testing-analyzer-methods)
+   - [Compliance Reports](#testing-compliance-reports)
+
+### Types and Configuration
+6. [Core Types](#types-and-configuration)
+   - [`Issue`](#issue)
+   - [`AnalysisResult`](#analysisresult)
+   - [`Config`](#config)
+   - [`MemoryConfig`](#memoryconfig)
+   - [`TestingConfig`](#testingconfig)
+7. [Enumerations](#enumerations)
+   - [`Severity`](#severity-levels)
+   - [`IssueType`](#issue-types)
+
+### Utility Modules
+8. [Patterns Module](#patterns)
+   - [`checkProject`](#checkproject)
+   - [`checkFile`](#checkfile)
+   - [`checkSource`](#checksource)
+9. [Formatters Module](#formatters)
+   - [Text Output](#text-formatter)
+   - [JSON Output](#json-formatter)
+   - [GitHub Actions](#github-actions-formatter)
+10. [Build Integration](#build_integration)
+11. [Scope Tracker](#scopetracker)
+
+### Advanced Topics
+12. [Custom Allocator Patterns](#custom-allocator-patterns)
+13. [Ownership Transfer Patterns](#ownership-transfer-patterns)
+14. [Logging Interface](#logging)
+15. [Source Context](#source-context-analysis)
+16. [Memory Management](#memory-management)
+17. [Error Handling](#error-handling)
+18. [Performance Tips](#performance-tips)
+19. [Thread Safety](#thread-safety)
 
 ## Quick Start
 
@@ -38,6 +86,107 @@ if (result.hasErrors()) {
         });
     }
 }
+```
+
+## Common Recipes
+
+### Recipe: Analyze a Single File
+```zig
+const result = try zig_tooling.analyzeFile(allocator, "main.zig", null);
+defer allocator.free(result.issues);
+defer for (result.issues) |issue| {
+    allocator.free(issue.file_path);
+    allocator.free(issue.message);
+    if (issue.suggestion) |s| allocator.free(s);
+};
+
+if (result.hasErrors()) {
+    std.process.exit(1);
+}
+```
+
+### Recipe: Analyze with Custom Allocators
+```zig
+const config = zig_tooling.Config{
+    .memory = .{
+        .allowed_allocators = &.{ "MyAllocator" },
+        .allocator_patterns = &.{
+            .{ .name = "MyAllocator", .pattern = "my_alloc" },
+        },
+    },
+};
+const result = try zig_tooling.analyzeFile(allocator, "main.zig", config);
+```
+
+### Recipe: Project-Wide Analysis with Progress
+```zig
+fn analyzeProject(allocator: Allocator) !void {
+    const result = try zig_tooling.patterns.checkProject(
+        allocator, ".", null, progressCallback
+    );
+    defer zig_tooling.patterns.freeProjectResult(allocator, result);
+    
+    const output = try zig_tooling.formatters.formatAsText(
+        allocator, result, .{ .color = true }
+    );
+    defer allocator.free(output);
+    
+    std.debug.print("{s}", .{output});
+}
+
+fn progressCallback(current: u32, total: u32, file: []const u8) void {
+    std.debug.print("\r[{}/{}] {s}", .{ current + 1, total, file });
+}
+```
+
+### Recipe: CI/CD Integration
+```zig
+// GitHub Actions format
+const output = try zig_tooling.formatters.formatAsGitHubActions(
+    allocator, result, .{}
+);
+
+// JSON for custom processing
+const json = try zig_tooling.formatters.formatAsJson(
+    allocator, result, .{ .json_indent = 2 }
+);
+```
+
+### Recipe: Memory-Only Analysis
+```zig
+const result = try zig_tooling.analyzeMemory(
+    allocator, source_code, "file.zig", null
+);
+// Only memory issues will be reported
+```
+
+### Recipe: Custom Ownership Patterns
+```zig
+const config = zig_tooling.Config{
+    .memory = .{
+        .ownership_patterns = &.{
+            .{ 
+                .function_pattern = "create",
+                .return_type_pattern = "!*Widget",
+                .description = "Widget factories" 
+            },
+        },
+    },
+};
+```
+
+### Recipe: Gradual Adoption
+```zig
+const config = zig_tooling.Config{
+    .options = .{
+        .max_issues = 10,  // Start with top 10 issues
+    },
+    .memory = .{
+        .check_defer = true,  // Enable one check at a time
+        .check_arena_usage = false,
+        .check_allocator_usage = false,
+    },
+};
 ```
 
 ## Core APIs
@@ -508,4 +657,18 @@ The analyzers and trackers are not thread-safe. Each thread should create its ow
 
 ---
 
-For more examples and use cases, see the [examples](../examples/) directory and [CLAUDE.md](../CLAUDE.md).
+## Navigation
+
+[← Back to Documentation Index](README.md) | [User Guide →](user-guide.md)
+
+### Quick Links
+- [Examples Directory](../examples/) - Working code examples
+- [Getting Started](getting-started.md) - New user guide
+- [Implementation Guide](implementation-guide.md) - Integration instructions
+- [Configuration Reference](claude-integration.md) - All configuration options
+
+### Related Documentation
+- [Patterns Module Examples](../examples/basic_usage.zig)
+- [Build Integration Examples](../examples/build_integration.zig)
+- [Custom Analyzer Examples](../examples/custom_analyzer.zig)
+- [Advanced Configuration](../examples/advanced/custom_patterns.zig)

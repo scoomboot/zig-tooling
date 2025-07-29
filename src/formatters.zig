@@ -23,10 +23,12 @@
 
 const std = @import("std");
 const types = @import("types.zig");
+const patterns = @import("patterns.zig");
 
 // Re-export types for convenience
 pub const Issue = types.Issue;
 pub const AnalysisResult = types.AnalysisResult;
+pub const ProjectAnalysisResult = patterns.ProjectAnalysisResult;
 pub const Severity = types.Severity;
 pub const IssueType = types.IssueType;
 
@@ -424,6 +426,138 @@ pub fn customFormatter(
     ) anyerror![]const u8,
 ) CustomFormatter {
     return CustomFormatter{ .format_fn = format_fn };
+}
+
+// Overloaded formatters for ProjectAnalysisResult
+
+/// Format ProjectAnalysisResult as human-readable text
+/// 
+/// This function accepts ProjectAnalysisResult and converts it to AnalysisResult.
+pub fn formatProjectAsText(
+    allocator: std.mem.Allocator,
+    result: ProjectAnalysisResult,
+    options: FormatOptions,
+) ![]const u8 {
+    // Convert ProjectAnalysisResult to AnalysisResult
+    const analysis_result = AnalysisResult{
+        .issues = result.issues,
+        .files_analyzed = result.files_analyzed,
+        .issues_found = result.issues_found,
+        .analysis_time_ms = result.analysis_time_ms,
+    };
+    
+    return formatAsText(allocator, analysis_result, options);
+}
+
+/// Format ProjectAnalysisResult as JSON
+/// 
+/// This function accepts ProjectAnalysisResult and includes additional project-level fields.
+pub fn formatProjectAsJson(
+    allocator: std.mem.Allocator,
+    result: ProjectAnalysisResult,
+    options: FormatOptions,
+) ![]const u8 {
+    var output = std.ArrayList(u8).init(allocator);
+    defer output.deinit();
+    
+    const writer = output.writer();
+    
+    try writer.writeAll("{\n");
+    
+    // Write analysis metadata with enhanced project info
+    try writeJsonIndent(writer, options.json_indent);
+    try writer.print("\"analysis\": {{\n", .{});
+    
+    try writeJsonIndent(writer, options.json_indent * 2);
+    try writer.print("\"files_analyzed\": {},\n", .{result.files_analyzed});
+    
+    try writeJsonIndent(writer, options.json_indent * 2);
+    try writer.print("\"issues_found\": {},\n", .{result.issues_found});
+    
+    try writeJsonIndent(writer, options.json_indent * 2);
+    try writer.print("\"analysis_time_ms\": {},\n", .{result.analysis_time_ms});
+    
+    try writeJsonIndent(writer, options.json_indent * 2);
+    try writer.print("\"failed_files\": {},\n", .{result.failed_files.len});
+    
+    try writeJsonIndent(writer, options.json_indent * 2);
+    try writer.print("\"skipped_files\": {}\n", .{result.skipped_files.len});
+    
+    try writeJsonIndent(writer, options.json_indent);
+    try writer.writeAll("},\n");
+    
+    // Write issues array
+    try writeJsonIndent(writer, options.json_indent);
+    try writer.writeAll("\"issues\": [\n");
+    
+    const issues_to_show = if (options.max_issues) |max| @min(max, result.issues.len) else result.issues.len;
+    
+    for (result.issues[0..issues_to_show], 0..) |issue, i| {
+        try writeJsonIndent(writer, options.json_indent * 2);
+        try writer.writeAll("{\n");
+        
+        try writeJsonIndent(writer, options.json_indent * 3);
+        try writeJsonString(writer, "file_path", issue.file_path);
+        try writer.writeAll(",\n");
+        
+        try writeJsonIndent(writer, options.json_indent * 3);
+        try writer.print("\"line\": {},\n", .{issue.line});
+        
+        try writeJsonIndent(writer, options.json_indent * 3);
+        try writer.print("\"column\": {},\n", .{issue.column});
+        
+        try writeJsonIndent(writer, options.json_indent * 3);
+        try writeJsonString(writer, "issue_type", @tagName(issue.issue_type));
+        try writer.writeAll(",\n");
+        
+        try writeJsonIndent(writer, options.json_indent * 3);
+        try writeJsonString(writer, "severity", @tagName(issue.severity));
+        try writer.writeAll(",\n");
+        
+        try writeJsonIndent(writer, options.json_indent * 3);
+        try writeJsonString(writer, "message", issue.message);
+        
+        if (issue.suggestion) |suggestion| {
+            try writer.writeAll(",\n");
+            try writeJsonIndent(writer, options.json_indent * 3);
+            try writeJsonString(writer, "suggestion", suggestion);
+        }
+        
+        try writer.writeAll("\n");
+        try writeJsonIndent(writer, options.json_indent * 2);
+        try writer.writeAll("}");
+        
+        if (i < issues_to_show - 1) {
+            try writer.writeAll(",");
+        }
+        try writer.writeAll("\n");
+    }
+    
+    try writeJsonIndent(writer, options.json_indent);
+    try writer.writeAll("]\n");
+    
+    try writer.writeAll("}\n");
+    
+    return output.toOwnedSlice();
+}
+
+/// Format ProjectAnalysisResult for GitHub Actions
+/// 
+/// This function accepts ProjectAnalysisResult and converts it to AnalysisResult.
+pub fn formatProjectAsGitHubActions(
+    allocator: std.mem.Allocator,
+    result: ProjectAnalysisResult,
+    options: FormatOptions,
+) ![]const u8 {
+    // Convert ProjectAnalysisResult to AnalysisResult
+    const analysis_result = AnalysisResult{
+        .issues = result.issues,
+        .files_analyzed = result.files_analyzed,
+        .issues_found = result.issues_found,
+        .analysis_time_ms = result.analysis_time_ms,
+    };
+    
+    return formatAsGitHubActions(allocator, analysis_result, options);
 }
 
 // Helper functions for formatting

@@ -132,4 +132,41 @@ pub fn build(b: *std.Build) void {
     const test_all_step = b.step("test-all", "Run all tests including integration tests");
     test_all_step.dependOn(test_step);
     test_all_step.dependOn(integration_test_step);
+
+    // Quality check tool
+    const quality_check_exe = b.addExecutable(.{
+        .name = "quality_check",
+        .root_source_file = b.path("tools/quality_check.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    quality_check_exe.root_module.addImport("zig_tooling", zig_tooling_module);
+
+    // Quality check step
+    const quality_step = b.step("quality", "Run all code quality checks");
+    const run_quality = b.addRunArtifact(quality_check_exe);
+    quality_step.dependOn(&run_quality.step);
+    
+    // Dogfood step - use our own tooling on ourselves (non-blocking)
+    const dogfood_step = b.step("dogfood", "Run quality checks on zig-tooling itself (non-blocking)");
+    const run_dogfood = b.addRunArtifact(quality_check_exe);
+    run_dogfood.addArg("--no-fail-on-warnings");
+    dogfood_step.dependOn(&run_dogfood.step);
+
+    // Validate tools compilation step
+    const validate_tools_step = b.step("validate-tools", "Validate that all tools compile successfully");
+    
+    // Add all tools here - currently just quality_check
+    // When new tools are added, they should be added to this list
+    const tools_to_validate = [_]*std.Build.Step.Compile{
+        quality_check_exe,
+    };
+    
+    // Make validate-tools depend on compilation of all tools
+    for (tools_to_validate) |tool| {
+        validate_tools_step.dependOn(&tool.step);
+    }
+    
+    // Make test step depend on tools validation
+    test_step.dependOn(validate_tools_step);
 }

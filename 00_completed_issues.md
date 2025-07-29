@@ -1,0 +1,759 @@
+## Completed Issues
+
+*Finished issues for reference*
+
+- [x] #LC076: Add build validation for tools/ directory compilation
+  - **Component**: build.zig, tools/
+  - **Priority**: Medium
+  - **Created**: 2025-07-29
+  - **Started**: 2025-07-29
+  - **Completed**: 2025-07-29
+  - **Dependencies**: None
+  - **Details**: Quality check tool had compilation errors that went unnoticed until manual testing
+  - **Resolution**:
+    - Added `validate-tools` build step to compile all tools without running them
+    - Created comprehensive CI pipeline with dedicated tools validation job
+    - Added tools/ directory maintenance documentation
+    - Integrated tools validation into the main test flow
+  - **Implementation Details**:
+    - Modified build.zig to add `validate-tools` step with array of tools to validate
+    - Created `.github/workflows/ci.yml` with validate-tools, unit-tests, integration-tests, quality-check, and cross-platform jobs
+    - Created `docs/tools-maintenance.md` with comprehensive guide for adding and maintaining tools
+    - Made `test` step depend on `validate-tools` for early compilation error detection
+    - CI includes cross-platform validation on Ubuntu, macOS, and Windows
+
+- [x] #LC052: Add proper JSON/XML escape functions to formatters
+  - **Component**: src/formatters.zig, src/utils.zig
+  - **Priority**: High
+  - **Created**: 2025-07-27
+  - **Started**: 2025-07-28
+  - **Completed**: 2025-07-28
+  - **Dependencies**: #LC015 ✅ (Completed 2025-07-27)
+  - **Details**: Current escape functions in examples are placeholders
+  - **Resolution**:
+    - Created comprehensive escape functions in utils.zig for JSON, XML, and GitHub Actions
+    - Enhanced writeJsonString in formatters.zig to handle all control characters per RFC 7159
+    - Updated GitHub Actions formatter to properly escape file paths and messages
+    - Updated ci_integration.zig example to use proper escape functions from utils
+    - Added comprehensive test coverage for all escape functions
+    - All tests pass successfully
+  - **Implementation Details**:
+    - JSON escaping handles all control characters (U+0000-U+001F) with proper \uXXXX format
+    - XML escaping handles the 5 predefined entities: &, <, >, ", '
+    - GitHub Actions escaping uses URL encoding for %, \r, \n, and optionally : and ,
+    - Escape functions are now exported via zig_tooling.utils for public use
+
+- [x] #LC068: Improve memory ownership transfer detection (GitHub Issue #2)
+  - **Component**: src/memory_analyzer.zig, src/types.zig
+  - **Priority**: High
+  - **Created**: 2025-07-27
+  - **Started**: 2025-07-27
+  - **Completed**: 2025-07-27
+  - **Dependencies**: None
+  - **Details**: False positive "missing defer" warnings for valid Zig memory ownership patterns
+  - **Resolution**:
+    - Added OwnershipPattern type to types.zig for configurable ownership transfer detection
+    - Enhanced return type detection to handle error unions, optionals, and complex types
+    - Implemented allocation-to-return tracking to detect variables returned later
+    - Added default ownership patterns for common function names and return types
+    - Added pattern validation similar to allocator pattern validation
+    - Created comprehensive test suite with 8 test cases covering various scenarios
+    - Added detailed documentation in CLAUDE.md explaining ownership transfer patterns
+    - Successfully reduces false positives for factory functions, builders, and similar patterns
+  - **Implementation Details**:
+    - Modified isOwnershipTransferReturnType() to use configurable patterns and handle complex types
+    - Added isAllocationReturnedLater() for data flow analysis
+    - Added default_ownership_patterns with common patterns (create, init, make, etc.)
+    - Added ownership_patterns and use_default_ownership_patterns to MemoryConfig
+    - All tests pass successfully
+
+- [x] #LC072: Complete GitHub issue #2 ownership transfer detection
+  - **Component**: src/memory_analyzer.zig, src/types.zig
+  - **Priority**: Critical
+  - **Created**: 2025-07-27
+  - **Started**: 2025-07-27
+  - **Completed**: 2025-07-27
+  - **Dependencies**: #LC068 ✅ (Completed 2025-07-27)
+  - **Details**: GitHub issue #2 still not fully resolved - missing key ownership transfer patterns from LC068
+  - **Resolution**:
+    - Added "get" function name pattern to default ownership transfer patterns
+    - Enhanced struct field assignment detection for array element patterns in isAllocationReturnedLater()
+    - Added support for pattern: `result[i] = Struct{ .field = allocation }`
+    - Added support for pattern: `result[i].field = allocation`
+    - Added support for general struct field assignment patterns
+    - Improved errdefer validation coverage through enhanced ownership transfer detection
+    - Added comprehensive test suite with 5 new test cases covering getMigrationHistory and array element patterns
+    - All tests pass successfully, resolving false positive "missing defer" warnings for valid Zig patterns
+  - **Implementation Details**:
+    - Added `.{ .function_pattern = "get", .description = "Getter functions that may return owned memory" }` to default_ownership_patterns
+    - Enhanced isAllocationReturnedLater() function with array element and struct field assignment detection
+    - Added test cases: LC072: getMigrationHistory, get function patterns, array element struct field assignments (initialization and direct), and general struct field assignment
+    - Successfully resolves GitHub issue #2 ownership transfer detection requirements
+
+- [x] #LC057: Fix segfault in memory_analyzer.findFunctionContext when freeing return_type
+  - **Component**: src/memory_analyzer.zig
+  - **Priority**: Critical
+  - **Created**: 2025-07-27
+  - **Started**: 2025-07-27
+  - **Completed**: 2025-07-27
+  - **Dependencies**: None
+  - **Details**: Segmentation fault occurs when freeing current_function.return_type in findFunctionContext
+  - **Stack Trace**: Crash at memory_analyzer.zig:1275 when calling temp_allocator.free(current_function.return_type)
+  - **Version**: v0.1.1 (different from LC056 which was v0.1.0)
+  - **Resolution**:
+    - Root cause: parseFunctionSignature initialized variables with string literals "unknown"
+    - Fixed by ensuring all strings in parseFunctionSignature are heap-allocated
+    - Changed initialization from string literals to temp_allocator.dupe() calls
+    - Added proper errdefer cleanup and memory management
+    - Added test case "LC057: Function context parsing memory safety" to prevent regression
+    - All tests pass successfully with no memory issues
+
+- [x] #LC056: Fix segfault in memory_analyzer.deinit when freeing suggestion strings
+  - **Component**: src/memory_analyzer.zig
+  - **Priority**: Critical
+  - **Created**: 2025-07-27
+  - **Started**: 2025-07-27
+  - **Completed**: 2025-07-27
+  - **Dependencies**: None
+  - **Details**: Segmentation fault occurs when freeing suggestion strings during cleanup
+  - **Resolution**:
+    - Identified root cause: some suggestions were string literals, others were heap-allocated
+    - Changed lines 896 and 924 to use std.fmt.allocPrint instead of string literals
+    - Added defensive comment in deinit function documenting that all suggestions are heap-allocated
+    - Added test case to verify allocator pattern validation doesn't cause segfault
+    - All tests pass successfully with no memory issues
+    - Library can now be safely used in production environments
+
+- [x] #LC069: Fix built-in pattern conflicts with std.testing.allocator (GitHub Issue #3)
+  - **Component**: src/memory_analyzer.zig, src/types.zig
+  - **Priority**: High
+  - **Created**: 2025-07-27
+  - **Started**: 2025-07-27
+  - **Completed**: 2025-07-27
+  - **Dependencies**: None
+  - **Details**: Persistent pattern name conflicts with std.testing.allocator across multiple files
+  - **Resolution**:
+    - Fixed duplicate pattern names in default_allocator_patterns (renamed second "std.testing.allocator" to "testing.allocator")
+    - Added `use_default_patterns: bool = true` configuration field to disable all built-in patterns
+    - Added `disabled_default_patterns: []const []const u8 = &.{}` for selective pattern disabling
+    - Enhanced validateAllocatorPatterns() to detect duplicates within default patterns
+    - Updated extractAllocatorType() to respect pattern disable configuration
+    - Added comprehensive test suite in tests/test_allocator_patterns.zig
+    - Updated CLAUDE.md with pattern conflict resolution documentation
+    - All tests pass successfully
+
+- [x] #LC073: Fix memory leaks in scope_tracker.zig (GitHub Issue #4)
+  - **Component**: src/scope_tracker.zig, src/memory_analyzer.zig
+  - **Priority**: Critical
+  - **Created**: 2025-07-28
+  - **Started**: 2025-07-28
+  - **Completed**: 2025-07-28
+  - **Dependencies**: None
+  - **Details**: Memory leaks when using GeneralPurposeAllocator - ~18 allocations leaked per analysis
+  - **Resolution**:
+    - Root cause was a use-after-free bug in validateAllocatorChoice() that was corrupting memory
+    - Fixed by properly managing allocator type string ownership in HashMap
+    - Changed to free all allocator type strings when HashMap is cleaned up
+    - Added comprehensive memory leak tests in test_scope_tracker_memory.zig
+    - No actual memory leaks found in ScopeTracker itself
+    - All tests pass with GeneralPurposeAllocator showing 0 memory leaks
+  - **Implementation Details**:
+    - The bug was in memory_analyzer.zig validateAllocatorChoice() at line 794
+    - Allocator type strings were being freed while still referenced by HashMap
+    - Fixed by deferring cleanup until HashMap destruction
+    - Added test case for the specific use-after-free scenario
+    - CI/CD can now use GPA for memory safety validation
+
+- [x] #LC030: Add option to disable default allocator patterns
+  - **Component**: src/memory_analyzer.zig, src/types.zig
+  - **Priority**: Low
+  - **Created**: 2025-07-27
+  - **Started**: 2025-07-27
+  - **Completed**: 2025-07-27
+  - **Dependencies**: #LC024 ✅
+  - **Details**: No way to use only custom patterns without default patterns
+  - **Resolution**:
+    - Implemented as part of LC069 pattern conflict resolution
+    - Added `use_default_patterns: bool = true` to MemoryConfig at [src/types.zig:326](src/types.zig#L326)
+    - Updated extractAllocatorType() to check flag before using defaults
+    - Added test case "pattern disable functionality - disable all default patterns"
+    - Functionality fully integrated and tested
+
+- [x] #LC016: API documentation
+  - **Component**: All public modules
+  - **Priority**: High
+  - **Created**: 2025-07-25
+  - **Started**: 2025-07-27
+  - **Completed**: 2025-07-27
+  - **Dependencies**: #LC005-#LC015 (All completed)
+  - **Details**: Add comprehensive documentation to all public APIs
+  - **Resolution**:
+    - Added comprehensive doc comments to all public types in types.zig
+    - Updated memory_analyzer.zig documentation and removed NFL references
+    - Added comprehensive documentation to testing_analyzer.zig
+    - Documented scope_tracker.zig builder pattern (already well documented)
+    - Enhanced documentation in app_logger.zig for types and callbacks
+    - Documented source_context.zig public API
+    - Added module doc to utils.zig (no public APIs yet)
+    - Created comprehensive docs/api-reference.md with full API guide
+    - All public APIs now have proper documentation with examples
+    - Discovered and logged LC050 for remaining project-specific references
+
+- [x] #LC015: Result formatting utilities
+  - **Component**: src/formatters.zig (new)
+  - **Priority**: Medium
+  - **Created**: 2025-07-25
+  - **Started**: 2025-07-27
+  - **Completed**: 2025-07-27
+  - **Dependencies**: #LC008 ✅ (Completed 2025-07-26)
+  - **Details**: Format analysis results for different outputs
+  - **Resolution**:
+    - Created comprehensive formatters.zig module with text, JSON, and GitHub Actions formatters
+    - Implemented FormatOptions for configurable output (verbose, color, max_issues, etc.)
+    - Added custom formatter interface support with customFormatter() helper
+    - Implemented AnalysisOptions fields (max_issues, verbose, continue_on_error) in analyzers
+    - Fixed recursive bugs in addIssue() methods in both analyzers
+    - Updated build_integration.zig to use new formatters, removing TODO placeholders
+    - Exported formatters module from main zig_tooling.zig
+    - Added comprehensive test suite with 12+ test cases covering all formatters
+    - Updated CLAUDE.md with detailed formatting examples and API documentation
+    - All tests pass successfully
+
+- [x] #LC019: Update test suite
+  - **Component**: tests/
+  - **Priority**: Critical
+  - **Created**: 2025-07-25
+  - **Started**: 2025-07-27
+  - **Completed**: 2025-07-27
+  - **Dependencies**: #LC005 ✅-#LC012 ✅ (All completed 2025-07-27)
+  - **Details**: Remove CLI tests, add API usage tests
+  - **Resolution**:
+    - Added test_patterns.zig to build.zig test configuration (missing from test suite)
+    - Fixed compatibility issues with tmpDir const qualifier for Zig 0.14.1
+    - Enhanced test_api.zig with comprehensive edge case and error boundary tests
+    - Added performance benchmarks for large file analysis (target: <1000ms for large files)
+    - Added concurrent analysis testing to verify thread safety
+    - Added tests for empty source, deeply nested scopes, problematic file paths
+    - All 4 test suites now pass: test_api.zig, test_patterns.zig, test_scope_integration.zig, lib tests
+    - No CLI tests found to remove (already cleaned up in earlier phases)
+    - Comprehensive API coverage with 68+ test cases covering all public APIs
+
+- [x] #LC014: Common patterns library
+  - **Component**: src/patterns.zig (new)
+  - **Priority**: Medium
+  - **Created**: 2025-07-25
+  - **Started**: 2025-07-27
+  - **Completed**: 2025-07-27
+  - **Dependencies**: #LC009 ✅, #LC010 ✅
+  - **Details**: High-level convenience functions for common use cases
+  - **Resolution**:
+    - Created comprehensive patterns.zig with checkProject(), checkFile(), and checkSource() functions
+    - Implemented ProjectAnalysisResult type with enhanced project-level statistics
+    - Added automatic file discovery with configurable include/exclude patterns
+    - Implemented progress reporting callback support for large projects
+    - Created optimized default configurations for different use cases
+    - Added memory management helpers (freeResult(), freeProjectResult())
+    - Exported patterns module through main zig_tooling.zig
+    - Created comprehensive test suite in tests/test_patterns.zig
+    - Updated CLAUDE.md with patterns usage examples and documentation
+    - All core requirements completed successfully
+
+- [x] #LC013: Build system integration helpers
+  - **Component**: src/build_integration.zig (new)
+  - **Priority**: High
+  - **Created**: 2025-07-25
+  - **Started**: 2025-07-27
+  - **Completed**: 2025-07-27
+  - **Dependencies**: #LC009 ✅, #LC010 ✅
+  - **Details**: Create helpers for Zig build system integration
+  - **Resolution**:
+    - Created comprehensive build_integration.zig with helper functions for build system integration
+    - Implemented addMemoryCheckStep() and addTestComplianceStep() for build steps
+    - Added createPreCommitHook() function for automated pre-commit analysis
+    - Implemented PatternConfig file filtering with basic glob pattern support
+    - Added file discovery using walkDirectoryForZigFiles() with include/exclude patterns
+    - Added support for multiple output formats (text, json, github_actions)
+    - Exported build_integration module through main zig_tooling.zig
+    - Updated CLAUDE.md with comprehensive build integration examples and usage patterns
+    - All core requirements completed successfully
+
+- [x] #LC012: Simplify logging system
+  - **Component**: src/app_logger.zig
+  - **Priority**: Low
+  - **Created**: 2025-07-25
+  - **Completed**: 2025-07-27
+  - **Dependencies**: #LC008
+  - **Details**: Make logging optional with callback interface
+  - **Resolution**:
+    - Completely redesigned app_logger.zig with callback-based interface
+    - Removed all file operations, rotation, and archive management
+    - Created simple Logger struct with optional LogCallback function
+    - Added LoggingConfig to types.zig and integrated with main Config struct
+    - Integrated logging with MemoryAnalyzer and TestingAnalyzer using initWithFullConfig()
+    - Exported logging types through zig_tooling.zig for easy access
+    - Added example callbacks: stderrLogCallback for console output
+    - Updated CLAUDE.md with logging usage examples
+    - All tests pass successfully
+
+- [x] #LC011: Optimize scope tracker
+  - **Component**: src/scope_tracker.zig
+  - **Priority**: Medium
+  - **Created**: 2025-07-25
+  - **Completed**: 2025-07-27
+  - **Dependencies**: #LC008
+  - **Details**: Expose as public API, add builder pattern
+  - **Resolution**:
+    - Added ScopeTrackerBuilder with fluent API for configuration
+    - Exported all necessary types (ScopeType, ScopeInfo, VariableInfo, ScopeConfig)
+    - Implemented performance optimizations: lazy parsing, configurable features, depth limits
+    - Added comprehensive public API methods: findScopesByType, getScopeHierarchy, getStats, etc.
+    - Added full documentation with examples for all public methods
+    - Added extensive unit tests for builder pattern and public API
+    - All tests pass successfully
+
+- [x] #LC027: Add buffer size validation for category formatting
+  - **Component**: src/testing_analyzer.zig
+  - **Priority**: Low
+  - **Created**: 2025-07-27
+  - **Completed**: 2025-07-27
+  - **Dependencies**: None
+  - **Details**: Fixed-size buffers used for category string building could overflow
+  - **Resolution**:
+    - Replaced fixed 256-byte buffer in determineTestCategory() with dynamic allocation using allocPrint()
+    - Replaced fixed 512-byte buffer in generateTestIssues() with ArrayList for building category lists
+    - Both changes prevent buffer overflow when handling long category names or many categories
+    - Added comprehensive test in test_api.zig with 300+ character category names to verify the fix
+    - All tests pass successfully with no buffer overflow issues
+
+- [x] #LC028: Add allocator pattern validation
+  - **Component**: src/memory_analyzer.zig
+  - **Priority**: Low
+  - **Created**: 2025-07-27
+  - **Completed**: 2025-07-27
+  - **Dependencies**: None
+  - **Details**: No validation of allocator patterns in configuration
+  - **Resolution**:
+    - Added validateAllocatorPatterns() function to check pattern configuration
+    - Added new error types to AnalysisError enum: EmptyPatternName, EmptyPattern, DuplicatePatternName, PatternTooGeneric
+    - Validation checks for empty pattern names and patterns (returns error)
+    - Detects duplicate pattern names across custom and default patterns (returns error)
+    - Warns about single-character patterns that may cause false matches (adds warning issue)
+    - Warns when custom pattern names conflict with built-in pattern names
+    - Added comprehensive tests covering all validation scenarios
+    - All tests pass successfully
+
+- [x] #LC026: Document getCategoryBreakdown memory ownership
+  - **Component**: src/testing_analyzer.zig
+  - **Priority**: Low
+  - **Created**: 2025-07-27
+  - **Completed**: 2025-07-27
+  - **Dependencies**: None
+  - **Details**: getCategoryBreakdown returns HashMap that caller must deinit
+  - **Resolution**:
+    - Added comprehensive doc comment explaining memory ownership (following LC023 pattern)
+    - Documented that caller must call deinit() on the returned HashMap
+    - Added example usage showing proper cleanup with defer statement
+    - Included design note explaining why HashMap is returned instead of struct
+    - Added unit test demonstrating proper HashMap cleanup pattern
+    - All tests pass successfully
+
+- [x] #LC025: Fix memory lifetime issues in TestPattern
+  - **Component**: src/testing_analyzer.zig
+  - **Priority**: Medium
+  - **Created**: 2025-07-27
+  - **Completed**: 2025-07-27
+  - **Dependencies**: None
+  - **Details**: TestPattern stores reference to category string from config, not a copy
+  - **Resolution**:
+    - Modified TestPattern creation to duplicate category strings using allocator.dupe()
+    - Updated deinit() to free category strings along with test names
+    - Updated reset() to free category strings when clearing tests
+    - Added comprehensive test to verify category strings survive config deallocation
+    - All tests pass successfully
+
+- [x] #LC024: Improve allocator type detection
+  - **Component**: src/memory_analyzer.zig
+  - **Priority**: Low
+  - **Created**: 2025-07-26
+  - **Completed**: 2025-07-27
+  - **Dependencies**: None
+  - **Details**: Current allocator type detection was limited to known patterns
+  - **Resolution**:
+    - Added AllocatorPattern struct to types.zig for custom pattern definitions
+    - Updated MemoryConfig to include allocator_patterns field
+    - Refactored extractAllocatorType() to use pattern-based matching
+    - Custom patterns are checked first, then default patterns
+    - Added comprehensive tests for custom allocator pattern detection
+    - Updated CLAUDE.md with configuration examples
+    - All tests pass successfully
+
+- [x] #LC023: Document memory management for helper functions
+  - **Component**: src/memory_analyzer.zig
+  - **Priority**: Low
+  - **Created**: 2025-07-26
+  - **Completed**: 2025-07-27
+  - **Dependencies**: None
+  - **Details**: Some helper functions return allocated memory without clear documentation
+  - **Resolution**:
+    - Added comprehensive doc comment to formatAllowedAllocators() explaining memory ownership
+    - Fixed memory leak in validateAllocatorChoice() by storing result and using defer to free
+    - Added note explaining design decision to keep allocation-based approach
+    - All callers now properly manage memory returned by formatAllowedAllocators()
+    - Tests pass successfully
+
+- [x] #LC022: Fix arena allocator tracking
+  - **Component**: src/memory_analyzer.zig
+  - **Priority**: Medium
+  - **Created**: 2025-07-26
+  - **Completed**: 2025-07-27
+  - **Dependencies**: None
+  - **Details**: Arena allocator variable tracking was broken
+  - **Resolution**:
+    - Added call to trackArenaAllocatorVars() in analyzeSourceCode() loop at line 180
+    - Arena-derived allocators (e.g., `const allocator = arena.allocator();`) are now properly tracked
+    - Added comprehensive test in test_api.zig to verify arena allocator tracking
+    - Verified that allocations using arena-derived allocators no longer generate false positive missing defer warnings
+    - All tests pass successfully
+
+- [x] #LC001: Clean up file structure
+  - **Component**: All CLI files, scripts, docs
+  - **Priority**: Critical
+  - **Created**: 2025-07-25
+  - **Completed**: 2025-07-25
+  - **Dependencies**: None
+  - **Details**: Delete all CLI-related files, shell scripts, and CLI documentation
+  - **Resolution**:
+    - Deleted 18 files: 3 CLI executables, config loader, 3 shell scripts, user guide, 5 config examples, 3 CLI tests
+    - Removed 4 directories: src/cli/, scripts/, docs/user-guide/, examples/configs/
+    - Updated build.zig to remove CLI targets and run steps
+    - Updated README.md to reflect library conversion status
+    - Fixed src/root.zig to remove config_loader import
+    - All tests pass, build succeeds
+
+- [x] #LC002: Restructure source tree
+  - **Component**: src/
+  - **Priority**: Critical
+  - **Created**: 2025-07-25
+  - **Completed**: 2025-07-25
+  - **Dependencies**: #LC001
+  - **Details**: Flatten directory structure and rename files for library usage
+  - **Resolution**:
+    - Renamed root.zig to zig_tooling.zig
+    - Moved all analyzers from src/analyzers/ to root src/
+    - Moved all core modules from src/core/ to root src/
+    - Moved logging and config modules to root src/
+    - Created types.zig and utils.zig placeholder files
+    - Updated all import paths in affected files
+    - Updated build.zig to reference new zig_tooling.zig
+    - Removed empty directories (analyzers/, core/, logging/, config/, tools/)
+    - All tests pass, build succeeds
+
+- [x] #LC003: Update build.zig for library
+  - **Component**: build.zig
+  - **Priority**: Critical
+  - **Created**: 2025-07-25
+  - **Completed**: 2025-07-25
+  - **Dependencies**: #LC002
+  - **Details**: Remove all executable targets and configure as pure library
+  - **Resolution**:
+    - Added static library artifact with proper name and configuration
+    - Configured library installation with b.installArtifact
+    - Created module for internal use and testing
+    - Added unit tests for the library itself
+    - Maintained existing integration test configuration
+    - Library builds successfully to zig-out/lib/libzig_tooling.a
+    - All tests pass
+
+- [x] #LC004: Update build.zig.zon metadata
+  - **Component**: build.zig.zon
+  - **Priority**: High
+  - **Created**: 2025-07-25
+  - **Completed**: 2025-07-25
+  - **Dependencies**: #LC003
+  - **Details**: Update package metadata for library distribution
+  - **Resolution**:
+    - Added description field with comprehensive library description
+    - Updated paths list: removed "docs", added "tests" for user verification
+    - Kept version as 1.0.0 (appropriate for first library release)
+    - Kept minimum Zig version as 0.15.0-dev.847+850655f06
+    - Library builds successfully with updated metadata
+    - All tests pass
+
+- [x] #LC005: Design public API surface
+  - **Component**: src/zig_tooling.zig, src/types.zig
+  - **Priority**: Critical
+  - **Created**: 2025-07-25
+  - **Completed**: 2025-07-26
+  - **Dependencies**: #LC004
+  - **Details**: Create main library interface with clean public API
+  - **Resolution**:
+    - Created comprehensive types.zig with unified issue types, severity levels, and configuration structures
+    - Implemented clean public API in zig_tooling.zig with analyzer exports and convenience functions
+    - Added analyzeMemory, analyzeTests, analyzeFile, and analyzeSource convenience functions
+    - Exported all core types and analyzers for advanced usage
+    - Added comprehensive documentation with examples for all public APIs
+    - Created test_api.zig with unit tests for the new public API
+    - Fixed enum naming conflicts (err vs error) and updated type conversions
+    - All tests pass, library builds successfully
+
+- [x] #LC006: Simplify configuration system
+  - **Component**: src/config/config.zig, src/types.zig
+  - **Priority**: High
+  - **Created**: 2025-07-25
+  - **Completed**: 2025-07-26
+  - **Dependencies**: #LC005
+  - **Details**: Remove file-based config, convert to programmatic only
+  - **Resolution**:
+    - Deleted unused src/config/config.zig file (198 lines removed)
+    - Updated MemoryAnalyzer to accept and use MemoryConfig from types.zig
+    - Updated TestingAnalyzer to accept and use TestingConfig from types.zig
+    - Added configuration checks before creating issues (check_defer, check_arena_usage, etc.)
+    - Wired configuration through public API functions analyzeMemory() and analyzeTests()
+    - Added comprehensive tests for configuration usage in test_api.zig
+    - Configuration is now purely programmatic with sensible defaults
+    - All tests pass, configuration system fully functional
+
+- [x] #LC007: Remove CLI dependencies
+  - **Component**: All analyzers and core modules
+  - **Priority**: Critical
+  - **Created**: 2025-07-25
+  - **Completed**: 2025-07-26
+  - **Dependencies**: #LC005
+  - **Details**: Remove all print statements and CLI-specific code
+  - **Resolution**:
+    - Removed printReport() methods from both analyzers (42 lines removed from each)
+    - Removed print imports from memory_analyzer.zig and testing_analyzer.zig
+    - Removed debug print statements from both analyzers
+    - Converted debug.print in app_logger.zig to proper error handling with TODO note
+    - Removed print import from app_logger.zig
+    - All tests pass, library builds successfully
+    - Analyzers now return structured data only, no console output
+
+- [x] #LC008: Improve error handling
+  - **Component**: src/types.zig, all modules
+  - **Priority**: High
+  - **Created**: 2025-07-25
+  - **Completed**: 2025-07-26
+  - **Dependencies**: #LC007
+  - **Details**: Define proper error types and structured issues
+  - **Resolution**:
+    - AnalysisError enum already existed in types.zig with proper error types
+    - Issue struct already existed in types.zig
+    - Removed duplicate AnalyzerError enums from both memory_analyzer.zig and testing_analyzer.zig
+    - Updated all error returns to use unified AnalysisError from types.zig
+    - Fixed field name mismatches (description → message) in issue creation
+    - Added comprehensive error documentation with examples
+    - Removed unnecessary type conversion functions from zig_tooling.zig
+    - Both analyzers now use unified Issue type directly
+    - All tests pass, library builds successfully
+  - **Cleanup needed in LC009/LC010**:
+    - Remove legacy type aliases (MemoryIssue, TestingIssue) added for backward compatibility
+    - Clean up duplicate type imports (IssueType, Severity) to use types.* directly
+    - Watch for similar field name patterns in other modules
+
+- [x] #LC009: Refactor memory analyzer
+  - **Component**: src/memory_analyzer.zig
+  - **Priority**: High
+  - **Created**: 2025-07-25
+  - **Completed**: 2025-07-26
+  - **Dependencies**: #LC008
+  - **Details**: Remove CLI formatting, return structured data
+  - **Resolution**:
+    - Removed legacy type alias `pub const MemoryIssue = Issue;` and duplicate imports
+    - Implemented allowed_allocators configuration check in validateAllocatorChoice()
+    - Enhanced allocator tracking with extractAllocatorType() to identify allocator types
+    - Removed NFL-specific ComponentType enum and determineComponentType() function
+    - Added formatAllowedAllocators() helper for better error messages
+    - Added comprehensive tests for allowed_allocators configuration
+    - All allocator usage is now validated against the configured allowed list
+    - Library is now fully generic and suitable for any Zig project
+
+- [x] #LC010: Refactor testing analyzer
+  - **Component**: src/testing_analyzer.zig
+  - **Priority**: High
+  - **Created**: 2025-07-25
+  - **Completed**: 2025-07-27
+  - **Dependencies**: #LC008
+  - **Details**: Make test categories configurable, return structured results
+  - **Resolution**:
+    - Removed hardcoded TestCategory enum and replaced with dynamic string-based categories
+    - Updated TestPattern to use optional string category instead of enum
+    - Rewrote determineTestCategory() to use config.allowed_categories
+    - Updated all category-related functions to work with configurable categories
+    - Removed legacy TestingIssue type alias and duplicate imports
+    - Added structured compliance data methods (getComplianceReport, getCategoryBreakdown, etc.)
+    - Added TestComplianceReport struct for detailed analysis results
+    - All tests pass, library builds successfully
+
+- [x] #LC050: Remove project-specific references from library documentation
+  - **Component**: src/memory_analyzer.zig, src/testing_analyzer.zig, README.md
+  - **Priority**: Low
+  - **Created**: 2025-07-27
+  - **Started**: 2025-07-27
+  - **Completed**: 2025-07-27
+  - **Dependencies**: None
+  - **Details**: The library contained project-specific references that needed to be removed for a generic library
+  - **Resolution**:
+    - Searched all source files, documentation, and tests for project-specific terms
+    - Found and replaced game_clock references in testing_analyzer.zig with generic cache_manager example
+    - Updated README.md to replace "Simulation" test category with "E2E, Performance"
+    - NFL references were already removed during LC016
+    - All tests pass successfully after changes
+
+- [x] #LC017: Integration examples
+  - **Component**: examples/
+  - **Priority**: High
+  - **Created**: 2025-07-25
+  - **Started**: 2025-07-27
+  - **Completed**: 2025-07-27
+  - **Dependencies**: #LC013 ✅, #LC014 ✅, #LC015 ✅ (All completed 2025-07-27)
+  - **Details**: Create example code for common integration scenarios
+  - **Resolution**:
+    - Created basic_usage.zig with simple getting started examples
+    - Created build_integration.zig demonstrating build.zig integration patterns
+    - Created custom_analyzer.zig showing how to extend the library with custom analysis
+    - Created ide_integration.zig for real-time editor/IDE integration patterns
+    - Created ci_integration.zig for CI/CD pipeline integration (GitHub Actions, GitLab, Jenkins)
+    - Updated sample_project/README.md to remove CLI references and show library usage
+    - All examples are self-contained, runnable, and include comprehensive documentation
+    - Examples cover all major integration scenarios for the library
+
+- [x] #LC021: Documentation testing
+  - **Component**: All documentation
+  - **Priority**: Medium
+  - **Created**: 2025-07-25
+  - **Started**: 2025-07-27
+  - **Completed**: 2025-07-27
+  - **Dependencies**: #LC016 ✅ (Completed 2025-07-27)
+  - **Details**: Ensure all documentation code compiles and works
+  - **Resolution**:
+    - Fixed broken file references in examples/basic_usage.zig (resolves LC059)
+    - Created comprehensive documentation testing infrastructure with build step
+    - Added intelligent code block extraction and validation from CLAUDE.md and docs/api-reference.md
+    - Implemented API completeness audit showing 49% documentation coverage (82/166 public items)
+    - Formatted all example files to fix syntax issues
+    - Added test-docs build step integrated into test-all
+    - Cleaned up temporary files from resolved segfault analysis
+    - All documentation examples now compile and work correctly
+
+- [x] #LC020: Integration testing
+  - **Component**: tests/integration/
+  - **Priority**: High
+  - **Created**: 2025-07-25
+  - **Started**: 2025-07-27
+  - **Completed**: 2025-07-27
+  - **Dependencies**: #LC019 ✅ (Completed 2025-07-27)
+  - **Details**: Test library with real projects
+  - **Requirements**:
+    - Sample project tests
+    - Build integration tests
+    - Memory usage validation
+    - Thread safety tests
+  - **Resolution**:
+    - Created comprehensive integration test suite in tests/integration/
+    - Built 4 sample projects with different complexity levels and patterns
+    - Implemented 6 integration test modules covering all requirements:
+      - test_integration_runner.zig - Test infrastructure and utilities
+      - test_real_project_analysis.zig - End-to-end project analysis workflows
+      - test_build_system_integration.zig - Build helpers and output formatters
+      - test_memory_performance.zig - Memory usage validation and performance benchmarks
+      - test_thread_safety.zig - Concurrent analysis and thread safety validation
+      - test_error_boundaries.zig - Error handling and edge case testing
+    - Added build.zig integration with separate test-integration and test-all steps
+    - Sample projects include: simple memory issues, complex multi-file, custom allocators, build integration
+    - All integration tests validate library production readiness and real-world usage scenarios
+
+- [x] #LC062: Fix integration test compilation failures
+  - **Component**: tests/integration/
+  - **Priority**: High
+  - **Created**: 2025-07-27
+  - **Started**: 2025-07-27
+  - **Completed**: 2025-07-27
+  - **Dependencies**: #LC020 ✅ (Completed 2025-07-27)
+  - **Details**: Integration tests have compilation errors preventing test-all from running
+  - **Requirements**: ✅ All completed
+    - ✅ Fix undefined type references (AnalysisResults → AnalysisResult, ProjectAnalysisResult, ErrorTestResult)
+    - ✅ Fix API mismatches (writeFile function signature changes, missing error types)
+    - ✅ Fix pointer capture issues in array iteration
+    - ✅ Remove unused imports and variables
+    - ✅ Ensure integration tests compile and run successfully
+  - **Resolution**:
+    - Fixed struct definition ordering issues (moved before usage)
+    - Updated writeFile API calls to new signature with options struct
+    - Corrected AnalysisError enum field names (InvalidInput → InvalidConfiguration)
+    - Fixed pointer capture syntax in for loops (added & prefix)
+    - Replaced incorrect enum fields (.allocator_usage → .allocator_mismatch, .arena_usage → .arena_in_library, .test_naming → .invalid_test_naming)
+    - Fixed type mismatches between patterns.ProjectAnalysisResult and types.AnalysisResult in formatter calls
+    - Cleaned up unused variables and parameters
+    - All integration tests now compile and run successfully with `zig build test-integration`
+  - **Notes**:
+    - Discovered during LC021 when running `zig build test-all`
+    - Multiple files affected: [tests/integration/test_thread_safety.zig](tests/integration/test_thread_safety.zig), [tests/integration/test_error_boundaries.zig](tests/integration/test_error_boundaries.zig), [tests/integration/test_integration_runner.zig](tests/integration/test_integration_runner.zig), and others
+    - Critical for ensuring comprehensive testing and production readiness
+
+- [x] #LC064: Add formatter support for ProjectAnalysisResult type
+  - **Component**: src/formatters.zig, src/patterns.zig
+  - **Priority**: Medium
+  - **Created**: 2025-07-27
+  - **Started**: 2025-07-29
+  - **Completed**: 2025-07-29
+  - **Dependencies**: #LC015 ✅ (Completed 2025-07-27)
+  - **Details**: Formatters only accept AnalysisResult but patterns.checkProject returns ProjectAnalysisResult
+  - **Resolution**:
+    - Added formatProjectAsText(), formatProjectAsJson(), formatProjectAsGitHubActions() functions to formatters.zig
+    - Enhanced JSON formatter to include additional project-level fields (failed_files, skipped_files)
+    - Updated tools/quality_check.zig to use new formatter functions
+    - Fixed compilation errors in quality check tool during implementation
+    - All formatter types now support both AnalysisResult and ProjectAnalysisResult
+    - API ergonomics significantly improved for patterns library users
+  - **Implementation Details**:
+    - formatProjectAsText() and formatProjectAsGitHubActions() convert to AnalysisResult internally
+    - formatProjectAsJson() preserves all ProjectAnalysisResult fields including failed_files and skipped_files
+    - Fixed TTY detection API usage and string concatenation issues in quality check tool
+    - Successfully tested with `zig build quality` and `zig build dogfood`
+
+- [x] #LC051: Create example quality check executable
+  - **Component**: tools/quality_check.zig
+  - **Priority**: Medium
+  - **Created**: 2025-07-27
+  - **Started**: Pre-implementation
+  - **Completed**: 2025-07-29 (discovered existing)
+  - **Dependencies**: #LC017 ✅
+  - **Details**: The build_integration.zig example references a quality check tool that doesn't exist
+  - **Resolution**:
+    - Quality check executable already existed at tools/quality_check.zig with full functionality
+    - Fixed compilation errors and enhanced during LC064 implementation
+    - Tool supports all required features: --check modes (memory/tests/all), --format options (text/json/github-actions)
+    - Added dogfood build step for non-blocking quality checks during development
+    - Successfully demonstrates best practices for library usage
+  - **Implementation Details**:
+    - Complete command-line interface with help system and argument parsing
+    - Supports configuration for allowed allocators, test categories, and exclusion patterns
+    - Includes progress reporting and comprehensive error handling
+    - Integrated with build.zig for both `zig build quality` and `zig build dogfood`
+    - Perfect template for users to customize for their own projects
+
+- [x] #LC060: Add CI configuration for integration test execution
+  - **Component**: build.zig, CI configuration, tests/integration/
+  - **Priority**: Medium
+  - **Created**: 2025-07-27
+  - **Started**: 2025-07-29 (building on LC076)
+  - **Completed**: 2025-07-29
+  - **Dependencies**: #LC020 ✅ (Completed 2025-07-27)
+  - **Details**: Integration tests need proper CI configuration with timeouts and resource limits
+  - **Resolution**:
+    - Added resource limits to CI configuration (4GB memory, 2 CPU cores)
+    - Created comprehensive integration test documentation at docs/integration-tests.md
+    - Updated existing documentation with references to integration test guide
+    - Configured environment variables for test resource constraints
+    - All requirements now fully addressed
+  - **Implementation Details**:
+    - Modified .github/workflows/ci.yml to run integration tests in a container with resource limits
+    - Container uses ubuntu:22.04 with Docker options: --memory 4g --cpus 2
+    - Added environment variables ZTOOL_TEST_MAX_MEMORY_MB (3072) and ZTOOL_TEST_MAX_THREADS (4)
+    - Documentation covers test architecture, resource requirements, troubleshooting, and CI/CD integration
+    - Updated docs/README.md and docs/implementation-guide.md with integration test references
+    - Builds on partial implementation from LC076 which created basic CI infrastructure
+
+*Last Updated: 2025-07-29 (Added LC064, LC051, LC060 completed; LC075, LC076, LC077 new issues)*
+*Focus: Library Conversion Project*
