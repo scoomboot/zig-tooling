@@ -1,33 +1,10 @@
 # Issue Tracking
 
+> **[← Back to Issue Index](00_index.md)**
+
 ## Active Issues
 
 
-- [ ] #LC066: Add CI validation for integration test compilation
-  - **Component**: CI configuration, build.zig
-  - **Priority**: High
-  - **Created**: 2025-07-27
-  - **Updated**: 2025-07-29 (partially addressed by LC076)
-  - **Dependencies**: #LC060 ✅ (Completed 2025-07-29)
-  - **Details**: Integration tests had compilation failures that went unnoticed
-  - **Requirements**:
-    - ✅ Add CI job that runs `zig build test-integration` separately
-    - ✅ Ensure CI fails on integration test compilation errors
-    - ✅ Consider running integration tests on PR validation
-    - ✅ Add timeout configurations for long-running tests
-  - **Partial Implementation** (via LC076):
-    - Created `.github/workflows/ci.yml` with dedicated `integration-tests` job
-    - Integration tests run on all PRs with 30-minute timeout
-    - Separate jobs for unit tests and integration tests
-    - Cross-platform validation on Ubuntu, macOS, and Windows
-  - **Notes**:
-    - LC062 found extensive compilation errors that accumulated over time
-    - Integration tests weren't being validated in regular development
-    - Would have caught writeFile API changes, enum mismatches, type errors early
-    - Critical for maintaining test suite health
-    - **Partially resolved**: Core CI infrastructure now exists, may need fine-tuning
-
----
 
 - [ ] #LC063: Improve API documentation coverage
   - **Component**: All public modules, especially src/zig_tooling.zig

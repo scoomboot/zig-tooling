@@ -78,6 +78,33 @@ pub const FileSpec = struct {
     content: []const u8,
 };
 
+// Environment variable parsing utilities
+pub const EnvConfig = struct {
+    /// Maximum memory in MB that tests should allocate
+    max_memory_mb: u32 = 3072,
+    /// Maximum number of threads for concurrent tests
+    max_threads: u32 = 4,
+    
+    /// Parse environment variables for test configuration
+    pub fn fromEnv() EnvConfig {
+        var config = EnvConfig{};
+        
+        // Parse ZTOOL_TEST_MAX_MEMORY_MB
+        if (std.process.getEnvVarOwned(std.heap.page_allocator, "ZTOOL_TEST_MAX_MEMORY_MB")) |value| {
+            defer std.heap.page_allocator.free(value);
+            config.max_memory_mb = std.fmt.parseInt(u32, value, 10) catch config.max_memory_mb;
+        } else |_| {}
+        
+        // Parse ZTOOL_TEST_MAX_THREADS
+        if (std.process.getEnvVarOwned(std.heap.page_allocator, "ZTOOL_TEST_MAX_THREADS")) |value| {
+            defer std.heap.page_allocator.free(value);
+            config.max_threads = std.fmt.parseInt(u32, value, 10) catch config.max_threads;
+        } else |_| {}
+        
+        return config;
+    }
+};
+
 // Performance benchmarking utilities
 pub const PerformanceBenchmark = struct {
     name: []const u8,

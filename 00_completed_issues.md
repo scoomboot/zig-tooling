@@ -2,6 +2,32 @@
 
 *Finished issues for reference*
 
+- [x] #LC066: Add CI validation for integration test compilation
+  - **Component**: CI configuration, build.zig
+  - **Priority**: High
+  - **Created**: 2025-07-27
+  - **Started**: 2025-07-29 (partially via LC076)
+  - **Completed**: 2025-07-29
+  - **Dependencies**: #LC060 ✅ (Completed 2025-07-29)
+  - **Details**: Integration tests had compilation failures that went unnoticed
+  - **Resolution**:
+    - All core requirements completed via LC076 CI infrastructure implementation
+    - CI job runs `zig build test-integration` separately with proper resource limits
+    - Integration tests run on all PRs with 30-minute timeout
+    - Cross-platform validation ensures compatibility across platforms
+    - Updated integration tests to respect environment variables for resource constraints
+  - **Implementation Details**:
+    - LC076 created comprehensive `.github/workflows/ci.yml` with dedicated `integration-tests` job
+    - Added EnvConfig.fromEnv() helper in test_integration_runner.zig for parsing environment variables
+    - Updated test_memory_performance.zig to use ZTOOL_TEST_MAX_MEMORY_MB from environment
+    - Updated test_thread_safety.zig to use ZTOOL_TEST_MAX_THREADS from environment
+    - CI runs integration tests in container with 4GB memory and 2 CPU limits
+    - Remaining environment variable work tracked separately in LC080
+  - **Notes**:
+    - Successfully prevents compilation errors from accumulating in integration tests
+    - Critical for maintaining test suite health and catching API changes early
+    - Fine-tuning of resource usage patterns continues under LC080
+
 - [x] #LC076: Add build validation for tools/ directory compilation
   - **Component**: build.zig, tools/
   - **Priority**: Medium
@@ -755,5 +781,5 @@
     - Updated docs/README.md and docs/implementation-guide.md with integration test references
     - Builds on partial implementation from LC076 which created basic CI infrastructure
 
-*Last Updated: 2025-07-29 (Added LC064, LC051, LC060 completed; LC075, LC076, LC077 new issues)*
+*Last Updated: 2025-07-29 (Added LC066 completed with environment variable support)*
 *Focus: Library Conversion Project*

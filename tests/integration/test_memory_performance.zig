@@ -12,6 +12,7 @@ const test_runner = @import("test_integration_runner.zig");
 const TestUtils = test_runner.TestUtils;
 const PerformanceBenchmark = test_runner.PerformanceBenchmark;
 const MemoryTracker = test_runner.MemoryTracker;
+const EnvConfig = test_runner.EnvConfig;
 
 test "integration: memory leak detection in library usage" {
     const allocator = testing.allocator;
@@ -242,6 +243,10 @@ test "integration: performance under memory pressure" {
     
     std.debug.print("\n--- Testing Performance Under Memory Pressure ---\n", .{});
     
+    // Get configuration from environment
+    const env_config = EnvConfig.fromEnv();
+    std.debug.print("Using environment config: max_memory_mb={}\n", .{env_config.max_memory_mb});
+    
     // Simulate memory pressure by doing many allocations
     var large_allocations = std.ArrayList([]u8).init(allocator);
     defer {
@@ -251,10 +256,15 @@ test "integration: performance under memory pressure" {
         large_allocations.deinit();
     }
     
-    // Allocate some large buffers to create memory pressure
+    // Calculate how many 1MB buffers to allocate based on the environment setting
+    // Use 10% of the max memory limit for pressure testing (minimum 1MB)
+    const memory_to_allocate_mb = @max(1, env_config.max_memory_mb / 10);
+    const bytes_per_buffer: usize = 1024 * 1024; // 1MB per buffer
+    
+    // Allocate large buffers to create memory pressure
     var i: u32 = 0;
-    while (i < 10) : (i += 1) {
-        const large_buffer = try allocator.alloc(u8, 1024 * 1024); // 1MB each
+    while (i < memory_to_allocate_mb) : (i += 1) {
+        const large_buffer = try allocator.alloc(u8, bytes_per_buffer);
         try large_allocations.append(large_buffer);
     }
     

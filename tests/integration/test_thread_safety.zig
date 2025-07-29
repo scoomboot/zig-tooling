@@ -11,11 +11,16 @@ const zig_tooling = @import("zig_tooling");
 const test_runner = @import("test_integration_runner.zig");
 const TestUtils = test_runner.TestUtils;
 const PerformanceBenchmark = test_runner.PerformanceBenchmark;
+const EnvConfig = test_runner.EnvConfig;
 
 test "integration: concurrent analysis operations" {
     const allocator = testing.allocator;
     
     std.debug.print("\n--- Testing Concurrent Analysis Operations ---\n", .{});
+    
+    // Get configuration from environment
+    const env_config = EnvConfig.fromEnv();
+    std.debug.print("Using environment config: max_threads={}\n", .{env_config.max_threads});
     
     const test_sources = [_][]const u8{
         \\const std = @import("std");
@@ -56,7 +61,7 @@ test "integration: concurrent analysis operations" {
         \\}
     };
     
-    const num_threads = 8;
+    const num_threads = env_config.max_threads;
     const analyses_per_thread = 20;
     
     const AnalysisResults = struct {
@@ -67,8 +72,10 @@ test "integration: concurrent analysis operations" {
         error_occurred: bool = false,
     };
     
-    var threads: [num_threads]std.Thread = undefined;
-    var results: [num_threads]AnalysisResults = undefined;
+    // Use a fixed maximum size for arrays since array sizes must be compile-time known
+    const max_threads = 32;
+    var threads: [max_threads]std.Thread = undefined;
+    var results: [max_threads]AnalysisResults = undefined;
     
     const ThreadContext = struct {
         thread_id: u32,
@@ -78,9 +85,10 @@ test "integration: concurrent analysis operations" {
         analyses_count: u32,
     };
     
-    var contexts: [num_threads]ThreadContext = undefined;
-    for (&contexts, 0..) |*context, idx| {
-        context.* = ThreadContext{
+    var contexts: [max_threads]ThreadContext = undefined;
+    var idx: usize = 0;
+    while (idx < num_threads) : (idx += 1) {
+        contexts[idx] = ThreadContext{
             .thread_id = @intCast(idx),
             .allocator = allocator,
             .sources = &test_sources,
@@ -160,14 +168,16 @@ test "integration: concurrent analysis operations" {
     
     var benchmark = PerformanceBenchmark.start(allocator, "Concurrent analysis stress test");
     
-    // Start all threads
-    for (&threads, 0..) |*thread, idx| {
-        thread.* = try std.Thread.spawn(.{}, analysisWorker, .{&contexts[idx]});
+    // Start all threads (only up to num_threads)
+    var i: usize = 0;
+    while (i < num_threads) : (i += 1) {
+        threads[i] = try std.Thread.spawn(.{}, analysisWorker, .{&contexts[i]});
     }
     
     // Wait for all threads to complete
-    for (threads) |thread| {
-        thread.join();
+    i = 0;
+    while (i < num_threads) : (i += 1) {
+        threads[i].join();
     }
     
     const duration = benchmark.end();
@@ -177,7 +187,9 @@ test "integration: concurrent analysis operations" {
     var total_issues: u32 = 0;
     var failed_threads: u32 = 0;
     
-    for (results, 0..) |result, idx| {
+    idx = 0;
+    while (idx < num_threads) : (idx += 1) {
+        const result = results[idx];
         if (!result.success or result.error_occurred) {
             failed_threads += 1;
             std.debug.print("Thread {}: ✗ FAILED\n", .{idx});
@@ -190,7 +202,7 @@ test "integration: concurrent analysis operations" {
     
     try testing.expectEqual(@as(u32, 0), failed_threads);
     
-    const expected_analyses = num_threads * analyses_per_thread;
+    const expected_analyses = @as(u32, num_threads) * analyses_per_thread;
     try testing.expectEqual(expected_analyses, total_analyses);
     
     std.debug.print("✓ Concurrent stress test: {} analyses, {} issues, {}ms\n", .{
@@ -500,6 +512,10 @@ test "integration: race condition detection in shared state" {
     
     std.debug.print("\n--- Testing Race Condition Detection ---\n", .{});
     
+    // Get configuration from environment
+    const env_config = EnvConfig.fromEnv();
+    std.debug.print("Using environment config: max_threads={}\n", .{env_config.max_threads});
+    
     // Test that multiple threads accessing the library simultaneously
     // don't cause race conditions or data corruption
     
@@ -520,12 +536,15 @@ test "integration: race condition detection in shared state" {
         \\}
     ;
     
-    const num_threads = 16; // Higher thread count for race detection
+    // Use double the configured threads for race detection (but cap at 16)
+    const num_threads = @min(16, env_config.max_threads * 2);
     const iterations_per_thread = 50;
     
-    var threads: [num_threads]std.Thread = undefined;
-    var thread_results: [num_threads]u32 = [_]u32{0} ** num_threads;
-    var thread_errors: [num_threads]bool = [_]bool{false} ** num_threads;
+    // Use fixed maximum size for arrays
+    const max_threads = 32;
+    var threads: [max_threads]std.Thread = undefined;
+    var thread_results: [max_threads]u32 = [_]u32{0} ** max_threads;
+    var thread_errors: [max_threads]bool = [_]bool{false} ** max_threads;
     
     const RaceTestContext = struct {
         thread_id: u32,
@@ -536,9 +555,10 @@ test "integration: race condition detection in shared state" {
         iterations: u32,
     };
     
-    var contexts: [num_threads]RaceTestContext = undefined;
-    for (&contexts, 0..) |*context, idx| {
-        context.* = RaceTestContext{
+    var contexts: [max_threads]RaceTestContext = undefined;
+    var idx: usize = 0;
+    while (idx < num_threads) : (idx += 1) {
+        contexts[idx] = RaceTestContext{
             .thread_id = @intCast(idx),
             .allocator = allocator,
             .source = source,
@@ -631,13 +651,15 @@ test "integration: race condition detection in shared state" {
     var benchmark = PerformanceBenchmark.start(allocator, "Race condition detection test");
     
     // Start all threads simultaneously
-    for (&threads, 0..) |*thread, idx| {
-        thread.* = try std.Thread.spawn(.{}, raceWorker, .{&contexts[idx]});
+    var i: usize = 0;
+    while (i < num_threads) : (i += 1) {
+        threads[i] = try std.Thread.spawn(.{}, raceWorker, .{&contexts[i]});
     }
     
     // Wait for all threads
-    for (threads) |thread| {
-        thread.join();
+    i = 0;
+    while (i < num_threads) : (i += 1) {
+        threads[i].join();
     }
     
     const duration = benchmark.end();
@@ -647,8 +669,9 @@ test "integration: race condition detection in shared state" {
     var total_issues: u32 = 0;
     var failed_threads: u32 = 0;
     
-    for (thread_errors, 0..) |had_error, idx| {
-        if (had_error) {
+    idx = 0;
+    while (idx < num_threads) : (idx += 1) {
+        if (thread_errors[idx]) {
             failed_threads += 1;
             std.debug.print("Thread {}: ✗ ERROR (potential race condition)\n", .{idx});
         } else {
@@ -660,7 +683,7 @@ test "integration: race condition detection in shared state" {
     
     try testing.expectEqual(@as(u32, 0), failed_threads);
     
-    const expected_analyses = num_threads * iterations_per_thread;
+    const expected_analyses = @as(u32, num_threads) * iterations_per_thread;
     try testing.expectEqual(expected_analyses, total_analyses);
     
     std.debug.print("✓ Race condition test: {} analyses, {} issues, {}ms (no races detected)\n", .{
