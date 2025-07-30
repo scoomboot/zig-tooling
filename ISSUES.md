@@ -318,27 +318,6 @@
     - Could be integrated into build process or CI
     - Discovered during LC062 when fixing numerous API mismatches
 
----
-
-- [ ] #LC059: Fix example file references to non-existent sample projects
-  - **Component**: examples/basic_usage.zig, examples/
-  - **Priority**: High
-  - **Created**: 2025-07-27
-  - **Dependencies**: #LC020 ✅ (Completed 2025-07-27)
-  - **Details**: Example files reference deleted sample project files that no longer exist
-  - **Requirements**:
-    - Fix references to "examples/sample_project/memory_issues.zig" and "examples/sample_project/test_examples.zig" in basic_usage.zig
-    - Either create the referenced sample files or update examples to use integration test sample projects
-    - Ensure all example code actually works as demonstrated
-    - Add validation to prevent future broken example references
-  - **Notes**:
-    - Found during LC020 integration testing implementation
-    - basic_usage.zig at [examples/basic_usage.zig:36-40](examples/basic_usage.zig#L36-L40) references non-existent files
-    - Examples should use the new integration test sample projects or create new minimal examples
-    - Critical for user onboarding experience
-    - Discovered during LC020 implementation
-
----
 
 ---
 
@@ -807,4 +786,23 @@
     - Pattern is enforced by quality checks but not explained to users
     - Would reduce confusion and help adoption
     - Should be prominently featured in documentation
+
+---
+
+- [ ] #LC085: Make example placeholder patterns configurable
+  - **Component**: tests/test_example_validation.zig, examples/
+  - **Priority**: Low
+  - **Created**: 2025-07-30
+  - **Dependencies**: #LC059 ✅ (discovered during implementation)
+  - **Details**: The validation test has a hardcoded list of placeholder filenames that shouldn't be validated
+  - **Requirements**:
+    - Create a configuration file (e.g., `.example-placeholders`) listing valid placeholder patterns
+    - Update test_example_validation.zig to read patterns from the config file
+    - Document the placeholder pattern convention for example authors
+    - Consider using pattern matching (e.g., "example*.zig") instead of exact matches
+  - **Notes**:
+    - The test at [tests/test_example_validation.zig:37-50] contains hardcoded placeholders
+    - Current placeholders include: "inline_code.zig", "custom_patterns.zig", "file.zig", etc.
+    - Would make it easier to maintain when adding new examples
+    - Example authors would have clear documentation of allowed placeholder patterns
 

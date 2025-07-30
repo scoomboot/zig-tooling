@@ -68,6 +68,14 @@ pub fn build(b: *std.Build) void {
     });
     test_scope_tracker_memory.root_module.addImport("zig_tooling", zig_tooling_module);
 
+    // Example validation tests
+    const test_example_validation = b.addTest(.{
+        .root_source_file = b.path("tests/test_example_validation.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    test_example_validation.root_module.addImport("zig_tooling", zig_tooling_module);
+
     // Unit tests for the library itself
     const lib_tests = b.addTest(.{
         .root_source_file = b.path("src/zig_tooling.zig"),
@@ -125,6 +133,7 @@ pub fn build(b: *std.Build) void {
     test_step.dependOn(&test_patterns.step);
     test_step.dependOn(&test_allocator_patterns.step);
     test_step.dependOn(&test_scope_tracker_memory.step);
+    test_step.dependOn(&test_example_validation.step);
     test_step.dependOn(&lib_tests.step);
 
     // Integration test step (separate for longer-running tests)

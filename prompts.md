@@ -2,7 +2,7 @@
 
 ## Prompt 1: Issue Resolution & Cleanup
 ```
-Come up with a plan to resolve issue LC078 in our issue tracker @ISSUES.md. Move completed tasks to @00_completed_issues.md. Make sure to update these files when done. Review, read, and understand @docs/ and @README.md. Clean up any temp files or test files that we don't need when done. ultrathink
+Come up with a plan to resolve issue LC059 in our issue tracker @ISSUES.md. Move completed tasks to @00_completed_issues.md. Make sure to update these files when done. Review, read, and understand @docs/ and @README.md. Clean up any temp files or test files that we don't need when done. ultrathink
 ```
 
 ## Prompt 2: Session Review & Issue Tracking
