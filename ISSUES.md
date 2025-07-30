@@ -138,6 +138,170 @@
 
 ---
 
+---
+
+- [ ] #LC087: Implement ownership transfer detection for return values
+  - **Component**: src/memory_analyzer.zig
+  - **Priority**: High
+  - **Created**: 2025-07-30
+  - **Dependencies**: #LC081 (parent task)
+  - **Details**: Detect when allocated memory is returned to caller, indicating ownership transfer
+  - **Requirements**:
+    - Analyze function return statements to detect returned allocations
+    - Track data flow from allocation to return statement
+    - Mark allocations that are returned as "ownership transferred"
+    - Skip defer requirement checks for transferred allocations
+  - **Notes**:
+    - Would fix false positives like src/zig_tooling.zig:125
+    - Should handle both direct returns and values stored in returned structures
+    - Consider return type analysis to understand ownership semantics
+
+---
+
+- [ ] #LC088: Add data flow analysis for structured returns
+  - **Component**: src/memory_analyzer.zig
+  - **Priority**: High
+  - **Created**: 2025-07-30
+  - **Dependencies**: #LC081 (parent task), #LC087
+  - **Details**: Track allocations that are stored in structures that are then returned
+  - **Requirements**:
+    - Implement field assignment tracking for struct types
+    - Detect when allocated values are assigned to struct fields
+    - Track when those structs are returned from functions
+    - Mark contained allocations as transferred ownership
+  - **Notes**:
+    - Handles complex cases like returning Result structs with allocated fields
+    - Should work with nested structures and arrays
+    - Critical for reducing false positives in real-world code
+
+---
+
+- [ ] #LC089: Create allowed allocator pattern database
+  - **Component**: src/memory_analyzer.zig, src/types.zig
+  - **Priority**: Medium
+  - **Created**: 2025-07-30
+  - **Dependencies**: #LC081 (parent task)
+  - **Details**: Build comprehensive database of common allocator patterns and parameter names
+  - **Requirements**:
+    - Research common allocator parameter naming patterns in Zig ecosystem
+    - Create configurable database of allowed patterns
+    - Include patterns like "allocator", "alloc", "arena", "gpa", etc.
+    - Support wildcards and regex patterns for flexibility
+  - **Notes**:
+    - Should include build system allocator patterns
+    - Consider per-project customization options
+    - Default patterns should cover 90%+ of valid use cases
+
+---
+
+- [ ] #LC090: Implement scope-aware defer analysis
+  - **Component**: src/memory_analyzer.zig, src/scope_tracker.zig
+  - **Priority**: Medium
+  - **Created**: 2025-07-30
+  - **Dependencies**: #LC081 (parent task)
+  - **Details**: Improve defer requirement detection based on allocation scope and lifetime
+  - **Requirements**:
+    - Integrate with ScopeTracker for better scope understanding
+    - Detect allocations that escape their creation scope
+    - Only require defer for allocations consumed within same scope
+    - Handle loop scopes and conditional scopes correctly
+  - **Notes**:
+    - Should reduce false positives for allocations with complex lifetimes
+    - Consider errdefer patterns and cleanup requirements
+    - Must handle nested scopes and early returns
+
+---
+
+- [ ] #LC091: Add allocation intent inference
+  - **Component**: src/memory_analyzer.zig
+  - **Priority**: Medium
+  - **Created**: 2025-07-30
+  - **Dependencies**: #LC081 (parent task)
+  - **Details**: Infer allocation intent from usage patterns to reduce false positives
+  - **Requirements**:
+    - Analyze how allocated memory is used after creation
+    - Detect patterns like "create and return" vs "temporary usage"
+    - Infer ownership model from surrounding code patterns
+    - Use inference to guide defer requirement decisions
+  - **Notes**:
+    - Could use heuristics like "allocated in init() = long-lived"
+    - Should handle factory patterns and builder patterns
+    - Balance between accuracy and analysis performance
+
+---
+
+- [ ] #LC092: Create configuration system for quality checks
+  - **Component**: tools/quality_check.zig, src/types.zig
+  - **Priority**: Medium
+  - **Created**: 2025-07-30
+  - **Dependencies**: #LC081 (parent task)
+  - **Details**: Add configuration file support for customizing quality check behavior
+  - **Requirements**:
+    - Design configuration file format (JSON or custom)
+    - Add config loading to quality_check tool
+    - Support disabling specific check categories
+    - Allow project-specific allocator patterns and rules
+  - **Notes**:
+    - Could use .zig-tooling.json or similar
+    - Should support inheritance from default config
+    - Enable teams to customize for their coding standards
+
+---
+
+- [ ] #LC093: Implement incremental false positive reduction
+  - **Component**: src/memory_analyzer.zig
+  - **Priority**: Medium
+  - **Created**: 2025-07-30
+  - **Dependencies**: #LC081 (parent task)
+  - **Details**: Add machine learning or pattern-based system to learn from false positive reports
+  - **Requirements**:
+    - Create feedback mechanism for marking false positives
+    - Build pattern database from reported false positives
+    - Use patterns to refine future analysis
+    - Provide reporting mechanism for users
+  - **Notes**:
+    - Could start with simple pattern matching
+    - Consider storing patterns in project metadata
+    - Long-term: could use ML for pattern recognition
+
+---
+
+- [ ] #LC094: Add semantic analysis for build system patterns
+  - **Component**: src/memory_analyzer.zig
+  - **Priority**: Low
+  - **Created**: 2025-07-30
+  - **Dependencies**: #LC081 (parent task)
+  - **Details**: Special handling for Zig build system allocation patterns
+  - **Requirements**:
+    - Detect when code is part of build.zig or build system
+    - Apply different rules for build-time allocations
+    - Understand build.zig allocation lifecycle
+    - Handle build step allocations appropriately
+  - **Notes**:
+    - Build system has different allocation patterns than runtime code
+    - Should fix false positives like src/build_integration.zig:356
+    - Consider build-specific allocator types
+
+---
+
+- [ ] #LC095: Create comprehensive test suite for false positive scenarios
+  - **Component**: tests/test_memory_analyzer.zig
+  - **Priority**: Low
+  - **Created**: 2025-07-30
+  - **Dependencies**: #LC081 (parent task), #LC086-#LC094
+  - **Details**: Build extensive test suite covering all false positive scenarios
+  - **Requirements**:
+    - Create test cases for each type of false positive
+    - Test parameter allocators, ownership transfers, build patterns
+    - Include regression tests for fixed issues
+    - Measure false positive rate improvements
+  - **Notes**:
+    - Should have before/after metrics for each improvement
+    - Include real-world code examples from reported issues
+    - Use as validation for all analyzer improvements
+
+---
+
 - [ ] #LC049: Add static analysis for recursive function call and use-after-free detection
   - **Component**: Static analysis tooling, CI/CD configuration
   - **Priority**: Medium
@@ -345,6 +509,7 @@
   - **Priority**: High
   - **Created**: 2025-07-30
   - **Dependencies**: #LC078 (related)
+  - **Implementation subtasks**: #LC086-#LC095 (10 subtasks)
   - **Details**: The quality analyzer reports many false positives for allocator usage and memory management patterns
   - **Requirements**:
     - Fix "parameter_allocator" false positives - allocator parameters in functions are perfectly valid
@@ -786,6 +951,75 @@
     - Pattern is enforced by quality checks but not explained to users
     - Would reduce confusion and help adoption
     - Should be prominently featured in documentation
+
+---
+
+- [ ] #LC096: Fix deprecated API usage throughout codebase
+  - **Component**: All source files
+  - **Priority**: Medium
+  - **Created**: 2025-07-30
+  - **Details**: During LC086, found deprecated std.mem.tokenize usage. Need systematic check for all deprecated APIs
+  - **Requirements**:
+    - Search for all uses of deprecated APIs (tokenize, etc.)
+    - Update to use modern equivalents (tokenizeAny, tokenizeScalar, tokenizeSequence)
+    - Add CI check to prevent new deprecated API usage
+    - Document migration patterns for common deprecations
+  - **Notes**:
+    - Found at src/memory_analyzer.zig:1650 during LC086 implementation
+    - Zig 0.14+ deprecated several commonly used APIs
+    - Should be done before next Zig version update
+
+---
+
+- [ ] #LC097: Enhance function signature parsing for multi-line and complex signatures
+  - **Component**: src/memory_analyzer.zig
+  - **Priority**: Low
+  - **Created**: 2025-07-30
+  - **Dependencies**: #LC086 ✅ (Completed 2025-07-30)
+  - **Details**: Current parseFunctionSignature is simplified and doesn't handle all cases
+  - **Requirements**:
+    - Support multi-line function signatures
+    - Handle nested parentheses in generic parameters
+    - Parse complex parameter types with nested structures
+    - Handle function signatures with comptime parameters
+  - **Notes**:
+    - Current implementation at src/memory_analyzer.zig:1556-1672
+    - Comment acknowledges limitation: "simplified - doesn't handle nested parentheses/generics"
+    - Would improve accuracy of context-aware analysis
+
+---
+
+- [ ] #LC098: Add dedicated test file for memory analyzer
+  - **Component**: tests/test_memory_analyzer.zig (new)
+  - **Priority**: Low
+  - **Created**: 2025-07-30
+  - **Details**: Memory analyzer tests are scattered across test_api.zig making it hard to maintain
+  - **Requirements**:
+    - Create tests/test_memory_analyzer.zig
+    - Move memory-specific tests from test_api.zig
+    - Organize tests by feature (context awareness, ownership, patterns, etc.)
+    - Add to build.zig test configuration
+  - **Notes**:
+    - test_api.zig is over 2600 lines and growing
+    - LC086 added 5 more test cases to already large file
+    - Better organization would improve maintainability
+
+---
+
+- [ ] #LC099: Improve quality check output handling for large results
+  - **Component**: tools/quality_check.zig
+  - **Priority**: Low
+  - **Created**: 2025-07-30
+  - **Details**: Quality check output gets truncated making it hard to see all issues
+  - **Requirements**:
+    - Add --output-file option to save full results
+    - Implement pagination for terminal output
+    - Add summary-only mode that shows counts by category
+    - Consider JSON output for programmatic processing
+  - **Notes**:
+    - Current output shows "... [19490 characters truncated] ..."
+    - Makes it difficult to review all issues systematically
+    - Important for dogfooding and quality improvement efforts
 
 ---
 

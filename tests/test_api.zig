@@ -2414,3 +2414,196 @@ test "LC072: struct field assignment - general case" {
     }
     try testing.expect(!found_missing_defer);
 }
+
+test "LC086: function parameter allocator - basic case" {
+    const allocator = testing.allocator;
+    
+    // Test that function parameter named 'allocator' is not flagged
+    const source =
+        \\pub fn processData(allocator: std.mem.Allocator, data: []const u8) ![]u8 {
+        \\    const result = try allocator.alloc(u8, data.len * 2);
+        \\    defer allocator.free(result);
+        \\    // Process data...
+        \\    return result;
+        \\}
+    ;
+    
+    const config = zig_tooling.Config{
+        .memory = .{
+            .allowed_allocators = &.{"std.heap.page_allocator", "std.testing.allocator"},
+        },
+    };
+    
+    const result = try zig_tooling.analyzeMemory(allocator, source, "test.zig", config);
+    defer allocator.free(result.issues);
+    defer for (result.issues) |issue| {
+        allocator.free(issue.file_path);
+        allocator.free(issue.message);
+        if (issue.suggestion) |s| allocator.free(s);
+    };
+    
+    // Should not find any incorrect_allocator issues for parameter
+    for (result.issues) |issue| {
+        if (issue.issue_type == .incorrect_allocator) {
+            try testing.expect(false); // Fail if we find incorrect_allocator issue
+        }
+    }
+}
+
+test "LC086: multiple parameters including allocator" {
+    const allocator = testing.allocator;
+    
+    const source =
+        \\pub fn createBuffer(allocator: std.mem.Allocator, size: usize, initial_value: u8) ![]u8 {
+        \\    const buffer = try allocator.alloc(u8, size);
+        \\    errdefer allocator.free(buffer);
+        \\    @memset(buffer, initial_value);
+        \\    return buffer;
+        \\}
+        \\
+        \\pub fn copyData(dest_allocator: std.mem.Allocator, src: []const u8) ![]u8 {
+        \\    return try dest_allocator.dupe(u8, src);
+        \\}
+    ;
+    
+    const config = zig_tooling.Config{
+        .memory = .{
+            .allowed_allocators = &.{"std.heap.page_allocator"},
+        },
+    };
+    
+    const result = try zig_tooling.analyzeMemory(allocator, source, "test.zig", config);
+    defer allocator.free(result.issues);
+    defer for (result.issues) |issue| {
+        allocator.free(issue.file_path);
+        allocator.free(issue.message);
+        if (issue.suggestion) |s| allocator.free(s);
+    };
+    
+    // Should not flag 'allocator' or 'dest_allocator' parameters
+    for (result.issues) |issue| {
+        if (issue.issue_type == .incorrect_allocator) {
+            // Check that the issue is not about parameter allocators
+            try testing.expect(std.mem.indexOf(u8, issue.message, "allocator") == null or
+                              std.mem.indexOf(u8, issue.message, "dest_allocator") == null);
+        }
+    }
+}
+
+test "LC086: method with self and allocator parameters" {
+    const allocator = testing.allocator;
+    
+    const source =
+        \\const MyStruct = struct {
+        \\    data: []u8,
+        \\    
+        \\    pub fn init(self: *MyStruct, allocator: std.mem.Allocator, size: usize) !void {
+        \\        self.data = try allocator.alloc(u8, size);
+        \\    }
+        \\    
+        \\    pub fn deinit(self: *MyStruct, allocator: std.mem.Allocator) void {
+        \\        allocator.free(self.data);
+        \\    }
+        \\};
+    ;
+    
+    const config = zig_tooling.Config{
+        .memory = .{
+            .allowed_allocators = &.{"gpa.allocator()"},
+        },
+    };
+    
+    const result = try zig_tooling.analyzeMemory(allocator, source, "test.zig", config);
+    defer allocator.free(result.issues);
+    defer for (result.issues) |issue| {
+        allocator.free(issue.file_path);
+        allocator.free(issue.message);
+        if (issue.suggestion) |s| allocator.free(s);
+    };
+    
+    // Should not flag parameter allocators in methods
+    var found_incorrect_allocator = false;
+    for (result.issues) |issue| {
+        if (issue.issue_type == .incorrect_allocator) {
+            found_incorrect_allocator = true;
+        }
+    }
+    try testing.expect(!found_incorrect_allocator);
+}
+
+test "LC086: distinguish parameter from local variable" {
+    const allocator = testing.allocator;
+    
+    const source =
+        \\pub fn example(allocator: std.mem.Allocator) !void {
+        \\    // Parameter allocator should not be flagged
+        \\    const data1 = try allocator.alloc(u8, 100);
+        \\    defer allocator.free(data1);
+        \\    
+        \\    // But this local allocator should be flagged
+        \\    const page_allocator = std.heap.page_allocator;
+        \\    const data2 = try page_allocator.alloc(u8, 100);
+        \\    defer page_allocator.free(data2);
+        \\}
+    ;
+    
+    const config = zig_tooling.Config{
+        .memory = .{
+            .allowed_allocators = &.{"std.testing.allocator"},
+        },
+    };
+    
+    const result = try zig_tooling.analyzeMemory(allocator, source, "test.zig", config);
+    defer allocator.free(result.issues);
+    defer for (result.issues) |issue| {
+        allocator.free(issue.file_path);
+        allocator.free(issue.message);
+        if (issue.suggestion) |s| allocator.free(s);
+    };
+    
+    // Should find exactly one incorrect_allocator issue for page_allocator
+    var incorrect_allocator_count: u32 = 0;
+    for (result.issues) |issue| {
+        if (issue.issue_type == .incorrect_allocator) {
+            incorrect_allocator_count += 1;
+            // Verify it's about page_allocator, not the parameter
+            try testing.expect(std.mem.indexOf(u8, issue.message, "page_allocator") != null);
+        }
+    }
+    try testing.expectEqual(@as(u32, 1), incorrect_allocator_count);
+}
+
+test "LC086: generic function with allocator parameter" {
+    const allocator = testing.allocator;
+    
+    const source =
+        \\pub fn genericCreate(comptime T: type, allocator: std.mem.Allocator) !*T {
+        \\    const ptr = try allocator.create(T);
+        \\    ptr.* = std.mem.zeroes(T);
+        \\    return ptr;
+        \\}
+        \\
+        \\pub fn genericDestroy(comptime T: type, allocator: std.mem.Allocator, ptr: *T) void {
+        \\    allocator.destroy(ptr);
+        \\}
+    ;
+    
+    const config = zig_tooling.Config{
+        .memory = .{
+            .allowed_allocators = &.{"arena.allocator()"},
+        },
+    };
+    
+    const result = try zig_tooling.analyzeMemory(allocator, source, "test.zig", config);
+    defer allocator.free(result.issues);
+    defer for (result.issues) |issue| {
+        allocator.free(issue.file_path);
+        allocator.free(issue.message);
+        if (issue.suggestion) |s| allocator.free(s);
+    };
+    
+    // Should not flag allocator parameters in generic functions
+    for (result.issues) |issue| {
+        try testing.expect(issue.issue_type != .incorrect_allocator);
+    }
+}

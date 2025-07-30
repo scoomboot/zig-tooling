@@ -2,7 +2,7 @@
 
 ## Issue Overview
 
-**Issue ID**: LC081  
+**Issue ID**: [LC081](../../ISSUES.md#lc081)  
 **Priority**: High  
 **Created**: 2025-07-30  
 
@@ -100,21 +100,21 @@ fn processData(allocator: std.mem.Allocator, data: []const u8) ![]u8 {
 
 ### Phase 1: Immediate Improvements (High Priority)
 
-#### 1.1 Fix Parameter Allocator Detection
+#### 1.1 Fix Parameter Allocator Detection [#LC086](../../ISSUES.md#lc086)
 - **Problem**: Function parameters named "allocator" are treated as allocator types
 - **Solution**: 
   - Add context tracking to distinguish parameters from types
   - Skip allocator type validation for function parameters
   - Add "parameter_allocator" to default allowed allocators
 
-#### 1.2 Improve Ownership Transfer Detection
+#### 1.2 Improve Ownership Transfer Detection [#LC087](../../ISSUES.md#lc087)
 - **Problem**: Allocations returned to caller are flagged as missing defer
 - **Solution**:
   - Enhance return value analysis
   - Track allocations that flow into return statements
   - Add more comprehensive ownership transfer patterns
 
-#### 1.3 Context-Sensitive Analysis
+#### 1.3 Context-Sensitive Analysis [#LC088](../../ISSUES.md#lc088)
 - **Problem**: Same patterns analyzed differently in different contexts
 - **Solution**:
   - Add AnalysisContext struct to track current analysis state
@@ -123,41 +123,41 @@ fn processData(allocator: std.mem.Allocator, data: []const u8) ![]u8 {
 
 ### Phase 2: Advanced Flow Analysis (Medium Priority)
 
-#### 2.1 Implement Basic Data Flow Tracking
+#### 2.1 Implement Basic Data Flow Tracking [#LC089](../../ISSUES.md#lc089)
 - Track variable assignments and usage
 - Build use-def chains for allocated memory
 - Detect when allocations escape the current scope
 
-#### 2.2 Path-Sensitive Analysis
+#### 2.2 Path-Sensitive Analysis [#LC090](../../ISSUES.md#lc090)
 - Track different execution paths separately
 - Understand conditional allocations
 - Reduce false positives for error handling paths
 
-#### 2.3 Enhanced Scope Analysis
+#### 2.3 Enhanced Scope Analysis [#LC091](../../ISSUES.md#lc091)
 - Improve ScopeTracker to understand ownership semantics
 - Track lifetime of allocations across scopes
 - Better defer statement matching
 
 ### Phase 3: Interprocedural Analysis (Medium Priority)
 
-#### 3.1 Function Summary Generation
+#### 3.1 Function Summary Generation [#LC092](../../ISSUES.md#lc092)
 - Create summaries for analyzed functions
 - Cache summaries for reuse
 - Track function memory behavior patterns
 
-#### 3.2 Cross-Function Ownership Tracking
+#### 3.2 Cross-Function Ownership Tracking [#LC093](../../ISSUES.md#lc093)
 - Track ownership across function boundaries
 - Understand factory patterns and builders
 - Reduce false positives for modular code
 
 ### Phase 4: Zig-Specific Enhancements (Low Priority)
 
-#### 4.1 Zig Idiom Recognition
+#### 4.1 Zig Idiom Recognition [#LC094](../../ISSUES.md#lc094)
 - Recognize common Zig patterns (arena allocators, error unions)
 - Special handling for comptime allocations
 - Understand Zig-specific ownership patterns
 
-#### 4.2 Incremental Analysis
+#### 4.2 Incremental Analysis [#LC095](../../ISSUES.md#lc095)
 - Cache analysis results
 - Only re-analyze changed functions
 - Improve performance for large codebases

@@ -139,6 +139,82 @@ pub const ArenaPattern = struct {
     }
 };
 
+/// Information about a function parameter
+pub const ParameterInfo = struct {
+    name: []const u8,
+    type_name: []const u8,
+};
+
+/// Enhanced function information including parameters
+pub const FunctionInfo = struct {
+    name: []const u8,
+    return_type: []const u8,
+    parameters: []const ParameterInfo,
+    start_line: u32,
+    end_line: u32,
+};
+
+/// Analysis context to track current state during code analysis
+pub const AnalysisContext = struct {
+    /// Current function being analyzed
+    current_function: ?FunctionInfo,
+    /// Whether we're currently parsing function parameters
+    in_parameter_list: bool,
+    /// Stack of nested scopes
+    scope_depth: u32,
+    /// Allocator for temporary allocations
+    temp_allocator: std.mem.Allocator,
+    
+    pub fn init(temp_allocator: std.mem.Allocator) AnalysisContext {
+        return .{
+            .current_function = null,
+            .in_parameter_list = false,
+            .scope_depth = 0,
+            .temp_allocator = temp_allocator,
+        };
+    }
+    
+    pub fn deinit(self: *AnalysisContext) void {
+        if (self.current_function) |func| {
+            // Free function data
+            self.temp_allocator.free(func.name);
+            self.temp_allocator.free(func.return_type);
+            for (func.parameters) |param| {
+                self.temp_allocator.free(param.name);
+                self.temp_allocator.free(param.type_name);
+            }
+            self.temp_allocator.free(func.parameters);
+        }
+    }
+    
+    /// Check if a variable name is a function parameter
+    pub fn isParameter(self: *const AnalysisContext, var_name: []const u8) bool {
+        if (self.current_function) |func| {
+            for (func.parameters) |param| {
+                if (std.mem.eql(u8, param.name, var_name)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+    
+    /// Update current function context
+    pub fn setCurrentFunction(self: *AnalysisContext, func: FunctionInfo) void {
+        // Free previous function if any
+        if (self.current_function) |old_func| {
+            self.temp_allocator.free(old_func.name);
+            self.temp_allocator.free(old_func.return_type);
+            for (old_func.parameters) |param| {
+                self.temp_allocator.free(param.name);
+                self.temp_allocator.free(param.type_name);
+            }
+            self.temp_allocator.free(old_func.parameters);
+        }
+        self.current_function = func;
+    }
+};
+
 /// Memory analyzer that detects memory safety issues in Zig source code
 ///
 /// The analyzer tracks allocations, deallocations, and ownership transfers
@@ -157,6 +233,7 @@ pub const MemoryAnalyzer = struct {
     config: types.MemoryConfig,
     options: types.AnalysisOptions,
     logger: ?app_logger.Logger,
+    context: ?*AnalysisContext,
     
     /// Creates a new memory analyzer with default configuration
     ///
@@ -176,6 +253,7 @@ pub const MemoryAnalyzer = struct {
             .config = .{}, // Use default config
             .options = .{}, // Use default options
             .logger = null,
+            .context = null,
         };
     }
     
@@ -198,6 +276,7 @@ pub const MemoryAnalyzer = struct {
             .config = config,
             .options = .{}, // Use default options
             .logger = null,
+            .context = null,
         };
     }
     
@@ -229,6 +308,7 @@ pub const MemoryAnalyzer = struct {
             .config = config.memory,
             .options = config.options,
             .logger = null,
+            .context = null,
         };
         
         // Create logger if logging is enabled
@@ -333,6 +413,12 @@ pub const MemoryAnalyzer = struct {
         defer temp_arena.deinit();
         const temp_allocator = temp_arena.allocator();
         
+        // Create analysis context for this file
+        var context = AnalysisContext.init(temp_allocator);
+        defer context.deinit();
+        self.context = &context;
+        defer self.context = null;
+        
         // Clear previous analysis results
         self.allocations.clearRetainingCapacity();
         self.arenas.clearRetainingCapacity();
@@ -350,6 +436,16 @@ pub const MemoryAnalyzer = struct {
         
         while (lines.next()) |line| {
             defer line_number += 1;
+            
+            // Check for function definitions and update context
+            if (std.mem.indexOf(u8, line, "fn ") != null or std.mem.indexOf(u8, line, "pub fn ") != null) {
+                // Parse function signature and update context
+                const fn_info = self.parseFunctionSignature(line, temp_allocator) catch {
+                    // If parsing fails, continue with existing context
+                    continue;
+                };
+                context.setCurrentFunction(fn_info);
+            }
             
             try self.identifyAllocationsScoped(file_path, line, line_number, temp_allocator);
             try self.identifyArenas(file_path, line, line_number, temp_allocator);
@@ -818,6 +914,14 @@ pub const MemoryAnalyzer = struct {
             const allocator_type = entry.key_ptr.*;
             const location = entry.value_ptr.*;
             
+            // Skip validation if this is a function parameter
+            if (self.context) |ctx| {
+                if (ctx.isParameter(allocator_type)) {
+                    // This is a function parameter, skip validation
+                    continue;
+                }
+            }
+            
             var is_allowed = false;
             for (self.config.allowed_allocators) |allowed| {
                 if (std.mem.eql(u8, allocator_type, allowed)) {
@@ -855,16 +959,20 @@ pub const MemoryAnalyzer = struct {
     }
     
     fn extractAllocatorType(self: *MemoryAnalyzer, allocator_var: []const u8) ![]const u8 {
+        // Check if we have context and if this is a function parameter
+        if (self.context) |ctx| {
+            if (ctx.isParameter(allocator_var)) {
+                // This is a function parameter, don't apply pattern matching
+                // Just return the variable name as-is
+                return try self.allocator.dupe(u8, allocator_var);
+            }
+        }
+        
         // First check custom patterns from configuration
         for (self.config.allocator_patterns) |pattern| {
             if (std.mem.indexOf(u8, allocator_var, pattern.pattern)) |_| {
                 return try self.allocator.dupe(u8, pattern.name);
             }
-        }
-        
-        // Special case for exact match "allocator" (parameter)
-        if (std.mem.eql(u8, allocator_var, "allocator")) {
-            return try self.allocator.dupe(u8, "parameter_allocator");
         }
         
         // Then check default patterns if enabled
@@ -1346,6 +1454,13 @@ pub const MemoryAnalyzer = struct {
         const function_info = try self.findFunctionContext(contents, allocation.line, temp_allocator);
         defer temp_allocator.free(function_info.name);
         defer temp_allocator.free(function_info.return_type);
+        defer {
+            for (function_info.parameters) |param| {
+                temp_allocator.free(param.name);
+                temp_allocator.free(param.type_name);
+            }
+            temp_allocator.free(function_info.parameters);
+        }
         
         // Check if function name matches ownership transfer patterns
         if (self.isOwnershipTransferFunctionName(function_info.name)) {
@@ -1435,12 +1550,6 @@ pub const MemoryAnalyzer = struct {
     }
     
     // Helper function to find function context for an allocation
-    const FunctionInfo = struct {
-        name: []const u8,
-        return_type: []const u8,
-        start_line: u32,
-        end_line: u32,
-    };
     
     fn findFunctionContext(self: *MemoryAnalyzer, contents: []const u8, target_line: u32, temp_allocator: std.mem.Allocator) !FunctionInfo {
         
@@ -1449,6 +1558,7 @@ pub const MemoryAnalyzer = struct {
         var current_function = FunctionInfo{
             .name = try temp_allocator.dupe(u8, "unknown"),
             .return_type = try temp_allocator.dupe(u8, "unknown"),
+            .parameters = try temp_allocator.alloc(ParameterInfo, 0),
             .start_line = 1,
             .end_line = 1,
         };
@@ -1465,10 +1575,16 @@ pub const MemoryAnalyzer = struct {
                 // Safe to free because parseFunctionSignature always returns heap-allocated strings
                 temp_allocator.free(current_function.name);
                 temp_allocator.free(current_function.return_type);
+                for (current_function.parameters) |param| {
+                    temp_allocator.free(param.name);
+                    temp_allocator.free(param.type_name);
+                }
+                temp_allocator.free(current_function.parameters);
                 
                 current_function = FunctionInfo{
                     .name = fn_info.name,
                     .return_type = fn_info.return_type,
+                    .parameters = fn_info.parameters,
                     .start_line = line_number,
                     .end_line = line_number + 100, // Approximate end
                 };
@@ -1491,9 +1607,20 @@ pub const MemoryAnalyzer = struct {
         errdefer temp_allocator.free(name);
         var return_type = try temp_allocator.dupe(u8, "unknown");
         errdefer temp_allocator.free(return_type);
+        var parameters = ArrayList(ParameterInfo).init(temp_allocator);
+        errdefer {
+            for (parameters.items) |param| {
+                temp_allocator.free(param.name);
+                temp_allocator.free(param.type_name);
+            }
+            parameters.deinit();
+        }
         
-        // Extract function name
+        // Find function start and opening parenthesis
         const fn_start = std.mem.indexOf(u8, line, "fn ") orelse std.mem.indexOf(u8, line, "pub fn ");
+        var open_paren: ?usize = null;
+        var close_paren: ?usize = null;
+        
         if (fn_start) |pos| {
             const name_start = if (std.mem.startsWith(u8, line[pos..], "pub fn ")) 
                 pos + 7 
@@ -1501,15 +1628,55 @@ pub const MemoryAnalyzer = struct {
                 pos + 3;
             
             if (std.mem.indexOf(u8, line[name_start..], "(")) |paren_pos| {
+                open_paren = name_start + paren_pos;
                 temp_allocator.free(name);
                 name = try temp_allocator.dupe(u8, std.mem.trim(u8, line[name_start..name_start + paren_pos], " "));
             }
         }
         
+        // Find closing parenthesis
+        if (open_paren) |op| {
+            close_paren = std.mem.indexOf(u8, line[op..], ")");
+            if (close_paren) |cp| {
+                close_paren = op + cp;
+            }
+        }
+        
+        // Extract parameters
+        if (open_paren != null and close_paren != null) {
+            const params_str = line[open_paren.? + 1 .. close_paren.?];
+            
+            // Parse parameters (simplified - doesn't handle nested parentheses/generics)
+            var param_iter = std.mem.tokenizeScalar(u8, params_str, ',');
+            while (param_iter.next()) |param_raw| {
+                const param = std.mem.trim(u8, param_raw, " \t");
+                if (param.len == 0) continue;
+                
+                // Find the colon separating name and type
+                if (std.mem.indexOf(u8, param, ":")) |colon_pos| {
+                    const param_name = std.mem.trim(u8, param[0..colon_pos], " \t");
+                    const param_type = std.mem.trim(u8, param[colon_pos + 1..], " \t");
+                    
+                    // Skip 'self' parameter
+                    if (std.mem.eql(u8, param_name, "self") or 
+                        std.mem.eql(u8, param_name, "*self") or
+                        std.mem.eql(u8, param_name, "*const self")) {
+                        continue;
+                    }
+                    
+                    const param_info = ParameterInfo{
+                        .name = try temp_allocator.dupe(u8, param_name),
+                        .type_name = try temp_allocator.dupe(u8, param_type),
+                    };
+                    try parameters.append(param_info);
+                }
+            }
+        }
+        
         // Extract return type - more comprehensive parsing
         // Find the closing parenthesis of function parameters
-        if (std.mem.lastIndexOf(u8, line, ")")) |close_paren| {
-            var pos = close_paren + 1;
+        if (close_paren) |cp| {
+            var pos = cp + 1;
             
             // Skip whitespace
             while (pos < line.len and (line[pos] == ' ' or line[pos] == '\t')) {
@@ -1544,6 +1711,7 @@ pub const MemoryAnalyzer = struct {
         return FunctionInfo{
             .name = name,
             .return_type = return_type,
+            .parameters = try parameters.toOwnedSlice(),
             .start_line = 0,
             .end_line = 0,
         };
@@ -1664,6 +1832,13 @@ pub const MemoryAnalyzer = struct {
         const function_info = try self.findFunctionContext(contents, allocation.line, temp_allocator);
         defer temp_allocator.free(function_info.name);
         defer temp_allocator.free(function_info.return_type);
+        defer {
+            for (function_info.parameters) |param| {
+                temp_allocator.free(param.name);
+                temp_allocator.free(param.type_name);
+            }
+            temp_allocator.free(function_info.parameters);
+        }
         
         // If the function doesn't return a type that could transfer ownership, no need to check
         if (!self.isOwnershipTransferReturnType(function_info.return_type)) {
