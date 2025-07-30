@@ -623,7 +623,7 @@ pub fn detectFormat(file_path: []const u8) ?enum { text, json, github_actions } 
 }
 
 // Tests
-test "formatAsText basic functionality" {
+test "unit: formatAsText: basic functionality" {
     const testing = std.testing;
     const allocator = testing.allocator;
     
@@ -655,7 +655,7 @@ test "formatAsText basic functionality" {
     try testing.expect(std.mem.indexOf(u8, output, "error:") != null);
 }
 
-test "formatAsJson basic functionality" {
+test "unit: formatAsJson: basic functionality" {
     const testing = std.testing;
     const allocator = testing.allocator;
     
@@ -685,7 +685,7 @@ test "formatAsJson basic functionality" {
     try testing.expect(std.mem.indexOf(u8, output, "\"severity\": \"warning\"") != null);
 }
 
-test "formatAsGitHubActions basic functionality" {
+test "unit: formatAsGitHubActions: basic functionality" {
     const testing = std.testing;
     const allocator = testing.allocator;
     
@@ -713,7 +713,7 @@ test "formatAsGitHubActions basic functionality" {
     try testing.expect(std.mem.indexOf(u8, output, "::error file=test.zig,line=10,col=5::Test error") != null);
 }
 
-test "max_issues option works correctly" {
+test "unit: formatters: max_issues option works correctly" {
     const testing = std.testing;
     const allocator = testing.allocator;
     
@@ -752,7 +752,7 @@ test "max_issues option works correctly" {
     try testing.expect(std.mem.indexOf(u8, output, "and 1 more issues") != null);
 }
 
-test "custom formatter works" {
+test "unit: formatters: custom formatter works" {
     const testing = std.testing;
     const allocator = testing.allocator;
     

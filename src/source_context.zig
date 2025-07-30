@@ -667,3 +667,14 @@ test "SourceContext embedded file detection" {
     // Real allocation should be code
     try std.testing.expect(context.isPositionInCode(2, 15)); // Real allocation
 }
+
+test "unit: source_context: SourceContext initialization" {
+    const testing = std.testing;
+    
+    // Test basic initialization and cleanup
+    var context = SourceContext.init(testing.allocator);
+    defer context.deinit();
+    
+    // Verify initial state
+    try testing.expectEqual(@as(usize, 0), context.lines.items.len);
+}

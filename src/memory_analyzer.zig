@@ -1947,3 +1947,16 @@ test "memory: memory analyzer handles allocator pattern validation without segfa
     
     // The test passes if deinit doesn't segfault
 }
+
+test "unit: memory_analyzer: MemoryAnalyzer initialization" {
+    const testing = std.testing;
+    
+    // Test basic initialization with default config
+    var analyzer = MemoryAnalyzer.init(testing.allocator);
+    defer analyzer.deinit();
+    
+    // Verify initial state
+    try testing.expectEqual(@as(usize, 0), analyzer.issues.items.len);
+    try testing.expectEqual(@as(usize, 0), analyzer.allocations.count());
+    try testing.expectEqual(@as(usize, 0), analyzer.defers.count());
+}

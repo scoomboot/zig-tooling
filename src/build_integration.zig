@@ -884,3 +884,22 @@ fn createPowerShellPreCommitHook(allocator: std.mem.Allocator, options: PreCommi
     _ = options;
     return allocator.dupe(u8, "# PowerShell pre-commit hook not yet implemented");
 }
+
+// Tests
+test "unit: build_integration: MemoryCheckOptions initialization" {
+    const testing = std.testing;
+    
+    // Test default initialization
+    const options = MemoryCheckOptions{};
+    try testing.expect(options.source_paths.len > 0); // Has default value
+    try testing.expect(options.exclude_patterns.len > 0); // Has default values
+    try testing.expect(options.fail_on_warnings == false); // Default is false
+    
+    // Test with custom options
+    const custom_options = MemoryCheckOptions{
+        .source_paths = &.{"src/*.zig", "lib/*.zig"},
+        .fail_on_warnings = true,
+    };
+    try testing.expect(custom_options.source_paths.len == 2);
+    try testing.expect(custom_options.fail_on_warnings == true);
+}

@@ -371,7 +371,7 @@ fn testLogCallback(event: LogEvent) void {
     test_last_event = event;
 }
 
-test "Logger basic functionality" {
+test "unit: Logger: basic functionality" {
     const testing = std.testing;
     
     // Reset test state
@@ -399,7 +399,7 @@ test "Logger basic functionality" {
     try testing.expect(!test_log_called);
 }
 
-test "Logger with context" {
+test "unit: Logger: with context" {
     const testing = std.testing;
     
     // Reset test state
@@ -431,7 +431,7 @@ test "Logger with context" {
     try testing.expectEqualStrings("memory_check", test_last_event.?.context.?.operation.?);
 }
 
-test "Logger disabled" {
+test "unit: Logger: disabled functionality" {
     const testing = std.testing;
     
     // Reset test state

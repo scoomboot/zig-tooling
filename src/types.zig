@@ -600,3 +600,25 @@ pub const AnalysisError = error{
     /// Custom patterns should use unique names to avoid confusion
     PatternConflict,
 };
+
+// Tests
+const testing = @import("std").testing;
+
+test "unit: types: Issue struct initialization" {
+    // Test basic Issue creation
+    const issue = Issue{
+        .file_path = "test.zig",
+        .line = 10,
+        .column = 5,
+        .issue_type = .missing_defer,
+        .severity = .err,
+        .message = "Test message",
+        .suggestion = null,
+    };
+    
+    try testing.expectEqualStrings("test.zig", issue.file_path);
+    try testing.expectEqual(@as(u32, 10), issue.line);
+    try testing.expectEqual(@as(u32, 5), issue.column);
+    try testing.expectEqual(IssueType.missing_defer, issue.issue_type);
+    try testing.expectEqual(Severity.err, issue.severity);
+}

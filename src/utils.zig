@@ -96,7 +96,7 @@ pub fn escapeGitHubActions(allocator: std.mem.Allocator, str: []const u8, is_pro
 // Tests
 const testing = std.testing;
 
-test "escapeJson handles basic special characters" {
+test "unit: escapeJson: handles basic special characters" {
     const allocator = testing.allocator;
     
     const input = "Hello \"world\"\nLine 2\tTabbed\r\nWindows line\\backslash";
@@ -107,7 +107,7 @@ test "escapeJson handles basic special characters" {
     try testing.expectEqualStrings(expected, result);
 }
 
-test "escapeJson handles control characters" {
+test "unit: escapeJson: handles control characters" {
     const allocator = testing.allocator;
     
     // Test all control characters
@@ -123,7 +123,7 @@ test "escapeJson handles control characters" {
     try testing.expectEqualStrings(expected, result);
 }
 
-test "escapeJson handles empty string" {
+test "unit: escapeJson: handles empty string" {
     const allocator = testing.allocator;
     
     const result = try escapeJson(allocator, "");
@@ -132,7 +132,7 @@ test "escapeJson handles empty string" {
     try testing.expectEqualStrings("", result);
 }
 
-test "escapeJson handles Unicode characters" {
+test "unit: escapeJson: handles Unicode characters" {
     const allocator = testing.allocator;
     
     const input = "Hello 世界 🌍 emoji";
@@ -143,7 +143,7 @@ test "escapeJson handles Unicode characters" {
     try testing.expectEqualStrings(input, result);
 }
 
-test "escapeXml handles all required entities" {
+test "unit: escapeXml: handles all required entities" {
     const allocator = testing.allocator;
     
     const input = "Test & <tag> \"quoted\" 'single' > text";
@@ -154,7 +154,7 @@ test "escapeXml handles all required entities" {
     try testing.expectEqualStrings(expected, result);
 }
 
-test "escapeXml handles empty string" {
+test "unit: escapeXml: handles empty string" {
     const allocator = testing.allocator;
     
     const result = try escapeXml(allocator, "");
@@ -163,7 +163,7 @@ test "escapeXml handles empty string" {
     try testing.expectEqualStrings("", result);
 }
 
-test "escapeXml preserves normal text" {
+test "unit: escapeXml: preserves normal text" {
     const allocator = testing.allocator;
     
     const input = "Normal text with numbers 123 and symbols !@#$%^*()";
@@ -173,7 +173,7 @@ test "escapeXml preserves normal text" {
     try testing.expectEqualStrings(input, result);
 }
 
-test "escapeGitHubActions handles message escaping" {
+test "unit: escapeGitHubActions: handles message escaping" {
     const allocator = testing.allocator;
     
     const input = "Error: 50% failed\r\nSecond line\nThird: line";
@@ -184,7 +184,7 @@ test "escapeGitHubActions handles message escaping" {
     try testing.expectEqualStrings(expected, result);
 }
 
-test "escapeGitHubActions handles property escaping" {
+test "unit: escapeGitHubActions: handles property escaping" {
     const allocator = testing.allocator;
     
     const input = "file:name,with%special.zig";
@@ -195,7 +195,7 @@ test "escapeGitHubActions handles property escaping" {
     try testing.expectEqualStrings(expected, result);
 }
 
-test "escapeGitHubActions handles empty string" {
+test "unit: escapeGitHubActions: handles empty string" {
     const allocator = testing.allocator;
     
     const result = try escapeGitHubActions(allocator, "", true);

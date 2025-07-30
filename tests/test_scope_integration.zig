@@ -141,7 +141,7 @@ pub const EnhancedMemoryAnalyzer = struct {
 };
 
 // Tests for integration
-test "Enhanced analyzer can detect test scopes" {
+test "integration: Enhanced analyzer: can detect test scopes" {
     var enhanced = EnhancedMemoryAnalyzer.init(std.testing.allocator);
     defer enhanced.deinit();
     
@@ -156,7 +156,7 @@ test "Enhanced analyzer can detect test scopes" {
     try std.testing.expect(results.allocations_found >= 1);
 }
 
-test "Enhanced analyzer improves defer detection in test bodies" {
+test "integration: Enhanced analyzer: improves defer detection in test bodies" {
     var enhanced = EnhancedMemoryAnalyzer.init(std.testing.allocator);
     defer enhanced.deinit();
     
@@ -175,7 +175,7 @@ test "Enhanced analyzer improves defer detection in test bodies" {
     try std.testing.expect(results.defer_patterns_fixed > 0);
 }
 
-test "Scope tracker detects both test and regular function scopes" {
+test "integration: Scope tracker: detects both test and regular function scopes" {
     var scope_tracker = ScopeTracker.init(std.testing.allocator);
     defer scope_tracker.deinit();
     
@@ -205,7 +205,7 @@ test "Scope tracker detects both test and regular function scopes" {
     try std.testing.expect(found_regular_scope);
 }
 
-test "Source context validates patterns correctly" {
+test "unit: Source context: validates patterns correctly" {
     var source_context = SourceContext.init(std.testing.allocator);
     defer source_context.deinit();
     

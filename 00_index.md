@@ -1,12 +1,14 @@
 # Issue Index
 
-> **Quick navigation for [ISSUES.md](ISSUES.md) - 106 tracked issues across zig-tooling library conversion**
+> **Quick navigation for [ISSUES.md](ISSUES.md) - 111 tracked issues across zig-tooling library conversion**
 
 ## Active Issues
 
-- 🔴 [#LC059](ISSUES.md#L346): Fix example file references to non-existent sample projects
-- 🔴 [#LC078](ISSUES.md#L366): Make zig build quality pass with no warnings or errors
-- 🟡 [#LC063](ISSUES.md#L32): Improve API documentation coverage
+- 🔴 [#LC059](ISSUES.md#L323): Fix example file references to non-existent sample projects
+- 🔴 [#LC081](ISSUES.md#L364): Fix false positives in quality analyzer allocator detection
+- 🟡 [#LC063](ISSUES.md#L9): Improve API documentation coverage
+- 🟡 [#LC082](ISSUES.md#L753): Fix false positive missing test detection for inline tests
+- 🟡 [#LC084](ISSUES.md#L793): Document test naming convention requirements
 - 🟡 [#LC039](ISSUES.md#L51): Complete output formatter implementations → [#LC015](00_completed_issues.md#L202)
 - 🟡 [#LC043](ISSUES.md#L69): Add parallel file analysis support → [#LC015](00_completed_issues.md#L202)
 - 🟡 [#LC038](ISSUES.md#L89): Implement proper glob pattern library for build integration
@@ -38,19 +40,23 @@
 - 🟢 [#LC042](ISSUES.md#L693): Complete pre-commit hook implementations
 - 🟢 [#LC034](ISSUES.md#L711): Improve logging callback pattern for stateful collectors
 - 🟢 [#LC035](ISSUES.md#L730): Add log filtering by category
-- 🟢 [#LC036](ISSUES.md#L749): Add structured logging format helpers
-- 🟢 [#LC079](ISSUES.md#L387): Make quality checks required in CI → [#LC078](ISSUES.md#L366)
+- 🟢 [#LC036](ISSUES.md#L734): Add structured logging format helpers
+- 🟢 [#LC079](ISSUES.md#L345): Make quality checks required in CI → [#LC078](00_completed_issues.md#L5)
+- 🟢 [#LC083](ISSUES.md#L774): Add test fixture exclusion patterns for sample projects
 
 ### ✅ [Completed Issues](00_completed_issues.md) *(Summary)*
-*70 issues completed including all core library conversion phases*
+*71 issues completed including all core library conversion phases*
+
+**Recently Completed (2025-07-30):**
+- [#LC078](00_completed_issues.md#L5): Make zig build quality pass with no warnings or errors ✅
 
 **Recently Completed (2025-07-29):**
-- [#LC066](00_completed_issues.md#L5): Add CI validation for integration test compilation ✅
-- [#LC060](00_completed_issues.md#L736): Add CI configuration for integration test execution ✅
+- [#LC066](00_completed_issues.md#L25): Add CI validation for integration test compilation ✅
+- [#LC060](00_completed_issues.md#L762): Add CI configuration for integration test execution ✅
 - [#LC076](00_completed_issues.md#L31): Add build validation for tools/ directory compilation ✅
 - [#LC052](00_completed_issues.md#L51): Proper JSON/XML escape functions ✅
 - [#LC068](00_completed_issues.md#L72): Memory ownership transfer detection ✅  
-- [#LC073](00_completed_issues.md#L171): Memory leak fixes ✅
+- [#LC073](00_completed_issues.md#L174): Memory leak fixes ✅
 - [#LC064](00_completed_issues.md#L720): ProjectAnalysisResult formatter support ✅
 
 **Major Milestones:**
@@ -66,9 +72,9 @@
 | Priority | Count | Notes |
 |----------|-------|-------|
 | 🔴 High | 2 | Critical issues needing attention |
-| 🟡 Medium | 7 | Important improvements |
-| 🟢 Low | 27 | Future enhancements |
-| ✅ Completed | 70 | Major conversion done |
-| **Total** | **106** | **Library ready for v1.0** |
+| 🟡 Medium | 9 | Important improvements |
+| 🟢 Low | 29 | Future enhancements |
+| ✅ Completed | 71 | Major conversion done |
+| **Total** | **111** | **Library ready for v1.0** |
 
 > 💡 **Tip**: Use `Ctrl+F` to search for specific issue numbers (#LCXXX) or components

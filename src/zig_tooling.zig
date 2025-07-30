@@ -123,6 +123,16 @@ pub fn analyzeMemory(
     
     const analyzer_issues = analyzer.getIssues();
     const issues = try allocator.alloc(Issue, analyzer_issues.len);
+    var issues_populated: usize = 0;
+    errdefer {
+        // Clean up any issues we've already populated
+        for (issues[0..issues_populated]) |issue| {
+            allocator.free(issue.file_path);
+            allocator.free(issue.message);
+            if (issue.suggestion) |s| allocator.free(s);
+        }
+        allocator.free(issues);
+    }
     
     for (analyzer_issues, 0..) |ai, i| {
         issues[i] = Issue{
@@ -135,6 +145,7 @@ pub fn analyzeMemory(
             .suggestion = if (ai.suggestion) |s| try allocator.dupe(u8, s) else null,
             .code_snippet = ai.code_snippet,
         };
+        issues_populated += 1;
     }
     
     const end_time = std.time.milliTimestamp();
@@ -183,6 +194,16 @@ pub fn analyzeTests(
     
     const analyzer_issues = analyzer.getIssues();
     const issues = try allocator.alloc(Issue, analyzer_issues.len);
+    var issues_populated: usize = 0;
+    errdefer {
+        // Clean up any issues we've already populated
+        for (issues[0..issues_populated]) |issue| {
+            allocator.free(issue.file_path);
+            allocator.free(issue.message);
+            if (issue.suggestion) |s| allocator.free(s);
+        }
+        allocator.free(issues);
+    }
     
     for (analyzer_issues, 0..) |ai, i| {
         issues[i] = Issue{
@@ -195,6 +216,7 @@ pub fn analyzeTests(
             .suggestion = if (ai.suggestion) |s| try allocator.dupe(u8, s) else null,
             .code_snippet = ai.code_snippet,
         };
+        issues_populated += 1;
     }
     
     const end_time = std.time.milliTimestamp();
@@ -312,3 +334,25 @@ pub fn analyzeSource(
 }
 
 // Conversion functions removed - analyzers now use unified types directly from types.zig
+
+// Tests
+test "unit: zig_tooling: module exports verification" {
+    const testing = std.testing;
+    
+    // Verify that key exports are available
+    _ = MemoryAnalyzer;
+    _ = TestingAnalyzer;
+    _ = ScopeTracker;
+    _ = types.Issue;
+    _ = types.Config;
+    _ = analyzeMemory;
+    _ = analyzeTests;
+    _ = analyzeFile;
+    
+    // Basic functionality test
+    const test_source = "const x = 42;";
+    const result = try analyzeMemory(testing.allocator, test_source, "test.zig", null);
+    defer testing.allocator.free(result.issues);
+    
+    try testing.expectEqual(@as(usize, 1), result.files_analyzed);
+}

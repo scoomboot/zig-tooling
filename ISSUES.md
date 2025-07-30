@@ -340,25 +340,6 @@
 
 ---
 
-- [ ] #LC078: Make zig build quality pass with no warnings or errors
-  - **Component**: All source files, tools/quality_check.zig
-  - **Priority**: High
-  - **Created**: 2025-07-29
-  - **Dependencies**: #LC077 (related but not blocking)
-  - **Details**: The zig build quality command currently fails due to 71 errors and 176 warnings
-  - **Requirements**:
-    - Fix all errors reported by zig build quality
-    - Fix all warnings reported by zig build quality
-    - Ensure zig build quality exits with status 0 without --no-fail-on-warnings
-    - Update CI to run zig build quality as a required check
-    - Document any legitimate warnings that should be suppressed with rationale
-  - **Notes**:
-    - Currently requires --no-fail-on-warnings flag to pass (used in zig build dogfood)
-    - Self-analysis found issues per LC077: 71 errors and 176 warnings
-    - Critical for project quality and CI/CD pipeline
-    - Should be fixed before v1.0 release
-    - Categories of issues include memory safety warnings, test naming conventions, missing test coverage
-
 ---
 
 - [ ] #LC079: Make quality checks required in CI
@@ -377,6 +358,33 @@
     - Should only be made required after LC078 is resolved (fixing all quality issues)
     - Will enforce code quality standards on all contributions
     - Discovered during LC076 implementation
+
+---
+
+- [ ] #LC081: Fix false positives in quality analyzer allocator detection
+  - **Component**: src/memory_analyzer.zig, tools/quality_check.zig
+  - **Priority**: High
+  - **Created**: 2025-07-30
+  - **Dependencies**: #LC078 (related)
+  - **Details**: The quality analyzer reports many false positives for allocator usage and memory management patterns
+  - **Requirements**:
+    - Fix "parameter_allocator" false positives - allocator parameters in functions are perfectly valid
+    - Fix false positives for allocations returned to caller (ownership transfer)
+    - Fix false positives for allocations stored in returned structures
+    - Consider context when detecting missing defer statements
+    - Update default allowed allocators to include common parameter patterns
+  - **Notes**:
+    - Currently reports warnings for valid code like: "Allocator type 'parameter_allocator' is not in the allowed list"
+    - Example false positives:
+      - src/zig_tooling.zig:125 - Issues array is returned to caller, no defer needed
+      - src/patterns.zig:158 - String duplicated for failed_files array, freed later
+      - src/build_integration.zig:356 - Build system allocator usage is valid
+    - These false positives make it harder to identify real issues
+    - Should differentiate between function parameters and actual allocator types
+    - File links for reference:
+      - Quality check configuration: [tools/quality_check.zig:71-76](tools/quality_check.zig#L71-L76)
+      - Memory analyzer patterns: [src/memory_analyzer.zig:59-67](src/memory_analyzer.zig#L59-L67)
+      - Example false positive: [src/zig_tooling.zig:125-149](src/zig_tooling.zig#L125-L149)
 
 ---
 
@@ -739,4 +747,64 @@
     - Users implementing callbacks must handle all formatting
     - Could provide formatters: JSON, logfmt, human-readable
     - Discovered during LC012 implementation
+
+---
+
+- [ ] #LC082: Fix false positive missing test detection for inline tests
+  - **Component**: src/testing_analyzer.zig, tools/quality_check.zig
+  - **Priority**: Medium
+  - **Created**: 2025-07-30
+  - **Dependencies**: #LC078 ✅ (discovered during implementation)
+  - **Details**: TestingAnalyzer incorrectly reports missing tests for files that have inline tests
+  - **Requirements**:
+    - Fix detection logic to properly find inline test blocks
+    - Ensure analyzer recognizes tests added at the end of source files
+    - Update test detection to check entire file, not just beginning
+    - Add test cases to verify inline test detection works correctly
+  - **Notes**:
+    - Discovered during LC078 when quality check reported missing tests for:
+      - [src/source_context.zig:671](src/source_context.zig#L671) - has inline test
+      - [src/memory_analyzer.zig:1951](src/memory_analyzer.zig#L1951) - has inline test  
+      - [src/build_integration.zig:889](src/build_integration.zig#L889) - has inline test
+    - All three files have valid inline tests but are still flagged as missing tests
+    - Causes confusion and reduces trust in the analyzer
+
+---
+
+- [ ] #LC083: Add test fixture exclusion patterns for sample projects
+  - **Component**: tools/quality_check.zig, src/testing_analyzer.zig
+  - **Priority**: Low
+  - **Created**: 2025-07-30
+  - **Dependencies**: None
+  - **Details**: Integration test sample projects contain intentionally bad test names that show up in quality checks
+  - **Requirements**:
+    - Add configuration option to exclude test fixture directories
+    - Default exclude pattern for `**/sample_projects/**` in quality checks
+    - Document how to exclude test fixtures from analysis
+    - Ensure fixtures can still be analyzed when explicitly requested
+  - **Notes**:
+    - Found during LC078: [tests/integration/sample_projects/complex_multi_file/tests/test_utils.zig](tests/integration/sample_projects/complex_multi_file/tests/test_utils.zig)
+    - Contains intentionally bad test names like "BadTestName" to test the analyzer
+    - These show up as real issues when running `zig build quality`
+    - Should not count against project quality metrics
+
+---
+
+- [ ] #LC084: Document test naming convention requirements
+  - **Component**: docs/, README.md, CLAUDE.md
+  - **Priority**: Medium
+  - **Created**: 2025-07-30
+  - **Dependencies**: None
+  - **Details**: Test naming convention requirements are not clearly documented for users
+  - **Requirements**:
+    - Add section to documentation explaining test naming pattern: `test "category: module: description"`
+    - List allowed categories: unit, integration, e2e, performance
+    - Provide examples of good and bad test names
+    - Add to getting-started guide and API reference
+    - Consider adding to error messages from testing analyzer
+  - **Notes**:
+    - During LC078, had to fix 21 test names without clear documentation
+    - Pattern is enforced by quality checks but not explained to users
+    - Would reduce confusion and help adoption
+    - Should be prominently featured in documentation
 
