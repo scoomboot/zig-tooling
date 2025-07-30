@@ -44,6 +44,14 @@ pub fn build(b: *std.Build) void {
     });
     test_patterns.root_module.addImport("zig_tooling", zig_tooling_module);
 
+    // Patterns performance benchmark tests
+    const test_patterns_performance = b.addTest(.{
+        .root_source_file = b.path("tests/test_patterns_performance.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    test_patterns_performance.root_module.addImport("zig_tooling", zig_tooling_module);
+
     // Allocator pattern tests
     const test_allocator_patterns = b.addTest(.{
         .root_source_file = b.path("tests/test_allocator_patterns.zig"),
@@ -127,6 +135,7 @@ pub fn build(b: *std.Build) void {
     integration_test_step.dependOn(&test_memory_performance.step);
     integration_test_step.dependOn(&test_thread_safety.step);
     integration_test_step.dependOn(&test_error_boundaries.step);
+    integration_test_step.dependOn(&test_patterns_performance.step);
 
     // Comprehensive test step that runs everything
     const test_all_step = b.step("test-all", "Run all tests including integration tests");

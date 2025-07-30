@@ -676,5 +676,5 @@ test "unit: source_context: SourceContext initialization" {
     defer context.deinit();
     
     // Verify initial state
-    try testing.expectEqual(@as(usize, 0), context.lines.items.len);
+    try testing.expectEqual(@as(usize, 0), context.regions.items.len);
 }

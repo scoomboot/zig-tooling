@@ -1957,6 +1957,5 @@ test "unit: memory_analyzer: MemoryAnalyzer initialization" {
     
     // Verify initial state
     try testing.expectEqual(@as(usize, 0), analyzer.issues.items.len);
-    try testing.expectEqual(@as(usize, 0), analyzer.allocations.count());
-    try testing.expectEqual(@as(usize, 0), analyzer.defers.count());
+    try testing.expectEqual(@as(usize, 0), analyzer.allocations.items.len);
 }
