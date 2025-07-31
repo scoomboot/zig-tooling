@@ -68,6 +68,14 @@ pub fn build(b: *std.Build) void {
     });
     test_scope_tracker_memory.root_module.addImport("zig_tooling", zig_tooling_module);
 
+    // LC103 Memory leak tests for analyzeMemory() and analyzeTests()
+    const test_memory_leaks = b.addTest(.{
+        .root_source_file = b.path("tests/test_memory_leaks.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    test_memory_leaks.root_module.addImport("zig_tooling", zig_tooling_module);
+
     // Example validation tests
     const test_example_validation = b.addTest(.{
         .root_source_file = b.path("tests/test_example_validation.zig"),
@@ -133,6 +141,7 @@ pub fn build(b: *std.Build) void {
     test_step.dependOn(&test_patterns.step);
     test_step.dependOn(&test_allocator_patterns.step);
     test_step.dependOn(&test_scope_tracker_memory.step);
+    test_step.dependOn(&test_memory_leaks.step);
     test_step.dependOn(&test_example_validation.step);
     test_step.dependOn(&lib_tests.step);
 

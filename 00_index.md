@@ -1,6 +1,6 @@
 # Issue Index
 
-> **Quick navigation for [ISSUES.md](ISSUES.md) - 132 tracked issues across zig-tooling library conversion**
+> **Quick navigation for [ISSUES.md](ISSUES.md) - 136 tracked issues across zig-tooling library conversion**
 
 ## Active Issues
 
@@ -31,9 +31,9 @@
 - 🟢 [#LC083](ISSUES.md#L917): Add test fixture exclusion patterns for sample projects
 
 ### Memory & Performance
-- 🔴 [#LC103](ISSUES.md#L9): Memory leaks in analyzeMemory() and analyzeTests() wrapper functions
 - 🔴 [#LC104](ISSUES.md#L27): Memory corruption or double-free in ScopeTracker.deinit() → [#LC102](00_completed_issues.md#L5)
 - 🔴 [#LC106](ISSUES.md#L63): Memory leaks detected in patterns.checkProject function
+- 🔴 [#LC107](ISSUES.md#L12): Memory leaks in analyzeFile() and analyzeSource() functions
 - 🔴 [#LC081](ISSUES.md#L585): Fix false positives in quality analyzer allocator detection
 - 🔴 [#LC087](ISSUES.md#L239): Implement ownership transfer detection for return values → [#LC081](ISSUES.md#L585)
 - 🔴 [#LC088](ISSUES.md#L257): Add data flow analysis for structured returns → [#LC081](ISSUES.md#L585)
@@ -55,10 +55,13 @@
 ### Code Quality & Analysis
 - 🟡 [#LC096](ISSUES.md#L998): Fix deprecated API usage throughout codebase
 - 🟡 [#LC082](ISSUES.md#L896): Fix false positive missing test detection for inline tests
+- 🟢 [#LC109](ISSUES.md#L219): Extract duplicate issue copying logic to helper function
+- 🟢 [#LC110](ISSUES.md#L238): Improve error handling specificity in wrapper functions
 - 🟢 [#LC077](ISSUES.md#L103): Systematically address self-analysis quality findings → [#LC075](ISSUES.md#L84)
 - 🟢 [#LC055](ISSUES.md#L589): Add additional issue types for custom analyzers
 
 ### Developer Tools & Utilities
+- 🟡 [#LC108](ISSUES.md#L43): Add public freeAnalysisResult() helper function
 - 🟡 [#LC039](ISSUES.md#L28): Complete output formatter implementations → [#LC015](00_completed_issues.md#L227)
 - 🟡 [#LC043](ISSUES.md#L46): Add parallel file analysis support → [#LC015](00_completed_issues.md#L227)
 - 🟢 [#LC099](ISSUES.md#L1072): Improve quality check output handling for large results
@@ -79,8 +82,10 @@
 *75 issues completed including all core library conversion phases*
 
 **Recently Completed (2025-07-31):**
-- [#LC102](00_completed_issues.md#L5): Fix memory leak in ScopeTracker.openScope ✅ (Investigated but not resolved)
-- [#LC100](00_completed_issues.md#L30): Fix multiple test failures in patterns.zig and api.zig test suites ✅
+- [#LC103](00_completed_issues.md#L6): Memory leaks in analyzeMemory() and analyzeTests() wrapper functions ✅
+- [#LC103](00_completed_issues.md#L6): Memory leaks in analyzeMemory() and analyzeTests() wrapper functions ✅
+- [#LC102](00_completed_issues.md#L29): Fix memory leak in ScopeTracker.openScope ✅ (Investigated but not resolved)
+- [#LC100](00_completed_issues.md#L54): Fix multiple test failures in patterns.zig and api.zig test suites ✅
 
 **Recently Completed (2025-07-30):**
 - [#LC086](00_completed_issues.md#L30): Create context-aware allocator detection ✅
@@ -112,10 +117,10 @@
 | Build & CI/CD | 5 | 🟡 Medium: 1, 🟢 Low: 4 |
 | Testing Infrastructure | 10 | 🟡 Medium: 3, 🟢 Low: 7 |
 | Memory & Performance | 20 | 🔴 High: 6, 🟡 Medium: 6, 🟢 Low: 8 |
-| Code Quality & Analysis | 4 | 🟡 Medium: 2, 🟢 Low: 2 |
-| Developer Tools & Utilities | 10 | 🟡 Medium: 2, 🟢 Low: 8 |
+| Code Quality & Analysis | 6 | 🟡 Medium: 2, 🟢 Low: 4 |
+| Developer Tools & Utilities | 11 | 🟡 Medium: 3, 🟢 Low: 8 |
 | Compatibility & Integration | 3 | 🟢 Low: 3 |
-| **Total Active** | **57** | **🔴 High: 6, 🟡 Medium: 17, 🟢 Low: 34** |
-| ✅ Completed | 75 | Major conversion done |
+| **Total Active** | **60** | **🔴 High: 6, 🟡 Medium: 18, 🟢 Low: 36** |
+| ✅ Completed | 76 | Major conversion done |
 
 > 💡 **Tip**: Use `Ctrl+F` to search for specific issue numbers (#LCXXX) or components

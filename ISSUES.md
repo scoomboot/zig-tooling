@@ -6,23 +6,6 @@
 
 ---
 
-- [ ] #LC103: Memory leaks in analyzeMemory() and analyzeTests() wrapper functions
-  - **Component**: src/zig_tooling.zig
-  - **Priority**: High
-  - **Created**: 2025-07-31
-  - **Dependencies**: None
-  - **Details**: Memory leaks in analyzeMemory() and analyzeTests() wrapper functions - they duplicate strings from analyzer issues but never free the original analyzer issues
-  - **Requirements**:
-    - Free the original analyzer issues after copying
-    - Update both analyzeMemory() and analyzeTests() functions
-    - Add memory leak tests for these specific functions
-    - Ensure proper cleanup in all error paths
-  - **Notes**:
-    - Discovered during LC102 investigation with test_memory_leak.zig
-    - Memory leaks detected at [src/zig_tooling.zig:211](src/zig_tooling.zig#L211), [src/zig_tooling.zig:216](src/zig_tooling.zig#L216), and [src/zig_tooling.zig:217](src/zig_tooling.zig#L217)
-    - Functions duplicate issue strings but never call free on the original analyzer issues
-    - Affects all users of analyzeSource() API
-
 ---
 
 - [ ] #LC104: Memory corruption or double-free in ScopeTracker.deinit()
@@ -80,6 +63,46 @@
     - Multiple leaked allocations followed by crash in freeProjectResult
     - Test shows leaks at [src/patterns.zig:167](src/patterns.zig#L167), [src/patterns.zig:172](src/patterns.zig#L172), [src/patterns.zig:173](src/patterns.zig#L173)
     - May be related to how issues are duplicated and aggregated
+
+---
+
+- [ ] #LC107: Memory leaks in analyzeFile() and analyzeSource() functions
+  - **Component**: src/zig_tooling.zig
+  - **Priority**: High
+  - **Created**: 2025-07-31
+  - **Dependencies**: None (but related to #LC103)
+  - **Details**: Memory leaks in analyzeFile() and analyzeSource() wrapper functions - they free the issue arrays but not the string fields inside each issue
+  - **Requirements**:
+    - Fix analyzeFile() to properly free strings in memory_result.issues before freeing the array
+    - Fix analyzeFile() to properly free strings in testing_result.issues before freeing the array
+    - Fix analyzeSource() with the same pattern
+    - Add memory leak tests for these functions
+    - Consider using the freeResult helper from patterns.zig
+  - **Notes**:
+    - Found during LC103 fix session when reviewing similar code patterns
+    - Lines 291 and 294 in analyzeFile() only do `allocator.free(memory_result.issues)` without freeing the strings
+    - Lines 334 and 337 in analyzeSource() have the same issue
+    - The strings (file_path, message, suggestion) were duplicated in analyzeMemory/analyzeTests and need to be freed
+
+---
+
+- [ ] #LC108: Add public freeAnalysisResult() helper function
+  - **Component**: src/zig_tooling.zig, src/utils.zig
+  - **Priority**: Medium
+  - **Created**: 2025-07-31
+  - **Dependencies**: None
+  - **Details**: Library lacks a public helper function to properly free AnalysisResult structures
+  - **Requirements**:
+    - Create public freeAnalysisResult() function that frees all issue strings and the issues array
+    - Add to main zig_tooling.zig exports or utils.zig
+    - Document memory ownership clearly
+    - Update examples to use this helper
+    - Consider also adding freeIssue() for single issues
+  - **Notes**:
+    - Currently users must manually iterate and free each field
+    - test_memory_leaks.zig has a private version at line 144 that could be adapted
+    - patterns.zig has freeResult() at line 263 that could be moved to main library
+    - Would prevent memory leaks and improve API usability
 
 ---
 
@@ -193,6 +216,45 @@
     - Most issues are legitimate and fixable
     - Would improve library code quality and demonstrate tool effectiveness
     - Not critical for users but good for library maintenance
+
+---
+
+- [ ] #LC109: Extract duplicate issue copying logic to helper function
+  - **Component**: src/zig_tooling.zig
+  - **Priority**: Low
+  - **Created**: 2025-07-31
+  - **Dependencies**: None
+  - **Details**: Code duplication in analyzeMemory() and analyzeTests() for copying issues from analyzer results
+  - **Requirements**:
+    - Create helper function like `copyIssues(allocator: Allocator, analyzer_issues: []const Issue) ![]Issue`
+    - Replace duplicate code in analyzeMemory() (lines 140-150)
+    - Replace duplicate code in analyzeTests() (lines 216-227)
+    - Add proper error handling with errdefer cleanup
+    - Consider making it public if useful for users
+  - **Notes**:
+    - Both functions have identical logic for duplicating issue strings
+    - Would reduce code duplication and potential for bugs
+    - Makes maintenance easier if issue copying logic needs to change
+
+---
+
+- [ ] #LC110: Improve error handling specificity in wrapper functions
+  - **Component**: src/zig_tooling.zig
+  - **Priority**: Low
+  - **Created**: 2025-07-31
+  - **Dependencies**: None
+  - **Details**: Wrapper functions lose error information by converting specific errors to generic ones
+  - **Requirements**:
+    - Review error conversions in analyzeMemory, analyzeTests, analyzeFile
+    - Add more specific error types to AnalysisError enum if needed
+    - Preserve original error information where possible
+    - Consider adding error context or wrapping errors
+    - Document which specific errors can occur for each function
+  - **Notes**:
+    - analyzeMemory/analyzeTests convert all non-OutOfMemory errors to ParseError (lines 122-124, 200-202)
+    - analyzeFile converts many file errors to generic FileReadError
+    - Makes debugging harder when specific error information is lost
+    - Consider pattern like `error.InvalidSyntax => return AnalysisError.InvalidSyntax`
 
 ---
 

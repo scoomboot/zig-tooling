@@ -114,11 +114,14 @@ pub fn analyzeMemory(
         MemoryAnalyzer.initWithFullConfig(allocator, cfg)
     else
         MemoryAnalyzer.init(allocator);
-    defer analyzer.deinit();
+    // Remove defer here - will call deinit manually after copying strings
     
-    analyzer.analyzeSourceCode(file_path, source) catch |err| switch (err) {
-        error.OutOfMemory => return AnalysisError.OutOfMemory,
-        else => return AnalysisError.ParseError,
+    analyzer.analyzeSourceCode(file_path, source) catch |err| {
+        analyzer.deinit(); // Clean up on error
+        switch (err) {
+            error.OutOfMemory => return AnalysisError.OutOfMemory,
+            else => return AnalysisError.ParseError,
+        }
     };
     
     const analyzer_issues = analyzer.getIssues();
@@ -147,6 +150,9 @@ pub fn analyzeMemory(
         };
         issues_populated += 1;
     }
+    
+    // NOW we can safely clean up the analyzer after copying all strings
+    analyzer.deinit();
     
     const end_time = std.time.milliTimestamp();
     
@@ -186,11 +192,14 @@ pub fn analyzeTests(
         TestingAnalyzer.initWithFullConfig(allocator, cfg)
     else
         TestingAnalyzer.init(allocator);
-    defer analyzer.deinit();
+    // Remove defer here - will call deinit manually after copying strings
     
-    analyzer.analyzeSourceCode(file_path, source) catch |err| switch (err) {
-        error.OutOfMemory => return AnalysisError.OutOfMemory,
-        else => return AnalysisError.ParseError,
+    analyzer.analyzeSourceCode(file_path, source) catch |err| {
+        analyzer.deinit(); // Clean up on error
+        switch (err) {
+            error.OutOfMemory => return AnalysisError.OutOfMemory,
+            else => return AnalysisError.ParseError,
+        }
     };
     
     const analyzer_issues = analyzer.getIssues();
@@ -219,6 +228,9 @@ pub fn analyzeTests(
         };
         issues_populated += 1;
     }
+    
+    // NOW we can safely clean up the analyzer after copying all strings
+    analyzer.deinit();
     
     const end_time = std.time.milliTimestamp();
     

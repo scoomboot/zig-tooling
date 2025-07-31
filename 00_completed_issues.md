@@ -2,6 +2,35 @@
 
 *Finished issues for reference*
 
+- [x] #LC103: Memory leaks in analyzeMemory() and analyzeTests() wrapper functions
+  - **Component**: src/zig_tooling.zig
+  - **Priority**: High
+  - **Created**: 2025-07-31
+  - **Started**: 2025-07-31
+  - **Completed**: 2025-07-31
+  - **Dependencies**: None
+  - **Details**: Memory leaks in analyzeMemory() and analyzeTests() wrapper functions - they duplicate strings from analyzer issues but never free the original analyzer issues
+  - **Resolution**:
+    - Fixed memory leaks in both analyzeMemory() and analyzeTests() wrapper functions in src/zig_tooling.zig
+    - Root cause was a use-after-free bug where functions accessed analyzer-owned memory after calling analyzer.deinit() via defer
+    - Fixed by removing defer statements and calling analyzer.deinit() manually after copying all strings
+    - Added comprehensive memory leak tests in tests/test_memory_leaks.zig with 15 test cases
+    - All tests pass successfully, confirming the fix works correctly
+    - The fix ensures proper memory cleanup in both success and error paths
+  - **Implementation Details**:
+    - Memory leaks were detected at src/zig_tooling.zig:211, 216, and 217
+    - Functions were duplicating issue strings but never freeing the original analyzer issues
+    - Original defer analyzer.deinit() was called too early, before string duplication completed
+    - Fixed by moving deinit() calls after all string copying is complete
+    - Added test coverage for both wrapper functions with GeneralPurposeAllocator to detect leaks
+    - Affects all users of analyzeSource() API - critical for production usage
+  - **Test Coverage**:
+    - Created tests/test_memory_leaks.zig with 15 comprehensive test cases
+    - Tests cover both analyzeMemory() and analyzeTests() functions
+    - Validates proper cleanup in success paths, error paths, and edge cases
+    - Uses GeneralPurposeAllocator to detect any remaining memory leaks
+    - All tests pass with zero memory leaks detected
+
 - [x] #LC102: Fix memory leak in ScopeTracker.openScope
   - **Component**: src/scope_tracker.zig
   - **Priority**: Medium
