@@ -1,6 +1,6 @@
 # Issue Index
 
-> **Quick navigation for [ISSUES.md](ISSUES.md) - 128 tracked issues across zig-tooling library conversion**
+> **Quick navigation for [ISSUES.md](ISSUES.md) - 132 tracked issues across zig-tooling library conversion**
 
 ## Active Issues
 
@@ -19,8 +19,9 @@
 - 🟢 [#LC042](ISSUES.md#L674): Complete pre-commit hook implementations
 
 ### Testing Infrastructure
-- 🟡 [#LC101](ISSUES.md#L1035): Audit documentation for Zig 0.14.1 command syntax changes
-- 🟡 [#LC080](ISSUES.md#L533): Integration tests should respect resource constraint environment variables → [#LC060](00_completed_issues.md#L787)
+- 🟡 [#LC105](ISSUES.md#L45): Need comprehensive memory leak test suite for all public APIs
+- 🟡 [#LC101](ISSUES.md#L1131): Audit documentation for Zig 0.14.1 command syntax changes
+- 🟡 [#LC080](ISSUES.md#L629): Integration tests should respect resource constraint environment variables → [#LC060](00_completed_issues.md#L787)
 - 🟢 [#LC098](ISSUES.md#L1040): Add dedicated test file for memory analyzer
 - 🟢 [#LC048](ISSUES.md#L348): Enhance error boundary testing framework
 - 🟢 [#LC046](ISSUES.md#L428): Add systematic Zig version compatibility testing
@@ -30,10 +31,12 @@
 - 🟢 [#LC083](ISSUES.md#L917): Add test fixture exclusion patterns for sample projects
 
 ### Memory & Performance
-- 🔴 [#LC081](ISSUES.md#L489): Fix false positives in quality analyzer allocator detection
-- 🔴 [#LC087](ISSUES.md#L143): Implement ownership transfer detection for return values → [#LC081](ISSUES.md#L489)
-- 🔴 [#LC088](ISSUES.md#L161): Add data flow analysis for structured returns → [#LC081](ISSUES.md#L489)
-- 🟡 [#LC102](ISSUES.md#L1032): Fix memory leak in ScopeTracker.openScope
+- 🔴 [#LC103](ISSUES.md#L9): Memory leaks in analyzeMemory() and analyzeTests() wrapper functions
+- 🔴 [#LC104](ISSUES.md#L27): Memory corruption or double-free in ScopeTracker.deinit() → [#LC102](00_completed_issues.md#L5)
+- 🔴 [#LC106](ISSUES.md#L63): Memory leaks detected in patterns.checkProject function
+- 🔴 [#LC081](ISSUES.md#L585): Fix false positives in quality analyzer allocator detection
+- 🔴 [#LC087](ISSUES.md#L239): Implement ownership transfer detection for return values → [#LC081](ISSUES.md#L585)
+- 🔴 [#LC088](ISSUES.md#L257): Add data flow analysis for structured returns → [#LC081](ISSUES.md#L585)
 - 🟡 [#LC089](ISSUES.md#L179): Create allowed allocator pattern database → [#LC081](ISSUES.md#L489)
 - 🟡 [#LC090](ISSUES.md#L197): Implement scope-aware defer analysis → [#LC081](ISSUES.md#L489)
 - 🟡 [#LC091](ISSUES.md#L215): Add allocation intent inference → [#LC081](ISSUES.md#L489)
@@ -73,10 +76,11 @@
 - 🟢 [#LC085](ISSUES.md#L954): Make example placeholder patterns configurable → [#LC059](00_completed_issues.md#L34)
 
 ### ✅ [Completed Issues](00_completed_issues.md) *(Summary)*
-*73 issues completed including all core library conversion phases*
+*75 issues completed including all core library conversion phases*
 
 **Recently Completed (2025-07-31):**
-- [#LC100](00_completed_issues.md#L5): Fix multiple test failures in patterns.zig and api.zig test suites ✅
+- [#LC102](00_completed_issues.md#L5): Fix memory leak in ScopeTracker.openScope ✅ (Investigated but not resolved)
+- [#LC100](00_completed_issues.md#L30): Fix multiple test failures in patterns.zig and api.zig test suites ✅
 
 **Recently Completed (2025-07-30):**
 - [#LC086](00_completed_issues.md#L30): Create context-aware allocator detection ✅
@@ -106,12 +110,12 @@
 |----------|-------|-------------------|
 | Documentation & API | 5 | 🟡 Medium: 3, 🟢 Low: 2 |
 | Build & CI/CD | 5 | 🟡 Medium: 1, 🟢 Low: 4 |
-| Testing Infrastructure | 9 | 🟡 Medium: 2, 🟢 Low: 7 |
-| Memory & Performance | 18 | 🔴 High: 3, 🟡 Medium: 7, 🟢 Low: 8 |
+| Testing Infrastructure | 10 | 🟡 Medium: 3, 🟢 Low: 7 |
+| Memory & Performance | 20 | 🔴 High: 6, 🟡 Medium: 6, 🟢 Low: 8 |
 | Code Quality & Analysis | 4 | 🟡 Medium: 2, 🟢 Low: 2 |
 | Developer Tools & Utilities | 10 | 🟡 Medium: 2, 🟢 Low: 8 |
 | Compatibility & Integration | 3 | 🟢 Low: 3 |
-| **Total Active** | **54** | **🔴 High: 3, 🟡 Medium: 17, 🟢 Low: 34** |
-| ✅ Completed | 74 | Major conversion done |
+| **Total Active** | **57** | **🔴 High: 6, 🟡 Medium: 17, 🟢 Low: 34** |
+| ✅ Completed | 75 | Major conversion done |
 
 > 💡 **Tip**: Use `Ctrl+F` to search for specific issue numbers (#LCXXX) or components

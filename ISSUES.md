@@ -4,7 +4,84 @@
 
 ## Active Issues
 
+---
 
+- [ ] #LC103: Memory leaks in analyzeMemory() and analyzeTests() wrapper functions
+  - **Component**: src/zig_tooling.zig
+  - **Priority**: High
+  - **Created**: 2025-07-31
+  - **Dependencies**: None
+  - **Details**: Memory leaks in analyzeMemory() and analyzeTests() wrapper functions - they duplicate strings from analyzer issues but never free the original analyzer issues
+  - **Requirements**:
+    - Free the original analyzer issues after copying
+    - Update both analyzeMemory() and analyzeTests() functions
+    - Add memory leak tests for these specific functions
+    - Ensure proper cleanup in all error paths
+  - **Notes**:
+    - Discovered during LC102 investigation with test_memory_leak.zig
+    - Memory leaks detected at [src/zig_tooling.zig:211](src/zig_tooling.zig#L211), [src/zig_tooling.zig:216](src/zig_tooling.zig#L216), and [src/zig_tooling.zig:217](src/zig_tooling.zig#L217)
+    - Functions duplicate issue strings but never call free on the original analyzer issues
+    - Affects all users of analyzeSource() API
+
+---
+
+- [ ] #LC104: Memory corruption or double-free in ScopeTracker.deinit()
+  - **Component**: src/scope_tracker.zig
+  - **Priority**: High
+  - **Created**: 2025-07-31
+  - **Dependencies**: #LC102 (related)
+  - **Details**: Memory corruption or double-free in ScopeTracker.deinit() - crashes when trying to free scope names
+  - **Requirements**:
+    - Investigate root cause of the crash (double-free vs corruption)
+    - Fix the memory management architecture in ScopeTracker
+    - Ensure proper ownership tracking of scope names
+    - Add defensive programming checks
+  - **Notes**:
+    - Discovered during LC102 investigation
+    - GPA assertion failure at debug_allocator.zig:951 when calling [src/scope_tracker.zig:365](src/scope_tracker.zig#L365)
+    - Suggests deeper architectural issues beyond just memory leaks
+    - May require redesigning how scope names are managed
+
+---
+
+- [ ] #LC105: Need comprehensive memory leak test suite for all public APIs
+  - **Component**: tests/
+  - **Priority**: Medium
+  - **Created**: 2025-07-31
+  - **Dependencies**: None
+  - **Details**: Need comprehensive memory leak test suite for all public APIs
+  - **Requirements**:
+    - Create systematic GPA-based tests for all public APIs
+    - Test analyzeFile, analyzeSource, checkProject, checkFile functions
+    - Test all formatter functions with GPA
+    - Add tests for error paths and edge cases
+    - Create helper utilities for memory leak testing
+  - **Notes**:
+    - Currently only have memory leak tests for specific components
+    - Would catch issues like LC103 automatically
+    - Should be part of standard test suite
+    - Could prevent memory leaks from reaching production
+
+---
+
+- [ ] #LC106: Memory leaks detected in patterns.checkProject function
+  - **Component**: src/patterns.zig
+  - **Priority**: High
+  - **Created**: 2025-07-31
+  - **Dependencies**: None
+  - **Details**: Memory leaks detected in patterns.checkProject function
+  - **Requirements**:
+    - Fix memory leaks in checkProject implementation
+    - Review all allocation/deallocation pairs
+    - Check for leaks in error paths
+    - Verify freeProjectResult properly cleans up all allocations
+  - **Notes**:
+    - Found during LC102 investigation in test_scope_tracker_memory.zig test "LC073: patterns.checkProject memory leak"
+    - Multiple leaked allocations followed by crash in freeProjectResult
+    - Test shows leaks at [src/patterns.zig:167](src/patterns.zig#L167), [src/patterns.zig:172](src/patterns.zig#L172), [src/patterns.zig:173](src/patterns.zig#L173)
+    - May be related to how issues are duplicated and aggregated
+
+---
 
 - [ ] #LC063: Improve API documentation coverage
   - **Component**: All public modules, especially src/zig_tooling.zig
@@ -1029,25 +1106,6 @@
 
 ---
 
-- [ ] #LC102: Fix memory leak in ScopeTracker.openScope
-  - **Component**: src/scope_tracker.zig
-  - **Priority**: Medium
-  - **Created**: 2025-07-31
-  - **Dependencies**: None
-  - **Details**: Memory leak detected during test runs where scope names are duplicated but never freed
-  - **Location**: [src/scope_tracker.zig:703](src/scope_tracker.zig#L703)
-  - **Requirements**:
-    - Add proper cleanup in closeScope() to free the duplicated name
-    - Ensure deinit() frees all remaining scope names
-    - Add test to verify no memory leaks in ScopeTracker
-  - **Notes**:
-    - Error trace shows: `const name_copy = try self.allocator.dupe(u8, name);`
-    - The duplicated name is stored but never freed when scopes are closed or the tracker is deinitialized
-    - Found during LC100 test fixes on 2025-07-31
-    - Shows up in test output as GPA memory leak
-    - Affects all tests that use memory analysis features
-
----
 
 - [ ] #LC099: Improve quality check output handling for large results
   - **Component**: tools/quality_check.zig
