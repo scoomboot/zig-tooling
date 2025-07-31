@@ -186,10 +186,12 @@ pub fn checkProject(
     
     const end_time = std.time.milliTimestamp();
     
+    const issues_slice = try all_issues.toOwnedSlice();
+    
     return ProjectAnalysisResult{
-        .issues = try all_issues.toOwnedSlice(),
+        .issues = issues_slice,
         .files_analyzed = @intCast(file_list.items.len - failed_files.items.len),
-        .issues_found = @intCast(all_issues.items.len),
+        .issues_found = @intCast(issues_slice.len),
         .analysis_time_ms = @intCast(end_time - start_time),
         .failed_files = try failed_files.toOwnedSlice(),
         .skipped_files = try skipped_files.toOwnedSlice(),
@@ -370,6 +372,18 @@ fn walkProjectDirectory(
     dir_path: []const u8,
     patterns: PatternConfig,
 ) !void {
+    return walkProjectDirectoryImpl(allocator, file_list, dir_path, dir_path, patterns);
+}
+
+/// Implementation of walkProjectDirectory with separate root path tracking
+fn walkProjectDirectoryImpl(
+    allocator: std.mem.Allocator,
+    file_list: *std.ArrayList([]const u8),
+    dir_path: []const u8,
+    root_path: []const u8,
+    patterns: PatternConfig,
+) !void {
+    
     var dir = std.fs.cwd().openDir(dir_path, .{ .iterate = true }) catch |err| switch (err) {
         error.FileNotFound => return, // Directory doesn't exist, skip
         else => return err,
@@ -378,6 +392,7 @@ fn walkProjectDirectory(
     
     var iterator = dir.iterate();
     while (try iterator.next()) |entry| {
+        
         const full_path = try std.fs.path.join(allocator, &.{ dir_path, entry.name });
         defer allocator.free(full_path);
         
@@ -385,10 +400,19 @@ fn walkProjectDirectory(
             .file => {
                 // Check if it's a .zig file
                 if (std.mem.endsWith(u8, entry.name, ".zig")) {
+                    // Get relative path for pattern matching (relative to root_path)
+                    var relative_path = full_path;
+                    if (std.mem.startsWith(u8, full_path, root_path)) {
+                        relative_path = full_path[root_path.len..];
+                        if (std.mem.startsWith(u8, relative_path, "/")) {
+                            relative_path = relative_path[1..];
+                        }
+                    }
+                    
                     // Check include patterns
-                    var included = false;
+                    var included = patterns.include_patterns.len == 0; // Include all if no patterns specified
                     for (patterns.include_patterns) |include_pattern| {
-                        if (matchesPattern(full_path, include_pattern)) {
+                        if (matchesPattern(relative_path, include_pattern)) {
                             included = true;
                             break;
                         }
@@ -397,7 +421,7 @@ fn walkProjectDirectory(
                     // Check exclude patterns
                     if (included) {
                         for (patterns.exclude_patterns) |exclude_pattern| {
-                            if (matchesPattern(full_path, exclude_pattern)) {
+                            if (matchesPattern(relative_path, exclude_pattern)) {
                                 included = false;
                                 break;
                             }
@@ -419,7 +443,7 @@ fn walkProjectDirectory(
                 }
                 
                 // Recursively walk subdirectory
-                try walkProjectDirectory(allocator, file_list, full_path, patterns);
+                try walkProjectDirectoryImpl(allocator, file_list, full_path, root_path, patterns);
             },
             else => {}, // Skip other types
         }
@@ -431,6 +455,50 @@ fn matchesPattern(path: []const u8, pattern: []const u8) bool {
     // Handle some basic glob patterns
     if (std.mem.eql(u8, pattern, "**/*.zig")) {
         return std.mem.endsWith(u8, path, ".zig");
+    }
+    
+    // Handle patterns like "**/vendor/**" (exclude any path containing vendor/)
+    if (std.mem.startsWith(u8, pattern, "**/") and std.mem.endsWith(u8, pattern, "/**")) {
+        const middle = pattern[3..pattern.len - 3]; // Extract "vendor" from "**/vendor/**"
+        return std.mem.indexOf(u8, path, middle) != null;
+    }
+    
+    // Handle patterns like "src/**/*.zig"
+    if (std.mem.indexOf(u8, pattern, "**/") != null) {
+        const star_pos = std.mem.indexOf(u8, pattern, "**/").?;
+        const prefix = pattern[0..star_pos];
+        const suffix = pattern[star_pos + 3..];
+        
+        // Path must start with prefix
+        if (!std.mem.startsWith(u8, path, prefix)) {
+            return false;
+        }
+        
+        // Handle suffix matching
+        if (std.mem.startsWith(u8, suffix, "*.")) {
+            // Suffix is a wildcard pattern like "*.zig"
+            const extension = suffix[1..]; // Skip the *
+            return std.mem.endsWith(u8, path, extension);
+        } else {
+            // Exact suffix match
+            return std.mem.endsWith(u8, path, suffix);
+        }
+    }
+    
+    // Handle patterns like "src/core/*.zig" 
+    if (std.mem.indexOf(u8, pattern, "/*") != null and !std.mem.endsWith(u8, pattern, "/**")) {
+        const star_pos = std.mem.indexOf(u8, pattern, "/*").?;
+        const prefix = pattern[0..star_pos + 1]; // include the /
+        const suffix = pattern[star_pos + 2..]; // skip /*
+        
+        if (std.mem.startsWith(u8, path, prefix)) {
+            const remaining = path[prefix.len..];
+            // For direct match (no further slashes)
+            if (std.mem.indexOf(u8, remaining, "/") == null) {
+                return std.mem.endsWith(u8, remaining, suffix);
+            }
+        }
+        return false;
     }
     
     if (std.mem.startsWith(u8, pattern, "**/")) {

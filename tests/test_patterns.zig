@@ -138,6 +138,8 @@ test "unit: patterns: checkProject with sample directory" {
     
     // Create a main file
     const main_content =
+        \\const std = @import("std");
+        \\
         \\pub fn main() !void {
         \\    const allocator = std.heap.page_allocator;
         \\    const data = try allocator.alloc(u8, 100);
@@ -152,6 +154,8 @@ test "unit: patterns: checkProject with sample directory" {
     
     // Create a utils file  
     const utils_content =
+        \\const std = @import("std");
+        \\
         \\pub fn helper() void {
         \\    std.debug.print("Helper function\n", .{});
         \\}
@@ -181,10 +185,21 @@ test "unit: patterns: checkProject with sample directory" {
         }
     };
     
+    // Use a config that doesn't enforce test categories for this test
+    const test_config = zig_tooling.Config{
+        .memory = .{},
+        .testing = .{
+            .enforce_categories = false,
+            .enforce_naming = false,
+            .enforce_test_files = false,
+        },
+        .patterns = .{},
+    };
+    
     const result = try patterns.checkProject(
         allocator, 
         dir_path, 
-        null, 
+        test_config, 
         progressCallback.callback
     );
     defer patterns.freeProjectResult(allocator, result);
@@ -193,7 +208,7 @@ test "unit: patterns: checkProject with sample directory" {
     try testing.expectEqual(@as(u32, 2), result.files_analyzed);
     try testing.expect(progressCallback.calls > 0);
     
-    // Files should be clean
+    // Files should be clean (no errors, warnings are OK)
     try testing.expect(!result.hasErrors());
     try testing.expectEqual(@as(u32, 0), result.failed_files.len);
 }

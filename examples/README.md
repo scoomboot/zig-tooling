@@ -30,7 +30,7 @@ Simple, standalone example showing core functionality.
 
 **Run it:**
 ```bash
-zig run examples/basic_usage.zig --mod zig_tooling::zig-out/lib/zig_tooling.zig
+zig run --dep zig_tooling -Mroot=examples/basic_usage.zig -Mzig_tooling=src/zig_tooling.zig
 ```
 
 #### [build_integration.zig](build_integration.zig)
@@ -196,13 +196,13 @@ Most examples can be run directly:
 
 ```bash
 # Run basic example
-zig run examples/basic_usage.zig --mod zig_tooling::src/zig_tooling.zig
+zig run --dep zig_tooling -Mroot=examples/basic_usage.zig -Mzig_tooling=src/zig_tooling.zig
 
 # Run with optimizations
-zig run -O ReleaseFast examples/basic_usage.zig --mod zig_tooling::src/zig_tooling.zig
+zig run -O ReleaseFast --dep zig_tooling -Mroot=examples/basic_usage.zig -Mzig_tooling=src/zig_tooling.zig
 
 # Build and run
-zig build-exe examples/custom_analyzer.zig --mod zig_tooling::src/zig_tooling.zig
+zig build-exe --dep zig_tooling -Mroot=examples/custom_analyzer.zig -Mzig_tooling=src/zig_tooling.zig
 ./custom_analyzer
 ```
 

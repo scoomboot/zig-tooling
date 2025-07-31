@@ -188,8 +188,9 @@ pub fn analyzeTests(
         TestingAnalyzer.init(allocator);
     defer analyzer.deinit();
     
-    analyzer.analyzeSourceCode(file_path, source) catch {
-        return AnalysisError.ParseError;
+    analyzer.analyzeSourceCode(file_path, source) catch |err| switch (err) {
+        error.OutOfMemory => return AnalysisError.OutOfMemory,
+        else => return AnalysisError.ParseError,
     };
     
     const analyzer_issues = analyzer.getIssues();
@@ -253,6 +254,11 @@ pub fn analyzeFile(
     config: ?Config,
 ) AnalysisError!AnalysisResult {
     const start_time = std.time.milliTimestamp();
+    
+    // Validate file path (reject null bytes and invalid paths)
+    if (std.mem.indexOfScalar(u8, path, 0) != null) {
+        return AnalysisError.FileNotFound; // Invalid path with null bytes
+    }
     
     // Read file
     const file = std.fs.cwd().openFile(path, .{}) catch |err| switch (err) {

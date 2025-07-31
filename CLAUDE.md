@@ -18,7 +18,13 @@ zig build test-integration
 zig build test-all
 
 # Run a specific test file
-zig test tests/test_patterns.zig --dep zig_tooling --mod zig_tooling::src/zig_tooling.zig
+# Syntax: zig test --dep zig_tooling -Mroot=<test_file> -Mzig_tooling=src/zig_tooling.zig
+zig test --dep zig_tooling -Mroot=tests/test_patterns.zig -Mzig_tooling=src/zig_tooling.zig
+
+# Examples for other test files:
+# zig test --dep zig_tooling -Mroot=tests/test_api.zig -Mzig_tooling=src/zig_tooling.zig
+# zig test --dep zig_tooling -Mroot=tests/test_scope_integration.zig -Mzig_tooling=src/zig_tooling.zig
+# zig test --dep zig_tooling -Mroot=tests/test_allocator_patterns.zig -Mzig_tooling=src/zig_tooling.zig
 
 # Run code quality checks on current project
 zig build quality

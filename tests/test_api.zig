@@ -1169,9 +1169,12 @@ test "unit: API: edge case - concurrent analysis" {
     const allocator = testing.allocator;
     
     const source =
+        \\const std = @import("std");
+        \\
         \\pub fn simpleFunction() !void {
-        \\    const data = try allocator.alloc(u8, 100);
-        \\    defer allocator.free(data);
+        \\    const alloc = std.heap.page_allocator;
+        \\    const data = try alloc.alloc(u8, 100);
+        \\    defer alloc.free(data);
         \\}
     ;
     
@@ -1183,11 +1186,13 @@ test "unit: API: edge case - concurrent analysis" {
     }
     
     defer for (results) |result| {
-        allocator.free(result.issues);
-        for (result.issues) |issue| {
-            allocator.free(issue.file_path);
-            allocator.free(issue.message);
-            if (issue.suggestion) |s| allocator.free(s);
+        if (result.issues.len > 0) {
+            for (result.issues) |issue| {
+                allocator.free(issue.file_path);
+                allocator.free(issue.message);
+                if (issue.suggestion) |s| allocator.free(s);
+            }
+            allocator.free(result.issues);
         }
     };
     

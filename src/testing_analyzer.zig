@@ -250,8 +250,8 @@ pub const TestingAnalyzer = struct {
         // Second pass: validate test patterns
         try self.validateTestPatterns(file_path, source, temp_allocator);
         
-        // Third pass: check for missing tests (if not a test file)
-        if (!is_test_file) {
+        // Third pass: check for missing tests (if not a test file and enforced)
+        if (!is_test_file and self.config.enforce_test_files) {
             try self.checkForMissingTests(file_path, temp_allocator);
         }
         

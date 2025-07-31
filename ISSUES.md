@@ -1006,6 +1006,49 @@
 
 ---
 
+
+---
+
+- [ ] #LC101: Audit documentation for Zig 0.14.1 command syntax changes
+  - **Component**: CLAUDE.md, examples/README.md, docs/
+  - **Priority**: Medium
+  - **Created**: 2025-07-30
+  - **Dependencies**: None
+  - **Details**: Zig 0.14.1 changed test command syntax requiring --dep and -M flags instead of --mod
+  - **Requirements**:
+    - Audit all documentation files for outdated Zig test command syntax
+    - Update any remaining references to old `--mod zig_tooling::src/zig_tooling.zig` syntax
+    - Ensure all examples use new `--dep zig_tooling -Mroot=<test_file> -Mzig_tooling=src/zig_tooling.zig` syntax
+    - Add version compatibility notes where appropriate
+    - Consider documenting both old and new syntax with version requirements
+  - **Notes**:
+    - Already fixed in CLAUDE.md and examples/README.md during session
+    - Need systematic check to ensure no other documentation has outdated syntax
+    - Important for user onboarding and preventing confusion
+    - Could add to getting-started documentation to prevent future issues
+
+---
+
+- [ ] #LC102: Fix memory leak in ScopeTracker.openScope
+  - **Component**: src/scope_tracker.zig
+  - **Priority**: Medium
+  - **Created**: 2025-07-31
+  - **Dependencies**: None
+  - **Details**: Memory leak detected during test runs where scope names are duplicated but never freed
+  - **Location**: [src/scope_tracker.zig:703](src/scope_tracker.zig#L703)
+  - **Requirements**:
+    - Add proper cleanup in closeScope() to free the duplicated name
+    - Ensure deinit() frees all remaining scope names
+    - Add test to verify no memory leaks in ScopeTracker
+  - **Notes**:
+    - Error trace shows: `const name_copy = try self.allocator.dupe(u8, name);`
+    - The duplicated name is stored but never freed when scopes are closed or the tracker is deinitialized
+    - Found during LC100 test fixes on 2025-07-31
+    - Shows up in test output as GPA memory leak
+    - Affects all tests that use memory analysis features
+
+---
+
 - [ ] #LC099: Improve quality check output handling for large results
   - **Component**: tools/quality_check.zig
   - **Priority**: Low
