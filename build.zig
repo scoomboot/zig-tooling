@@ -76,6 +76,14 @@ pub fn build(b: *std.Build) void {
     });
     test_memory_leaks.root_module.addImport("zig_tooling", zig_tooling_module);
 
+    // LC104 Memory corruption tests
+    const test_lc104_crash = b.addTest(.{
+        .root_source_file = b.path("tests/test_lc104_crash.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    test_lc104_crash.root_module.addImport("zig_tooling", zig_tooling_module);
+
     // Example validation tests
     const test_example_validation = b.addTest(.{
         .root_source_file = b.path("tests/test_example_validation.zig"),
@@ -142,6 +150,7 @@ pub fn build(b: *std.Build) void {
     test_step.dependOn(&test_allocator_patterns.step);
     test_step.dependOn(&test_scope_tracker_memory.step);
     test_step.dependOn(&test_memory_leaks.step);
+    test_step.dependOn(&test_lc104_crash.step);
     test_step.dependOn(&test_example_validation.step);
     test_step.dependOn(&lib_tests.step);
 

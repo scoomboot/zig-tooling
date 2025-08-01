@@ -1,6 +1,6 @@
 # Issue Index
 
-> **Quick navigation for [ISSUES.md](ISSUES.md) - 136 tracked issues across zig-tooling library conversion**
+> **Quick navigation for [ISSUES.md](ISSUES.md) - 140 tracked issues across zig-tooling library conversion**
 
 ## Active Issues
 
@@ -10,6 +10,8 @@
 - 🟢 [#LC075](ISSUES.md#L84): Document dogfooding patterns for library developers
 - 🟡 [#LC084](ISSUES.md#L774): Document test naming convention requirements
 - 🟢 [#LC074](ISSUES.md#L506): Document GitHub codeload URL requirement for build.zig.zon
+- 🟡 [#LC111](ISSUES.md#L240): ScopeTrackerBuilder API documentation inconsistencies
+- 🟢 [#LC114](ISSUES.md#L295): Create comprehensive memory management patterns guide
 
 ### Build & CI/CD
 - 🟡 [#LC038](ISSUES.md#L66): Implement proper glob pattern library for build integration
@@ -29,11 +31,9 @@
 - 🟢 [#LC071](ISSUES.md#L705): Add ownership pattern testing utilities
 - 🟢 [#LC045](ISSUES.md#L799): Add test utilities for temporary directory setup
 - 🟢 [#LC083](ISSUES.md#L917): Add test fixture exclusion patterns for sample projects
+- 🟢 [#LC113](ISSUES.md#L277): Consolidate issue-specific test files into component test files
 
 ### Memory & Performance
-- 🔴 [#LC104](ISSUES.md#L27): Memory corruption or double-free in ScopeTracker.deinit() → [#LC102](00_completed_issues.md#L5)
-- 🔴 [#LC106](ISSUES.md#L63): Memory leaks detected in patterns.checkProject function
-- 🔴 [#LC107](ISSUES.md#L12): Memory leaks in analyzeFile() and analyzeSource() functions
 - 🔴 [#LC081](ISSUES.md#L585): Fix false positives in quality analyzer allocator detection
 - 🔴 [#LC087](ISSUES.md#L239): Implement ownership transfer detection for return values → [#LC081](ISSUES.md#L585)
 - 🔴 [#LC088](ISSUES.md#L257): Add data flow analysis for structured returns → [#LC081](ISSUES.md#L585)
@@ -59,9 +59,9 @@
 - 🟢 [#LC110](ISSUES.md#L238): Improve error handling specificity in wrapper functions
 - 🟢 [#LC077](ISSUES.md#L103): Systematically address self-analysis quality findings → [#LC075](ISSUES.md#L84)
 - 🟢 [#LC055](ISSUES.md#L589): Add additional issue types for custom analyzers
+- 🟢 [#LC112](ISSUES.md#L259): Add static analysis for invalid null pointer comparisons on slices
 
 ### Developer Tools & Utilities
-- 🟡 [#LC108](ISSUES.md#L43): Add public freeAnalysisResult() helper function
 - 🟡 [#LC039](ISSUES.md#L28): Complete output formatter implementations → [#LC015](00_completed_issues.md#L227)
 - 🟡 [#LC043](ISSUES.md#L46): Add parallel file analysis support → [#LC015](00_completed_issues.md#L227)
 - 🟢 [#LC099](ISSUES.md#L1072): Improve quality check output handling for large results
@@ -79,13 +79,18 @@
 - 🟢 [#LC085](ISSUES.md#L954): Make example placeholder patterns configurable → [#LC059](00_completed_issues.md#L34)
 
 ### ✅ [Completed Issues](00_completed_issues.md) *(Summary)*
-*75 issues completed including all core library conversion phases*
+*76 issues completed including all core library conversion phases*
+
+**Recently Completed (2025-08-01):**
+- [#LC108](00_completed_issues.md#L5): Add public freeAnalysisResult() helper function ✅
+- [#LC107](00_completed_issues.md#L26): Memory leaks in analyzeFile() and analyzeSource() functions ✅
+- [#LC106](00_completed_issues.md#L53): Memory leaks detected in patterns.checkProject function ✅
+- [#LC104](00_completed_issues.md#L79): Memory corruption or double-free in ScopeTracker.deinit() ✅
 
 **Recently Completed (2025-07-31):**
-- [#LC103](00_completed_issues.md#L6): Memory leaks in analyzeMemory() and analyzeTests() wrapper functions ✅
-- [#LC103](00_completed_issues.md#L6): Memory leaks in analyzeMemory() and analyzeTests() wrapper functions ✅
-- [#LC102](00_completed_issues.md#L29): Fix memory leak in ScopeTracker.openScope ✅ (Investigated but not resolved)
-- [#LC100](00_completed_issues.md#L54): Fix multiple test failures in patterns.zig and api.zig test suites ✅
+- [#LC103](00_completed_issues.md#L33): Memory leaks in analyzeMemory() and analyzeTests() wrapper functions ✅
+- [#LC102](00_completed_issues.md#L59): Fix memory leak in ScopeTracker.openScope ✅ (Investigated but not resolved)
+- [#LC100](00_completed_issues.md#L84): Fix multiple test failures in patterns.zig and api.zig test suites ✅
 
 **Recently Completed (2025-07-30):**
 - [#LC086](00_completed_issues.md#L30): Create context-aware allocator detection ✅
@@ -113,14 +118,14 @@
 
 | Category | Count | Priority Breakdown |
 |----------|-------|-------------------|
-| Documentation & API | 5 | 🟡 Medium: 3, 🟢 Low: 2 |
+| Documentation & API | 7 | 🟡 Medium: 4, 🟢 Low: 3 |
 | Build & CI/CD | 5 | 🟡 Medium: 1, 🟢 Low: 4 |
-| Testing Infrastructure | 10 | 🟡 Medium: 3, 🟢 Low: 7 |
-| Memory & Performance | 20 | 🔴 High: 6, 🟡 Medium: 6, 🟢 Low: 8 |
-| Code Quality & Analysis | 6 | 🟡 Medium: 2, 🟢 Low: 4 |
-| Developer Tools & Utilities | 11 | 🟡 Medium: 3, 🟢 Low: 8 |
+| Testing Infrastructure | 11 | 🟡 Medium: 3, 🟢 Low: 8 |
+| Memory & Performance | 16 | 🔴 High: 2, 🟡 Medium: 6, 🟢 Low: 8 |
+| Code Quality & Analysis | 7 | 🟡 Medium: 2, 🟢 Low: 5 |
+| Developer Tools & Utilities | 10 | 🟡 Medium: 2, 🟢 Low: 8 |
 | Compatibility & Integration | 3 | 🟢 Low: 3 |
-| **Total Active** | **60** | **🔴 High: 6, 🟡 Medium: 18, 🟢 Low: 36** |
-| ✅ Completed | 76 | Major conversion done |
+| **Total Active** | **60** | **🔴 High: 2, 🟡 Medium: 18, 🟢 Low: 39** |
+| ✅ Completed | 79 | Major conversion done |
 
 > 💡 **Tip**: Use `Ctrl+F` to search for specific issue numbers (#LCXXX) or components

@@ -8,25 +8,6 @@
 
 ---
 
-- [ ] #LC104: Memory corruption or double-free in ScopeTracker.deinit()
-  - **Component**: src/scope_tracker.zig
-  - **Priority**: High
-  - **Created**: 2025-07-31
-  - **Dependencies**: #LC102 (related)
-  - **Details**: Memory corruption or double-free in ScopeTracker.deinit() - crashes when trying to free scope names
-  - **Requirements**:
-    - Investigate root cause of the crash (double-free vs corruption)
-    - Fix the memory management architecture in ScopeTracker
-    - Ensure proper ownership tracking of scope names
-    - Add defensive programming checks
-  - **Notes**:
-    - Discovered during LC102 investigation
-    - GPA assertion failure at debug_allocator.zig:951 when calling [src/scope_tracker.zig:365](src/scope_tracker.zig#L365)
-    - Suggests deeper architectural issues beyond just memory leaks
-    - May require redesigning how scope names are managed
-
----
-
 - [ ] #LC105: Need comprehensive memory leak test suite for all public APIs
   - **Component**: tests/
   - **Priority**: Medium
@@ -47,64 +28,6 @@
 
 ---
 
-- [ ] #LC106: Memory leaks detected in patterns.checkProject function
-  - **Component**: src/patterns.zig
-  - **Priority**: High
-  - **Created**: 2025-07-31
-  - **Dependencies**: None
-  - **Details**: Memory leaks detected in patterns.checkProject function
-  - **Requirements**:
-    - Fix memory leaks in checkProject implementation
-    - Review all allocation/deallocation pairs
-    - Check for leaks in error paths
-    - Verify freeProjectResult properly cleans up all allocations
-  - **Notes**:
-    - Found during LC102 investigation in test_scope_tracker_memory.zig test "LC073: patterns.checkProject memory leak"
-    - Multiple leaked allocations followed by crash in freeProjectResult
-    - Test shows leaks at [src/patterns.zig:167](src/patterns.zig#L167), [src/patterns.zig:172](src/patterns.zig#L172), [src/patterns.zig:173](src/patterns.zig#L173)
-    - May be related to how issues are duplicated and aggregated
-
----
-
-- [ ] #LC107: Memory leaks in analyzeFile() and analyzeSource() functions
-  - **Component**: src/zig_tooling.zig
-  - **Priority**: High
-  - **Created**: 2025-07-31
-  - **Dependencies**: None (but related to #LC103)
-  - **Details**: Memory leaks in analyzeFile() and analyzeSource() wrapper functions - they free the issue arrays but not the string fields inside each issue
-  - **Requirements**:
-    - Fix analyzeFile() to properly free strings in memory_result.issues before freeing the array
-    - Fix analyzeFile() to properly free strings in testing_result.issues before freeing the array
-    - Fix analyzeSource() with the same pattern
-    - Add memory leak tests for these functions
-    - Consider using the freeResult helper from patterns.zig
-  - **Notes**:
-    - Found during LC103 fix session when reviewing similar code patterns
-    - Lines 291 and 294 in analyzeFile() only do `allocator.free(memory_result.issues)` without freeing the strings
-    - Lines 334 and 337 in analyzeSource() have the same issue
-    - The strings (file_path, message, suggestion) were duplicated in analyzeMemory/analyzeTests and need to be freed
-
----
-
-- [ ] #LC108: Add public freeAnalysisResult() helper function
-  - **Component**: src/zig_tooling.zig, src/utils.zig
-  - **Priority**: Medium
-  - **Created**: 2025-07-31
-  - **Dependencies**: None
-  - **Details**: Library lacks a public helper function to properly free AnalysisResult structures
-  - **Requirements**:
-    - Create public freeAnalysisResult() function that frees all issue strings and the issues array
-    - Add to main zig_tooling.zig exports or utils.zig
-    - Document memory ownership clearly
-    - Update examples to use this helper
-    - Consider also adding freeIssue() for single issues
-  - **Notes**:
-    - Currently users must manually iterate and free each field
-    - test_memory_leaks.zig has a private version at line 144 that could be adapted
-    - patterns.zig has freeResult() at line 263 that could be moved to main library
-    - Would prevent memory leaks and improve API usability
-
----
 
 - [ ] #LC063: Improve API documentation coverage
   - **Component**: All public modules, especially src/zig_tooling.zig
@@ -255,6 +178,78 @@
     - analyzeFile converts many file errors to generic FileReadError
     - Makes debugging harder when specific error information is lost
     - Consider pattern like `error.InvalidSyntax => return AnalysisError.InvalidSyntax`
+
+- [ ] #LC111: ScopeTrackerBuilder API documentation inconsistencies
+  - **Component**: src/scope_tracker.zig, docs/
+  - **Priority**: Medium
+  - **Created**: 2025-08-01
+  - **Dependencies**: None
+  - **Details**: Builder API method names and config field names are inconsistent or undocumented
+  - **Requirements**:
+    - Document that `withOwnershipTracking` doesn't exist, use `withVariableTracking` instead
+    - Document correct field names: `track_defer_statements` not `track_defer_usage`
+    - Document correct field names: `max_scope_depth` not `max_depth`
+    - Add comprehensive builder pattern examples to documentation
+    - Consider adding missing builder methods if they make sense
+  - **Notes**:
+    - Found during LC104 when test_lc104_crash.zig had compilation errors
+    - Builder pattern should have clear, consistent API
+    - See test fixes at [tests/test_lc104_crash.zig:386-412]
+
+---
+
+- [ ] #LC112: Add static analysis for invalid null pointer comparisons on slices
+  - **Component**: Static analysis tooling
+  - **Priority**: Low
+  - **Created**: 2025-08-01
+  - **Dependencies**: None
+  - **Details**: Detect invalid `slice.ptr == null` comparisons which are not valid in Zig
+  - **Requirements**:
+    - Add pattern detection for `*.ptr == null` on slice types
+    - Suggest using `.len == 0` for empty slice checks instead
+    - Include in static analysis suite from LC049
+    - Add test cases to verify detection works
+  - **Notes**:
+    - Found during LC104 when defensive checks had `scope.name.ptr == null`
+    - This is a common mistake for developers coming from C
+    - Pattern example: `if (slice.ptr == null)` should be `if (slice.len == 0)`
+
+---
+
+- [ ] #LC113: Consolidate issue-specific test files into component test files
+  - **Component**: tests/
+  - **Priority**: Low
+  - **Created**: 2025-08-01
+  - **Dependencies**: None
+  - **Details**: Many issue-specific test files (test_lc104_crash.zig, test_scope_tracker_lc102.zig, etc.) should be consolidated
+  - **Requirements**:
+    - Create component-specific test files (test_scope_tracker.zig, test_memory_analyzer.zig, etc.)
+    - Move issue-specific tests into appropriate component test files
+    - Keep tests organized by feature/component rather than by issue number
+    - Update build.zig to use consolidated test files
+  - **Notes**:
+    - Currently have test_lc104_crash.zig, test_scope_tracker_lc102.zig, test_scope_tracker_memory.zig
+    - Better organization would be a single test_scope_tracker.zig with all ScopeTracker tests
+    - Makes test maintenance easier and reduces build configuration complexity
+
+---
+
+- [ ] #LC114: Create comprehensive memory management patterns guide
+  - **Component**: docs/
+  - **Priority**: Low
+  - **Created**: 2025-08-01
+  - **Dependencies**: None
+  - **Details**: Document memory management patterns used throughout the library
+  - **Requirements**:
+    - Create docs/memory-management-guide.md
+    - Document ownership patterns (who allocates, who frees)
+    - Document use of errdefer for error safety
+    - Document patterns for avoiding double-frees and use-after-free
+    - Include examples from ScopeTracker, MemoryAnalyzer, etc.
+  - **Notes**:
+    - LC104 added memory ownership documentation to scope-tracking-guide.md
+    - This pattern should be documented library-wide
+    - Would help contributors maintain consistent memory safety
 
 ---
 

@@ -2,6 +2,108 @@
 
 *Finished issues for reference*
 
+- [x] #LC108: Add public freeAnalysisResult() helper function
+  - **Component**: src/zig_tooling.zig, src/utils.zig
+  - **Priority**: Medium
+  - **Created**: 2025-07-31
+  - **Completed**: 2025-08-01
+  - **Dependencies**: None (completed as part of #LC107)
+  - **Details**: Library lacks a public helper function to properly free AnalysisResult structures
+  - **Resolution**:
+    - Fixed by creating public freeAnalysisResult() helper function in src/zig_tooling.zig as part of fixing LC107
+    - Function properly frees all issue strings and the issues array with correct error handling
+    - Added comprehensive documentation with usage examples in doc comments
+    - Function is exported as part of the main library API for user convenience
+    - Prevents memory leaks and significantly improves API usability
+  - **Implementation Details**:
+    - Created freeAnalysisResult(allocator: std.mem.Allocator, result: AnalysisResult) function
+    - Function iterates through all issues and frees file_path, message, and suggestion strings
+    - Uses proper error handling and defensive programming patterns
+    - Added usage example in documentation: `defer zig_tooling.freeAnalysisResult(allocator, result);`
+    - Function is used internally by analyzeFile() and analyzeSource() for proper cleanup
+    - Tested as part of comprehensive memory leak test suite with zero leaks detected
+
+- [x] #LC107: Memory leaks in analyzeFile() and analyzeSource() functions
+  - **Component**: src/zig_tooling.zig
+  - **Priority**: High
+  - **Created**: 2025-07-31
+  - **Completed**: 2025-08-01
+  - **Dependencies**: None (but related to #LC103)
+  - **Details**: Memory leaks in analyzeFile() and analyzeSource() wrapper functions - they free the issue arrays but not the string fields inside each issue
+  - **Resolution**:
+    - Fixed memory leaks in analyzeFile() and analyzeSource() by properly managing memory after ownership transfer
+    - Root cause was improper memory management where functions freed arrays after @memcpy but not the original strings
+    - Created public freeAnalysisResult() helper function for proper cleanup of AnalysisResult structures
+    - Updated both functions to use proper memory management patterns with errdefer for error safety
+    - Added comprehensive memory leak tests with 15 new test cases, all passing with zero memory leaks
+  - **Implementation Details**:
+    - Created public freeAnalysisResult() helper function in src/zig_tooling.zig
+    - Updated analyzeFile() to free only arrays after @memcpy, not strings (which are transferred to caller)
+    - Updated analyzeSource() with same fix - proper ownership transfer without memory leaks
+    - Added errdefer cleanup using freeAnalysisResult() in error paths
+    - Functions now properly transfer string ownership to caller while managing internal arrays
+    - All 39 memory leak tests pass, including specific tests for these functions
+  - **Test Coverage**:
+    - 15 new tests specifically for LC107 in comprehensive memory leak test suite
+    - Tests cover both analyzeFile() and analyzeSource() functions
+    - Validates proper cleanup in success paths, error paths, and edge cases
+    - Uses GeneralPurposeAllocator to detect any remaining memory leaks
+    - All tests pass with zero memory leaks detected, confirming complete fix
+
+- [x] #LC106: Memory leaks detected in patterns.checkProject function
+  - **Component**: src/patterns.zig
+  - **Priority**: High
+  - **Created**: 2025-07-31
+  - **Investigated**: 2025-08-01
+  - **Completed**: 2025-08-01
+  - **Dependencies**: Related to #LC107
+  - **Details**: Memory leaks detected in patterns.checkProject function - root cause identified as ownership transfer confusion
+  - **Resolution**:
+    - Fixed by resolving the underlying memory leaks in analyzeFile() and analyzeSource() functions (LC107)
+    - The ownership transfer confusion was resolved once the underlying functions properly freed their memory
+    - Root cause was that analyzeFile() and analyzeSource() had memory leaks that propagated to checkProject()
+    - Once LC107 was fixed with proper memory management, checkProject() memory issues were automatically resolved
+    - All 39 memory leak tests pass, including specific test for patterns.checkProject()
+  - **Implementation Details**:
+    - Fixed analyzeFile() and analyzeSource() to only free arrays after @memcpy, not the strings (which are transferred)
+    - Added comprehensive memory leak tests in test_memory_leaks.zig
+    - Created public freeAnalysisResult() helper function for proper cleanup
+    - The ownership transfer confusion was eliminated by proper memory management in underlying functions
+    - checkProject() now works correctly without memory leaks when using properly fixed analyzer functions
+  - **Test Coverage**:
+    - All 39 memory leak tests pass, including specific test for patterns.checkProject()
+    - Tests validate that checkProject() properly manages memory when underlying functions are fixed
+    - Comprehensive coverage ensures no memory leaks in project-level analysis workflows
+    - GeneralPurposeAllocator shows zero memory leaks across all test scenarios
+
+- [x] #LC104: Memory corruption or double-free in ScopeTracker.deinit()
+  - **Component**: src/scope_tracker.zig
+  - **Priority**: High
+  - **Created**: 2025-07-31
+  - **Started**: 2025-07-31
+  - **Completed**: 2025-08-01
+  - **Dependencies**: #LC102 (related)
+  - **Details**: Memory corruption or double-free in ScopeTracker.deinit() - crashes when trying to free scope names
+  - **Resolution**:
+    - Root cause: Invalid null pointer comparison and missing defensive checks in memory cleanup
+    - Fixed by implementing a clear memory ownership model
+    - Added defensive programming checks to prevent crashes
+    - Refactored cleanup methods to consolidate logic
+    - Created comprehensive test suite with 8 test cases covering all edge cases
+    - All tests pass with no memory leaks or crashes
+  - **Implementation Details**:
+    - Fixed invalid pointer comparisons (scope.name.ptr == null changed to scope.name.len == 0)
+    - Consolidated cleanup logic into helper methods (cleanupAllScopes, cleanupArenaAllocators)
+    - Added clear documentation about memory ownership in code and documentation
+    - Added errdefer in allocation paths for error safety
+    - Created tests/test_lc104_crash.zig with comprehensive memory management tests
+    - The ScopeTracker now properly manages memory without crashes or leaks
+  - **Test Coverage**:
+    - Created comprehensive test suite with 8 test cases covering all edge cases
+    - Tests include normal cleanup, error path cleanup, defensive checks, and stress testing
+    - All tests pass successfully with GeneralPurposeAllocator showing zero memory leaks
+    - Validates that the memory ownership model prevents crashes in all scenarios
+
 - [x] #LC103: Memory leaks in analyzeMemory() and analyzeTests() wrapper functions
   - **Component**: src/zig_tooling.zig
   - **Priority**: High

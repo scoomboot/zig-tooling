@@ -138,13 +138,33 @@ pub fn checkProject(
     
     // Track results and failures
     var all_issues = std.ArrayList(Issue).init(allocator);
-    defer all_issues.deinit();
+    errdefer {
+        // Clean up all duplicated strings in case of error
+        for (all_issues.items) |issue| {
+            allocator.free(issue.file_path);
+            allocator.free(issue.message);
+            if (issue.suggestion) |s| allocator.free(s);
+        }
+        all_issues.deinit();
+    }
     
     var failed_files = std.ArrayList([]const u8).init(allocator);
-    defer failed_files.deinit();
+    errdefer {
+        // Clean up all duplicated file paths in case of error
+        for (failed_files.items) |file_path| {
+            allocator.free(file_path);
+        }
+        failed_files.deinit();
+    }
     
     var skipped_files = std.ArrayList([]const u8).init(allocator);
-    defer skipped_files.deinit();
+    errdefer {
+        // Clean up all duplicated file paths in case of error
+        for (skipped_files.items) |file_path| {
+            allocator.free(file_path);
+        }
+        skipped_files.deinit();
+    }
     
     // Analyze each file
     for (file_list.items, 0..) |file_path, i| {
@@ -161,40 +181,31 @@ pub fn checkProject(
             else => return err,
         };
         
-        // Add all issues to our collection
+        // Transfer ownership of issues from file_result to all_issues
+        // The issues already own their strings, so we just move them
         for (file_result.issues) |issue| {
-            try all_issues.append(Issue{
-                .file_path = try allocator.dupe(u8, issue.file_path),
-                .line = issue.line,
-                .column = issue.column,
-                .issue_type = issue.issue_type,
-                .severity = issue.severity,
-                .message = try allocator.dupe(u8, issue.message),
-                .suggestion = if (issue.suggestion) |s| try allocator.dupe(u8, s) else null,
-                .code_snippet = issue.code_snippet,
-            });
+            try all_issues.append(issue);
         }
         
-        // Clean up file result
-        for (file_result.issues) |issue| {
-            allocator.free(issue.file_path);
-            allocator.free(issue.message);
-            if (issue.suggestion) |s| allocator.free(s);
-        }
+        // Only free the array, not the strings (which have been transferred to all_issues)
         allocator.free(file_result.issues);
     }
     
     const end_time = std.time.milliTimestamp();
     
+    // Transfer ownership of the arrays to the result
+    // After toOwnedSlice(), the ArrayLists no longer own the memory
     const issues_slice = try all_issues.toOwnedSlice();
+    const failed_files_slice = try failed_files.toOwnedSlice();
+    const skipped_files_slice = try skipped_files.toOwnedSlice();
     
     return ProjectAnalysisResult{
         .issues = issues_slice,
-        .files_analyzed = @intCast(file_list.items.len - failed_files.items.len),
+        .files_analyzed = @intCast(file_list.items.len - failed_files_slice.len),
         .issues_found = @intCast(issues_slice.len),
         .analysis_time_ms = @intCast(end_time - start_time),
-        .failed_files = try failed_files.toOwnedSlice(),
-        .skipped_files = try skipped_files.toOwnedSlice(),
+        .failed_files = failed_files_slice,
+        .skipped_files = skipped_files_slice,
     };
 }
 

@@ -288,17 +288,23 @@ pub fn analyzeFile(
     
     // Run both analyzers
     const memory_result = try analyzeMemory(allocator, source, path, config);
-    defer allocator.free(memory_result.issues);
+    errdefer freeAnalysisResult(allocator, memory_result);
     
     const testing_result = try analyzeTests(allocator, source, path, config);
-    defer allocator.free(testing_result.issues);
+    errdefer freeAnalysisResult(allocator, testing_result);
     
     // Combine results
     const total_issues = memory_result.issues.len + testing_result.issues.len;
     const combined_issues = try allocator.alloc(Issue, total_issues);
+    errdefer allocator.free(combined_issues);
     
+    // Transfer ownership of the issues - strings are already allocated by analyzeMemory/analyzeTests
     @memcpy(combined_issues[0..memory_result.issues.len], memory_result.issues);
     @memcpy(combined_issues[memory_result.issues.len..], testing_result.issues);
+    
+    // Free only the arrays, not the strings (ownership has been transferred to combined_issues)
+    allocator.free(memory_result.issues);
+    allocator.free(testing_result.issues);
     
     const end_time = std.time.milliTimestamp();
     
@@ -331,17 +337,22 @@ pub fn analyzeSource(
     
     // Run both analyzers
     const memory_result = try analyzeMemory(allocator, source, file_path, config);
-    defer allocator.free(memory_result.issues);
+    errdefer freeAnalysisResult(allocator, memory_result);
     
     const testing_result = try analyzeTests(allocator, source, file_path, config);
-    defer allocator.free(testing_result.issues);
+    errdefer freeAnalysisResult(allocator, testing_result);
     
     // Combine results
     const total_issues = memory_result.issues.len + testing_result.issues.len;
     const combined_issues = try allocator.alloc(Issue, total_issues);
+    errdefer allocator.free(combined_issues);
     
     @memcpy(combined_issues[0..memory_result.issues.len], memory_result.issues);
     @memcpy(combined_issues[memory_result.issues.len..], testing_result.issues);
+    
+    // Free only the arrays, not the strings (ownership has been transferred to combined_issues)
+    allocator.free(memory_result.issues);
+    allocator.free(testing_result.issues);
     
     return AnalysisResult{
         .issues = combined_issues,
@@ -349,6 +360,29 @@ pub fn analyzeSource(
         .issues_found = @intCast(total_issues),
         .analysis_time_ms = memory_result.analysis_time_ms + testing_result.analysis_time_ms,
     };
+}
+
+/// Frees all memory associated with an AnalysisResult
+///
+/// This function properly cleans up all allocated memory in an AnalysisResult,
+/// including the strings within each issue (file_path, message, suggestion).
+///
+/// ## Parameters
+/// - `allocator`: The allocator that was used to create the result
+/// - `result`: The AnalysisResult to free
+///
+/// ## Example
+/// ```zig
+/// const result = try zig_tooling.analyzeFile(allocator, "src/main.zig", null);
+/// defer zig_tooling.freeAnalysisResult(allocator, result);
+/// ```
+pub fn freeAnalysisResult(allocator: std.mem.Allocator, result: AnalysisResult) void {
+    for (result.issues) |issue| {
+        allocator.free(issue.file_path);
+        allocator.free(issue.message);
+        if (issue.suggestion) |s| allocator.free(s);
+    }
+    allocator.free(result.issues);
 }
 
 // Conversion functions removed - analyzers now use unified types directly from types.zig

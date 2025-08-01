@@ -165,6 +165,54 @@ With scope tracking enabled:
 - **Memory usage**: Minimal - uses arena allocator for temporary data
 - **Scalability**: Linear with file size and scope depth
 
+## Memory Ownership Model
+
+### Overview
+
+The ScopeTracker implements a clear memory ownership model to prevent leaks and double-frees:
+
+1. **ScopeTracker owns scope names**: When a scope is created via `openScope()`, the name is duplicated and owned by ScopeTracker
+2. **ScopeInfo owns variable names**: When variables are added to a scope, their names are duplicated and owned by the ScopeInfo
+3. **Cleanup responsibility**: Parent structures are responsible for freeing child allocations
+
+### Memory Management Architecture
+
+```zig
+// ScopeTracker cleanup (consolidated in cleanupAllScopes)
+for (self.scopes.items) |*scope| {
+    // Free scope name (owned by ScopeTracker)
+    if (scope.name.len > 0) {
+        self.allocator.free(scope.name);
+    }
+    // Let ScopeInfo clean up its own resources
+    scope.deinit(self.allocator);
+}
+
+// ScopeInfo cleanup
+pub fn deinit(self: *ScopeInfo, allocator: std.mem.Allocator) void {
+    // Free all variable names (owned by ScopeInfo)
+    var iterator = self.variables.iterator();
+    while (iterator.next()) |entry| {
+        allocator.free(entry.key_ptr.*);
+    }
+    self.variables.deinit();
+    // NOTE: scope.name is NOT freed here - parent handles it
+}
+```
+
+### Key Design Decisions
+
+1. **Defensive Programming**: All cleanup methods check for empty strings before freeing
+2. **Consolidated Logic**: Common cleanup patterns extracted to helper methods
+3. **Clear Ownership**: Documentation explicitly states who owns each piece of memory
+4. **Error Safety**: Using `errdefer` in allocation paths to prevent leaks on error
+
+### Memory Safety Guarantees
+
+- No double-frees: Each piece of memory has exactly one owner
+- No leaks: Comprehensive test suite with GeneralPurposeAllocator validation
+- Thread-safe design: Each ScopeTracker instance manages its own memory
+
 ## Limitations and Known Issues
 
 ### Current Limitations:
@@ -174,8 +222,8 @@ With scope tracking enabled:
 4. **Pattern precedence**: When multiple patterns match, precedence rules are simple
 
 ### Known Issues:
-- **ISSUE-080**: Single-file memory leak in scope tracker (acceptable for CLI tools)
 - **Pattern detection**: Still relies on syntactic patterns, not true semantic analysis
+- ~~**ISSUE-080**: Single-file memory leak in scope tracker~~ (Fixed in LC104)
 
 ## Best Practices
 

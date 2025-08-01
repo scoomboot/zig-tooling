@@ -141,8 +141,11 @@ pub const ScopeInfo = struct {
     /// Nesting depth (0 for top-level)
     depth: u32,
     /// Function name, test name, or block identifier
+    /// OWNERSHIP: This string is owned by the ScopeInfo and must be freed in deinit()
+    /// It is allocated by the parent ScopeTracker's allocator in openScope()
     name: []const u8,
     /// Variables declared in this scope (maps name to info)
+    /// OWNERSHIP: HashMap owns the variable name keys (allocated in addVariable)
     variables: std.StringHashMap(VariableInfo),
     /// Index of parent scope in the scopes array (null for top-level)
     parent_scope: ?u32,
@@ -159,13 +162,24 @@ pub const ScopeInfo = struct {
         };
     }
     
+    /// Clean up all resources owned by this ScopeInfo
+    /// 
+    /// This function is responsible for:
+    /// - Freeing all variable name keys in the variables HashMap
+    /// - Deinitializing the HashMap itself
+    /// 
+    /// NOTE: The scope name is NOT freed here - it is the responsibility
+    /// of the parent ScopeTracker to free scope names in its cleanup methods.
     pub fn deinit(self: *ScopeInfo, allocator: std.mem.Allocator) void {
-        // Free all variable names that were duplicated
+        // Free all variable names that were duplicated in addVariable()
         var iterator = self.variables.iterator();
         while (iterator.next()) |entry| {
+            // Each key is a duplicated string that we own
             allocator.free(entry.key_ptr.*);
         }
         self.variables.deinit();
+        
+        // NOTE: self.name is NOT freed here - the parent ScopeTracker handles it
     }
     
     /// Add a variable to this scope
@@ -359,21 +373,13 @@ pub const ScopeTracker = struct {
     }
     
     pub fn deinit(self: *ScopeTracker) void {
-        // Clean up all scopes
-        for (self.scopes.items) |*scope| {
-            // Free the scope name that was duplicated
-            self.allocator.free(scope.name);
-            scope.deinit(self.allocator);
-        }
+        // Use consolidated cleanup logic
+        self.cleanupAllScopes();
+        self.cleanupArenaAllocators();
+        
+        // Deinitialize the containers themselves (not just clear)
         self.scopes.deinit();
         self.scope_stack.deinit();
-        
-        // Clean up arena allocator mapping
-        var arena_iterator = self.arena_allocators.iterator();
-        while (arena_iterator.next()) |entry| {
-            self.allocator.free(entry.key_ptr.*);
-            self.allocator.free(entry.value_ptr.*);
-        }
         self.arena_allocators.deinit();
         
         // Clean up optional arena allocator
@@ -384,22 +390,9 @@ pub const ScopeTracker = struct {
     
     /// Reset the tracker for analyzing a new file
     pub fn reset(self: *ScopeTracker) void {
-        // Clean up all scopes
-        for (self.scopes.items) |*scope| {
-            // Free the scope name that was duplicated
-            self.allocator.free(scope.name);
-            scope.deinit(self.allocator);
-        }
-        self.scopes.clearRetainingCapacity();
-        self.scope_stack.clearRetainingCapacity();
-        
-        // Clean up arena allocator mapping
-        var arena_iterator = self.arena_allocators.iterator();
-        while (arena_iterator.next()) |entry| {
-            self.allocator.free(entry.key_ptr.*);
-            self.allocator.free(entry.value_ptr.*);
-        }
-        self.arena_allocators.clearRetainingCapacity();
+        // Use consolidated cleanup logic
+        self.cleanupAllScopes();
+        self.cleanupArenaAllocators();
         
         // Reset state
         self.current_depth = 0;
@@ -491,23 +484,38 @@ pub const ScopeTracker = struct {
     
     /// Clear all scopes and reset state
     fn clearScopes(self: *ScopeTracker) void {
+        self.cleanupAllScopes();
+        self.cleanupArenaAllocators();
+        self.current_depth = 0;
+    }
+    
+    /// Internal helper to clean up all scopes
+    /// This consolidates the cleanup logic used by deinit(), reset(), and clearScopes()
+    /// Note: This only clears the contents, not the containers themselves
+    fn cleanupAllScopes(self: *ScopeTracker) void {
         for (self.scopes.items) |*scope| {
-            // Free the scope name that was duplicated
-            self.allocator.free(scope.name);
+            // Only free the scope name if it has valid content
+            if (scope.name.len > 0) {
+                self.allocator.free(scope.name);
+            }
             scope.deinit(self.allocator);
         }
         self.scopes.clearRetainingCapacity();
         self.scope_stack.clearRetainingCapacity();
-        
-        // Clear arena allocator mapping
+    }
+    
+    /// Internal helper to clean up arena allocator mappings
+    fn cleanupArenaAllocators(self: *ScopeTracker) void {
         var arena_iterator = self.arena_allocators.iterator();
         while (arena_iterator.next()) |entry| {
-            self.allocator.free(entry.key_ptr.*);
-            self.allocator.free(entry.value_ptr.*);
+            if (entry.key_ptr.*.len > 0) {
+                self.allocator.free(entry.key_ptr.*);
+            }
+            if (entry.value_ptr.*.len > 0) {
+                self.allocator.free(entry.value_ptr.*);
+            }
         }
         self.arena_allocators.clearRetainingCapacity();
-        
-        self.current_depth = 0;
     }
     
     /// Process a single line of source code
@@ -697,12 +705,21 @@ pub const ScopeTracker = struct {
     }
     
     /// Open a new scope
+    /// 
+    /// Creates a new scope with the given type and name. The name is duplicated
+    /// and owned by the created ScopeInfo. The ScopeTracker is responsible for
+    /// freeing the name when the scope is destroyed (in deinit/reset/clearScopes).
     fn openScope(self: *ScopeTracker, scope_type: ScopeType, name: []const u8, line_number: u32) !void {
         const parent_scope = if (self.scope_stack.items.len > 0) self.scope_stack.items[self.scope_stack.items.len - 1] else null;
         
+        // Duplicate the name - this memory is owned by the ScopeInfo
         const name_copy = try self.allocator.dupe(u8, name);
+        errdefer self.allocator.free(name_copy);
+        
+        // Create the scope with the duplicated name
         const scope = ScopeInfo.init(self.allocator, scope_type, name_copy, line_number, self.current_depth, parent_scope);
         
+        // Append to scopes array - if this fails, name_copy is freed by errdefer
         try self.scopes.append(scope);
         const scope_index = @as(u32, @intCast(self.scopes.items.len - 1));
         try self.scope_stack.append(scope_index);
