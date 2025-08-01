@@ -1,6 +1,6 @@
 # Issue Index
 
-> **Quick navigation for [ISSUES.md](ISSUES.md) - 140 tracked issues across zig-tooling library conversion**
+> **Quick navigation for [ISSUES.md](ISSUES.md) - 142 tracked issues across zig-tooling library conversion**
 
 ## Active Issues
 
@@ -34,8 +34,9 @@
 - 🟢 [#LC113](ISSUES.md#L277): Consolidate issue-specific test files into component test files
 
 ### Memory & Performance
+- 🔴 [#LC115](ISSUES.md#L11): Enhance ownership transfer detection for struct return types → [#LC087](00_completed_issues.md#L5)
+- 🟡 [#LC116](ISSUES.md#L34): Fix memory leak in ScopeTracker.addVariable
 - 🔴 [#LC081](ISSUES.md#L585): Fix false positives in quality analyzer allocator detection
-- 🔴 [#LC087](ISSUES.md#L239): Implement ownership transfer detection for return values → [#LC081](ISSUES.md#L585)
 - 🔴 [#LC088](ISSUES.md#L257): Add data flow analysis for structured returns → [#LC081](ISSUES.md#L585)
 - 🟡 [#LC089](ISSUES.md#L179): Create allowed allocator pattern database → [#LC081](ISSUES.md#L489)
 - 🟡 [#LC090](ISSUES.md#L197): Implement scope-aware defer analysis → [#LC081](ISSUES.md#L489)
@@ -82,10 +83,11 @@
 *76 issues completed including all core library conversion phases*
 
 **Recently Completed (2025-08-01):**
-- [#LC108](00_completed_issues.md#L5): Add public freeAnalysisResult() helper function ✅
-- [#LC107](00_completed_issues.md#L26): Memory leaks in analyzeFile() and analyzeSource() functions ✅
-- [#LC106](00_completed_issues.md#L53): Memory leaks detected in patterns.checkProject function ✅
-- [#LC104](00_completed_issues.md#L79): Memory corruption or double-free in ScopeTracker.deinit() ✅
+- [#LC087](00_completed_issues.md#L5): Implement ownership transfer detection for return values ✅
+- [#LC108](00_completed_issues.md#L37): Add public freeAnalysisResult() helper function ✅
+- [#LC107](00_completed_issues.md#L68): Memory leaks in analyzeFile() and analyzeSource() functions ✅
+- [#LC106](00_completed_issues.md#L95): Memory leaks detected in patterns.checkProject function ✅
+- [#LC104](00_completed_issues.md#L121): Memory corruption or double-free in ScopeTracker.deinit() ✅
 
 **Recently Completed (2025-07-31):**
 - [#LC103](00_completed_issues.md#L33): Memory leaks in analyzeMemory() and analyzeTests() wrapper functions ✅
@@ -121,11 +123,11 @@
 | Documentation & API | 7 | 🟡 Medium: 4, 🟢 Low: 3 |
 | Build & CI/CD | 5 | 🟡 Medium: 1, 🟢 Low: 4 |
 | Testing Infrastructure | 11 | 🟡 Medium: 3, 🟢 Low: 8 |
-| Memory & Performance | 16 | 🔴 High: 2, 🟡 Medium: 6, 🟢 Low: 8 |
+| Memory & Performance | 17 | 🔴 High: 2, 🟡 Medium: 7, 🟢 Low: 8 |
 | Code Quality & Analysis | 7 | 🟡 Medium: 2, 🟢 Low: 5 |
 | Developer Tools & Utilities | 10 | 🟡 Medium: 2, 🟢 Low: 8 |
 | Compatibility & Integration | 3 | 🟢 Low: 3 |
-| **Total Active** | **60** | **🔴 High: 2, 🟡 Medium: 18, 🟢 Low: 39** |
-| ✅ Completed | 79 | Major conversion done |
+| **Total Active** | **61** | **🔴 High: 2, 🟡 Medium: 19, 🟢 Low: 40** |
+| ✅ Completed | 80 | Major conversion done |
 
 > 💡 **Tip**: Use `Ctrl+F` to search for specific issue numbers (#LCXXX) or components

@@ -235,6 +235,12 @@ pub const MemoryAnalyzer = struct {
     logger: ?app_logger.Logger,
     context: ?*AnalysisContext,
     
+    // Source storage for in-memory analysis (LC087 fix)
+    // These fields store the current source being analyzed to avoid file I/O
+    // in ownership transfer detection functions
+    current_source: ?[]const u8,
+    current_file_path: ?[]const u8,
+    
     /// Creates a new memory analyzer with default configuration
     ///
     /// ## Parameters
@@ -254,6 +260,8 @@ pub const MemoryAnalyzer = struct {
             .options = .{}, // Use default options
             .logger = null,
             .context = null,
+            .current_source = null,
+            .current_file_path = null,
         };
     }
     
@@ -277,6 +285,8 @@ pub const MemoryAnalyzer = struct {
             .options = .{}, // Use default options
             .logger = null,
             .context = null,
+            .current_source = null,
+            .current_file_path = null,
         };
     }
     
@@ -309,6 +319,8 @@ pub const MemoryAnalyzer = struct {
             .options = config.options,
             .logger = null,
             .context = null,
+            .current_source = null,
+            .current_file_path = null,
         };
         
         // Create logger if logging is enabled
@@ -418,6 +430,14 @@ pub const MemoryAnalyzer = struct {
         defer context.deinit();
         self.context = &context;
         defer self.context = null;
+        
+        // Store source for ownership transfer detection (LC087 fix)
+        self.current_source = source;
+        self.current_file_path = file_path;
+        defer {
+            self.current_source = null;
+            self.current_file_path = null;
+        }
         
         // Clear previous analysis results
         self.allocations.clearRetainingCapacity();
@@ -1233,17 +1253,28 @@ pub const MemoryAnalyzer = struct {
     
     fn isAllocationForStructField(self: *MemoryAnalyzer, file_path: []const u8, allocation: AllocationPattern, temp_allocator: std.mem.Allocator) !bool {
         
-        // Read the file to check for struct field assignments and deinit patterns
-        const file = std.fs.cwd().openFile(file_path, .{}) catch return false;
-        defer file.close();
+        // Use stored source if available and matching (LC087 fix)
+        const contents = if (self.current_file_path) |cfp| blk: {
+            if (std.mem.eql(u8, cfp, file_path) and self.current_source != null) {
+                break :blk self.current_source.?;
+            }
+            break :blk null;
+        } else null;
         
-        const file_size = try file.getEndPos();
-        const contents = try temp_allocator.alloc(u8, file_size);
-        defer temp_allocator.free(contents);
-        _ = try file.readAll(contents);
+        // If no stored source, fall back to file I/O for backward compatibility
+        const file_contents = if (contents) |c| c else file_blk: {
+            const file = std.fs.cwd().openFile(file_path, .{}) catch return false;
+            defer file.close();
+            
+            const file_size = try file.getEndPos();
+            const file_data = try temp_allocator.alloc(u8, file_size);
+            defer temp_allocator.free(file_data);
+            _ = try file.readAll(file_data);
+            break :file_blk file_data;
+        };
         
         // Check if this allocation is assigned to a struct field (contains '.')
-        var lines = std.mem.splitScalar(u8, contents, '\n');
+        var lines = std.mem.splitScalar(u8, file_contents, '\n');
         var line_number: u32 = 1;
         
         while (lines.next()) |line| {
@@ -1255,7 +1286,7 @@ pub const MemoryAnalyzer = struct {
                 if (std.mem.indexOf(u8, line, ".") != null and 
                     std.mem.indexOf(u8, line, "= try") != null) {
                     // Check if there's a corresponding deinit that frees this field
-                    return self.hasCorrespondingDeinitFree(contents, allocation.variable_name);
+                    return self.hasCorrespondingDeinitFree(file_contents, allocation.variable_name);
                 }
                 // Also check for patterns with comments indicating cleanup in deinit
                 if (std.mem.indexOf(u8, line, "freed in deinit") != null or
@@ -1441,17 +1472,28 @@ pub const MemoryAnalyzer = struct {
     
     fn isOwnershipTransferAllocation(self: *MemoryAnalyzer, file_path: []const u8, allocation: AllocationPattern, temp_allocator: std.mem.Allocator) !bool {
         
-        // Read the file to analyze the function context
-        const file = std.fs.cwd().openFile(file_path, .{}) catch return false;
-        defer file.close();
+        // Use stored source if available and matching (LC087 fix)
+        const contents = if (self.current_file_path) |cfp| blk: {
+            if (std.mem.eql(u8, cfp, file_path) and self.current_source != null) {
+                break :blk self.current_source.?;
+            }
+            break :blk null;
+        } else null;
         
-        const file_size = try file.getEndPos();
-        const contents = try temp_allocator.alloc(u8, file_size);
-        defer temp_allocator.free(contents);
-        _ = try file.readAll(contents);
+        // If no stored source, fall back to file I/O for backward compatibility
+        const file_contents = if (contents) |c| c else file_blk: {
+            const file = std.fs.cwd().openFile(file_path, .{}) catch return false;
+            defer file.close();
+            
+            const file_size = try file.getEndPos();
+            const file_data = try temp_allocator.alloc(u8, file_size);
+            defer temp_allocator.free(file_data);
+            _ = try file.readAll(file_data);
+            break :file_blk file_data;
+        };
         
         // Find the function that contains this allocation
-        const function_info = try self.findFunctionContext(contents, allocation.line, temp_allocator);
+        const function_info = try self.findFunctionContext(file_contents, allocation.line, temp_allocator);
         defer temp_allocator.free(function_info.name);
         defer temp_allocator.free(function_info.return_type);
         defer {
@@ -1462,15 +1504,14 @@ pub const MemoryAnalyzer = struct {
             temp_allocator.free(function_info.parameters);
         }
         
-        // Check if function name matches ownership transfer patterns
-        if (self.isOwnershipTransferFunctionName(function_info.name)) {
-            return true;
-        }
+        // Check if function name or return type suggests ownership transfer
+        const name_suggests_transfer = self.isOwnershipTransferFunctionName(function_info.name);
+        const type_suggests_transfer = self.isOwnershipTransferReturnType(function_info.return_type);
         
-        // Check if return type indicates ownership transfer
-        if (self.isOwnershipTransferReturnType(function_info.return_type)) {
+        // If either the name or type suggests transfer, check if the allocation is actually returned
+        if (name_suggests_transfer or type_suggests_transfer) {
             // Check if allocation is immediately returned
-            if (self.isAllocationImmediatelyReturned(contents, allocation.line)) {
+            if (self.isAllocationImmediatelyReturned(file_contents, allocation.line)) {
                 return true;
             }
             
@@ -1484,18 +1525,28 @@ pub const MemoryAnalyzer = struct {
     }
     
     fn isSingleAllocationReturn(self: *MemoryAnalyzer, file_path: []const u8, allocation: AllocationPattern, temp_allocator: std.mem.Allocator) !bool {
-        _ = self;
         
-        // Read the file to check if allocation is immediately returned
-        const file = std.fs.cwd().openFile(file_path, .{}) catch return false;
-        defer file.close();
+        // Use stored source if available and matching (LC087 fix)
+        const contents = if (self.current_file_path) |cfp| blk: {
+            if (std.mem.eql(u8, cfp, file_path) and self.current_source != null) {
+                break :blk self.current_source.?;
+            }
+            break :blk null;
+        } else null;
         
-        const file_size = try file.getEndPos();
-        const contents = try temp_allocator.alloc(u8, file_size);
-        defer temp_allocator.free(contents);
-        _ = try file.readAll(contents);
+        // If no stored source, fall back to file I/O for backward compatibility
+        const file_contents = if (contents) |c| c else file_blk: {
+            const file = std.fs.cwd().openFile(file_path, .{}) catch return false;
+            defer file.close();
+            
+            const file_size = try file.getEndPos();
+            const file_data = try temp_allocator.alloc(u8, file_size);
+            defer temp_allocator.free(file_data);
+            _ = try file.readAll(file_data);
+            break :file_blk file_data;
+        };
         
-        var lines = std.mem.splitScalar(u8, contents, '\n');
+        var lines = std.mem.splitScalar(u8, file_contents, '\n');
         var line_number: u32 = 1;
         
         while (lines.next()) |line| {
@@ -1819,17 +1870,28 @@ pub const MemoryAnalyzer = struct {
     // New function to track if an allocated variable is eventually returned
     fn isAllocationReturnedLater(self: *MemoryAnalyzer, file_path: []const u8, allocation: AllocationPattern, temp_allocator: std.mem.Allocator) !bool {
         
-        // Read the file to analyze return patterns
-        const file = std.fs.cwd().openFile(file_path, .{}) catch return false;
-        defer file.close();
+        // Use stored source if available and matching (LC087 fix)
+        const contents = if (self.current_file_path) |cfp| blk: {
+            if (std.mem.eql(u8, cfp, file_path) and self.current_source != null) {
+                break :blk self.current_source.?;
+            }
+            break :blk null;
+        } else null;
         
-        const file_size = try file.getEndPos();
-        const contents = try temp_allocator.alloc(u8, file_size);
-        defer temp_allocator.free(contents);
-        _ = try file.readAll(contents);
+        // If no stored source, fall back to file I/O for backward compatibility
+        const file_contents = if (contents) |c| c else file_blk: {
+            const file = std.fs.cwd().openFile(file_path, .{}) catch return false;
+            defer file.close();
+            
+            const file_size = try file.getEndPos();
+            const file_data = try temp_allocator.alloc(u8, file_size);
+            defer temp_allocator.free(file_data);
+            _ = try file.readAll(file_data);
+            break :file_blk file_data;
+        };
         
         // Find the function containing this allocation
-        const function_info = try self.findFunctionContext(contents, allocation.line, temp_allocator);
+        const function_info = try self.findFunctionContext(file_contents, allocation.line, temp_allocator);
         defer temp_allocator.free(function_info.name);
         defer temp_allocator.free(function_info.return_type);
         defer {
@@ -1845,10 +1907,11 @@ pub const MemoryAnalyzer = struct {
             return false;
         }
         
-        var lines = std.mem.splitScalar(u8, contents, '\n');
+        var lines = std.mem.splitScalar(u8, file_contents, '\n');
         var line_number: u32 = 1;
         var inside_function = false;
         var brace_depth: i32 = 0;
+        var inside_return_statement = false;
         
         while (lines.next()) |line| {
             defer line_number += 1;
@@ -1861,7 +1924,9 @@ pub const MemoryAnalyzer = struct {
             if (inside_function) {
                 // Track brace depth to know when function ends
                 for (line) |ch| {
-                    if (ch == '{') brace_depth += 1;
+                    if (ch == '{') {
+                        brace_depth += 1;
+                    }
                     if (ch == '}') {
                         brace_depth -= 1;
                         if (brace_depth == 0 and line_number > allocation.line) {
@@ -1871,11 +1936,22 @@ pub const MemoryAnalyzer = struct {
                     }
                 }
                 
+                // Check if we're ending a return statement (semicolon at end of line)
+                if (inside_return_statement and std.mem.indexOf(u8, line, ";") != null) {
+                    inside_return_statement = false;
+                }
+                
                 // Look for return statements after the allocation
                 if (line_number > allocation.line) {
                     if (std.mem.indexOf(u8, line, "return")) |return_pos| {
                         // Check if the allocated variable is being returned
                         const after_return = line[return_pos + 6..];
+                        
+                        // Check if this starts a multi-line return
+                        if (std.mem.indexOf(u8, after_return, "{")) |_| {
+                            inside_return_statement = true;
+                            // Don't reset return_brace_depth here - it gets tracked in the main loop
+                        }
                         
                         // Simple check: is the variable name in the return statement?
                         if (std.mem.indexOf(u8, after_return, allocation.variable_name)) |_| {
@@ -1885,6 +1961,38 @@ pub const MemoryAnalyzer = struct {
                         // Check for struct initialization patterns like .{ .field = variable }
                         if (std.mem.indexOf(u8, after_return, ".{")) |_| {
                             if (std.mem.indexOf(u8, after_return, allocation.variable_name)) |_| {
+                                return true;
+                            }
+                        }
+                        
+                        // Check for struct initialization patterns like StructName{ .field = variable }
+                        // Look for patterns like "SomeName{" (uppercase letter followed by {)
+                        var i: usize = 0;
+                        while (i < after_return.len) : (i += 1) {
+                            if (i + 1 < after_return.len and 
+                                after_return[i] >= 'A' and after_return[i] <= 'Z' and
+                                after_return[i + 1] == '{') {
+                                // Found a struct initialization pattern
+                                if (std.mem.indexOf(u8, after_return, allocation.variable_name)) |_| {
+                                    return true;
+                                }
+                            }
+                        }
+                    }
+                    
+                    // If we're inside a multi-line return statement, check if the allocation is used
+                    if (inside_return_statement) {
+                        if (std.mem.indexOf(u8, line, allocation.variable_name)) |var_pos| {
+                            // Check if it's being assigned to something (has = before it)
+                            const before_var = line[0..var_pos];
+                            if (std.mem.indexOf(u8, before_var, "=") != null) {
+                                return true;
+                            }
+                            // Also check if there's an = after it (for patterns like .field = var,)
+                            const after_var = line[var_pos + allocation.variable_name.len..];
+                            if (std.mem.indexOf(u8, after_var, ",") != null or 
+                                std.mem.indexOf(u8, after_var, "}") != null) {
+                                // This looks like it's part of a struct initialization
                                 return true;
                             }
                         }

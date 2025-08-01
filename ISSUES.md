@@ -8,6 +8,48 @@
 
 ---
 
+- [ ] #LC115: Enhance ownership transfer detection for struct return types
+  - **Component**: src/memory_analyzer.zig
+  - **Priority**: High
+  - **Created**: 2025-08-01
+  - **Dependencies**: #LC087 (builds on the file I/O fix)
+  - **Details**: Current ownership transfer detection doesn't recognize when functions return structs containing allocated fields as ownership transfer
+  - **Requirements**:
+    - Detect when return type is a struct type (not just slices/pointers)
+    - Analyze struct fields to identify those that contain allocated memory
+    - Track when allocated values are assigned to struct fields that are then returned
+    - Support nested structs and complex return patterns
+    - Handle error unions and optionals containing structs
+  - **Notes**:
+    - Discovered during LC087 testing - 10 out of 15 tests fail due to this limitation
+    - Examples of patterns not detected:
+      - `return Data{ .buffer = allocatedBuffer, .size = size };`
+      - `return ComplexData{ .primary = alloc1, .secondary = alloc2 };`
+    - Current implementation only checks for simple patterns and return type strings
+    - Would significantly reduce false positives in real-world code
+    - See test cases in [tests/test_lc087_ownership_transfer.zig] for specific patterns
+
+---
+
+- [ ] #LC116: Fix memory leak in ScopeTracker.addVariable
+  - **Component**: src/scope_tracker.zig
+  - **Priority**: Medium
+  - **Created**: 2025-08-01
+  - **Dependencies**: None
+  - **Details**: Variable names are duplicated in addVariable but may not be properly freed in all cases
+  - **Requirements**:
+    - Investigate the memory leak at [src/scope_tracker.zig:187]
+    - Ensure all duplicated variable names are freed when scopes are cleaned up
+    - Add memory leak tests specifically for ScopeTracker variable tracking
+    - Verify proper cleanup in error paths
+  - **Notes**:
+    - Found during LC087 test runs - GPA reported leak at line 187
+    - The leak appears in addVariable when duplicating var_info.name
+    - May be related to scope cleanup or early returns
+    - Should be fixed to ensure clean memory management
+
+---
+
 - [ ] #LC105: Need comprehensive memory leak test suite for all public APIs
   - **Component**: tests/
   - **Priority**: Medium
@@ -274,21 +316,6 @@
 
 ---
 
-- [ ] #LC087: Implement ownership transfer detection for return values
-  - **Component**: src/memory_analyzer.zig
-  - **Priority**: High
-  - **Created**: 2025-07-30
-  - **Dependencies**: #LC081 (parent task)
-  - **Details**: Detect when allocated memory is returned to caller, indicating ownership transfer
-  - **Requirements**:
-    - Analyze function return statements to detect returned allocations
-    - Track data flow from allocation to return statement
-    - Mark allocations that are returned as "ownership transferred"
-    - Skip defer requirement checks for transferred allocations
-  - **Notes**:
-    - Would fix false positives like src/zig_tooling.zig:125
-    - Should handle both direct returns and values stored in returned structures
-    - Consider return type analysis to understand ownership semantics
 
 ---
 

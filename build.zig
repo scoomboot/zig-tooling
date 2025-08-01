@@ -92,6 +92,14 @@ pub fn build(b: *std.Build) void {
     });
     test_example_validation.root_module.addImport("zig_tooling", zig_tooling_module);
 
+    // LC087 ownership transfer detection tests
+    const test_lc087_ownership_transfer = b.addTest(.{
+        .root_source_file = b.path("tests/test_lc087_ownership_transfer.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    test_lc087_ownership_transfer.root_module.addImport("zig_tooling", zig_tooling_module);
+
     // Unit tests for the library itself
     const lib_tests = b.addTest(.{
         .root_source_file = b.path("src/zig_tooling.zig"),
@@ -152,6 +160,7 @@ pub fn build(b: *std.Build) void {
     test_step.dependOn(&test_memory_leaks.step);
     test_step.dependOn(&test_lc104_crash.step);
     test_step.dependOn(&test_example_validation.step);
+    test_step.dependOn(&test_lc087_ownership_transfer.step);
     test_step.dependOn(&lib_tests.step);
 
     // Integration test step (separate for longer-running tests)
